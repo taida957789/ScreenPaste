@@ -395,7 +395,7 @@ public partial class CaptureOverlayWindow : Window
         if (_fontCombo.SelectedItem == null) _fontCombo.Text = _textFont;
         _fontCombo.SelectionChanged += (_, _) =>
         {
-            if (_fontCombo.SelectedItem is string s) { _textFont = s; ApplyTextStyle(); }
+            if (_fontCombo.SelectedItem is string s) { _textFont = s; ApplyTextStyle(); RefocusText(); }
         };
         _textOptionsPanel.Children.Add(_fontCombo);
 
@@ -405,9 +405,9 @@ public partial class CaptureOverlayWindow : Window
         _textOptionsPanel.Children.Add(_textSizeSlider);
 
         _textOptionsPanel.Children.Add(Label("樣式"));
-        _boldButton = MakeStyleToggle("B", () => { _textBold = !_textBold; RefreshStyleToggles(); ApplyTextStyle(); });
-        _italicButton = MakeStyleToggle("I", () => { _textItalic = !_textItalic; RefreshStyleToggles(); ApplyTextStyle(); });
-        _strikeButton = MakeStyleToggle("S", () => { _textStrike = !_textStrike; RefreshStyleToggles(); ApplyTextStyle(); });
+        _boldButton = MakeStyleToggle("B", () => { _textBold = !_textBold; RefreshStyleToggles(); ApplyTextStyle(); RefocusText(); });
+        _italicButton = MakeStyleToggle("I", () => { _textItalic = !_textItalic; RefreshStyleToggles(); ApplyTextStyle(); RefocusText(); });
+        _strikeButton = MakeStyleToggle("S", () => { _textStrike = !_textStrike; RefreshStyleToggles(); ApplyTextStyle(); RefocusText(); });
         _textOptionsPanel.Children.Add(_boldButton);
         _textOptionsPanel.Children.Add(_italicButton);
         _textOptionsPanel.Children.Add(_strikeButton);
@@ -766,6 +766,7 @@ public partial class CaptureOverlayWindow : Window
         {
             _textColor = Color.FromArgb(a, rgb.R, rgb.G, rgb.B);
             ApplyTextStyle();
+            RefocusText();
             return;
         }
         if (_tool == ToolKind.Shape)
@@ -878,7 +879,7 @@ public partial class CaptureOverlayWindow : Window
 
     private void OnColorPicked(Color c)
     {
-        if (_tool == ToolKind.Text) { _textColor = Color.FromArgb(_textColor.A, c.R, c.G, c.B); ApplyTextStyle(); return; }
+        if (_tool == ToolKind.Text) { _textColor = Color.FromArgb(_textColor.A, c.R, c.G, c.B); ApplyTextStyle(); RefocusText(); return; }
         if (_tool == ToolKind.Shape) { _shapeColor = Color.FromArgb(_shapeColor.A, c.R, c.G, c.B); return; }
         if (_tool == ToolKind.Highlighter) _hlColor = c;
         else _penColor = c;
@@ -1124,7 +1125,8 @@ public partial class CaptureOverlayWindow : Window
             else if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Shift) == 0)
             { CommitActiveText(discardIfEmpty: true); e.Handled = true; }
         };
-        box.LostKeyboardFocus += (_, _) => CommitActiveText(discardIfEmpty: true);
+        // NOTE: no commit-on-focus-loss — clicking a toolbar style button must not
+        // dismiss the box. It commits on Enter/Esc, a new placement, tool switch, or export.
 
         box.Loaded += (_, _) => { box.Focus(); Keyboard.Focus(box); };
         box.Focus();
@@ -1140,6 +1142,18 @@ public partial class CaptureOverlayWindow : Window
         _editingText.FontWeight = _textBold ? FontWeights.Bold : FontWeights.Normal;
         _editingText.FontStyle = _textItalic ? FontStyles.Italic : FontStyles.Normal;
         _editingText.TextDecorations = _textStrike ? TextDecorations.Strikethrough : null;
+    }
+
+    /// <summary>Return keyboard focus to the text box being edited so typing continues.</summary>
+    private void RefocusText()
+    {
+        if (_editingText is not { } box) return;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            box.Focus();
+            Keyboard.Focus(box);
+            box.CaretIndex = box.Text.Length;
+        }), System.Windows.Threading.DispatcherPriority.Input);
     }
 
     /// <summary>Finalize the text being edited: bake it into a static label or discard if empty.</summary>
