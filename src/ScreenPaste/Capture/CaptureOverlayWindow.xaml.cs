@@ -428,6 +428,25 @@ public partial class CaptureOverlayWindow : Window
         foreach (var c in Palette) _shapeOptionsPanel.Children.Add(MakeSwatch(c));
         _shapeOptionsPanel.Children.Add(MakeMoreColorsButton());
         ToolbarStack.Children.Add(_shapeOptionsPanel);
+
+        // The toolbar itself shows a move cursor (drag); interactive controls override it.
+        ApplyControlCursors(ToolbarStack);
+    }
+
+    /// <summary>Buttons get a hand cursor, sliders/combos an arrow — so only empty
+    /// toolbar chrome keeps the drag (SizeAll) cursor.</summary>
+    private static void ApplyControlCursors(DependencyObject root)
+    {
+        foreach (var obj in LogicalTreeHelper.GetChildren(root))
+        {
+            if (obj is System.Windows.Controls.Primitives.ButtonBase btn)
+                btn.Cursor = Cursors.Hand;
+            else if (obj is Slider or ComboBox)
+                ((FrameworkElement)obj).Cursor = Cursors.Arrow;
+
+            if (obj is DependencyObject child)
+                ApplyControlCursors(child);
+        }
     }
 
     private Button MakeShapeKindButton(string text, ShapeKind kind)
