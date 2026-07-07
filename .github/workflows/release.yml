@@ -1,12 +1,12 @@
 name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags: ['v*']          # pushing a v* tag builds and publishes a release
   workflow_dispatch:      # allow manual runs for testing
 
 permissions:
-  contents: write         # needed to upload assets to the release
+  contents: write         # needed to create the release / upload assets
 
 jobs:
   build:
@@ -24,7 +24,7 @@ jobs:
       - name: Resolve version from tag
         shell: pwsh
         run: |
-          $tag = "${{ github.event.release.tag_name }}"
+          $tag = "${{ github.ref_name }}"
           $ver = ($tag -replace '^v', '')
           if ($ver -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') { $ver = '1.0.0' }
           "VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
@@ -50,10 +50,11 @@ jobs:
           "ASSET_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "ASSET_ZIP=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Upload assets to release
-        if: github.event_name == 'release'
+      - name: Create release and upload assets
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          generate_release_notes: true
           files: |
             ${{ env.ASSET_EXE }}
             ${{ env.ASSET_ZIP }}
