@@ -39,6 +39,12 @@ public sealed class AppSettings
     public bool TextItalic { get; set; }
     public bool TextStrikethrough { get; set; }
 
+    // ---- Shape defaults ----
+    public string ShapeKind { get; set; } = "Rectangle";  // Rectangle | RoundedRectangle | Ellipse
+    public bool ShapeFilled { get; set; }
+    public string ShapeColor { get; set; } = "#FFFF3B30"; // red
+    public double ShapeWidth { get; set; } = 3;
+
     // ---- Appearance ----
     public string Theme { get; set; } = "System";   // System | Light | Dark
 

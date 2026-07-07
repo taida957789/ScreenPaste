@@ -57,14 +57,25 @@ public partial class CaptureOverlayWindow : Window
     private bool _textBold, _textItalic, _textStrike;
     private TextBox? _editingText;
 
+    // Shape-tool settings + state
+    private ShapeKind _shapeKind = ShapeKind.Rectangle;
+    private bool _shapeFilled;
+    private Color _shapeColor;      // ARGB (alpha = opacity)
+    private double _shapeWidth = 3; // outline thickness
+    private bool _shapeDragging;
+    private Point _shapeStart;
+    private Shape? _shapePreview;
+
     // Toolbar controls we need to read/update
-    private Slider _widthSlider = null!, _opacitySlider = null!, _blurSlider = null!, _textSizeSlider = null!;
-    private StackPanel _blurOptionsPanel = null!, _penOptionsPanel = null!, _textOptionsPanel = null!;
+    private Slider _widthSlider = null!, _opacitySlider = null!, _blurSlider = null!, _textSizeSlider = null!, _shapeWidthSlider = null!;
+    private StackPanel _blurOptionsPanel = null!, _penOptionsPanel = null!, _textOptionsPanel = null!, _shapeOptionsPanel = null!;
     private ComboBox _fontCombo = null!;
     private Button _boldButton = null!, _italicButton = null!, _strikeButton = null!;
     private Button _redoButton = null!;
     private readonly List<Button> _toolButtons = new();
     private readonly List<Button> _blurKindButtons = new();
+    private readonly List<Button> _shapeKindButtons = new();
+    private readonly List<Button> _shapeStyleButtons = new();
 
     public CaptureOverlayWindow(BitmapSource screenshot, VirtualScreen vs, AppSettings settings)
     {
@@ -87,6 +98,10 @@ public partial class CaptureOverlayWindow : Window
         _textBold = settings.TextBold;
         _textItalic = settings.TextItalic;
         _textStrike = settings.TextStrikethrough;
+        _shapeKind = Enum.TryParse<ShapeKind>(settings.ShapeKind, out var sk) ? sk : ShapeKind.Rectangle;
+        _shapeFilled = settings.ShapeFilled;
+        _shapeColor = ParseColor(settings.ShapeColor, Colors.Red);
+        _shapeWidth = settings.ShapeWidth;
 
         _undoGesture = HotkeyGesture.Parse(settings.UndoHotkey);
         _redoGesture = HotkeyGesture.Parse(settings.RedoHotkey);
@@ -110,6 +125,12 @@ public partial class CaptureOverlayWindow : Window
         InteractionLayer.MouseLeftButtonDown += Blur_MouseDown;
         InteractionLayer.MouseMove += Blur_MouseMove;
         InteractionLayer.MouseLeftButtonUp += Blur_MouseUp;
+
+        // Drag the toolbar by its empty chrome (buttons/sliders handle their own clicks).
+        Toolbar.Cursor = Cursors.SizeAll;
+        Toolbar.MouseLeftButtonDown += Toolbar_DragStart;
+        Toolbar.MouseMove += Toolbar_DragMove;
+        Toolbar.MouseLeftButtonUp += Toolbar_DragEnd;
 
         _history.Changed += UpdateHistoryButtons;
 
@@ -282,8 +303,8 @@ public partial class CaptureOverlayWindow : Window
 
         BuildToolbar();
         SelectTool(ToolKind.MarkerPen);
+        Toolbar.Visibility = Visibility.Visible;   // must be visible before measuring
         PositionToolbar(cursor);
-        Toolbar.Visibility = Visibility.Visible;
         UpdateHistoryButtons();
     }
 
@@ -294,6 +315,7 @@ public partial class CaptureOverlayWindow : Window
     private static readonly string GlyphMarker = Glyph(0xE70F);      // Edit (pen)
     private static readonly string GlyphHighlighter = Glyph(0xE891); // Highlight
     private static readonly string GlyphText = Glyph(0xE8D2);        // Font (A)
+    private static readonly string GlyphShape = Glyph(0xE71A);       // Stop (square/block)
     private static readonly string GlyphBlur = Glyph(0xE7B3);        // blur metaphor
     private static readonly string GlyphRedo = Glyph(0xE7A6);        // Redo
     private static readonly string GlyphCopy = Glyph(0xE8C8);        // Copy
@@ -306,6 +328,8 @@ public partial class CaptureOverlayWindow : Window
         ToolbarStack.Children.Clear();
         _toolButtons.Clear();
         _blurKindButtons.Clear();
+        _shapeKindButtons.Clear();
+        _shapeStyleButtons.Clear();
 
         Toolbar.Background = Theme.PanelBrush;
         Toolbar.BorderBrush = Theme.ButtonBorderBrush;
@@ -314,6 +338,7 @@ public partial class CaptureOverlayWindow : Window
         toolsRow.Children.Add(MakeToolButton(GlyphMarker, "麥克筆", ToolKind.MarkerPen));
         toolsRow.Children.Add(MakeToolButton(GlyphHighlighter, "螢光筆", ToolKind.Highlighter));
         toolsRow.Children.Add(MakeToolButton(GlyphText, "文字", ToolKind.Text));
+        toolsRow.Children.Add(MakeToolButton(GlyphShape, "形狀", ToolKind.Shape));
         toolsRow.Children.Add(MakeToolButton(GlyphBlur, "模糊", ToolKind.Blur));
         toolsRow.Children.Add(MakeSeparator());
         // 復原改由設定中的熱鍵觸發（預設 Ctrl+Z），不再放工具列按鈕。
@@ -385,6 +410,68 @@ public partial class CaptureOverlayWindow : Window
         _textOptionsPanel.Children.Add(MakeMoreColorsButton());
         RefreshStyleToggles();
         ToolbarStack.Children.Add(_textOptionsPanel);
+
+        // ---- Shape options (shape / style / thickness / colour) ----
+        _shapeOptionsPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+        _shapeOptionsPanel.Children.Add(Label("形狀"));
+        _shapeOptionsPanel.Children.Add(MakeShapeKindButton("方形", ShapeKind.Rectangle));
+        _shapeOptionsPanel.Children.Add(MakeShapeKindButton("圓角", ShapeKind.RoundedRectangle));
+        _shapeOptionsPanel.Children.Add(MakeShapeKindButton("圓形", ShapeKind.Ellipse));
+        _shapeOptionsPanel.Children.Add(Label("樣式"));
+        _shapeOptionsPanel.Children.Add(MakeShapeStyleButton("外框", filled: false));
+        _shapeOptionsPanel.Children.Add(MakeShapeStyleButton("填滿", filled: true));
+        _shapeOptionsPanel.Children.Add(Label("粗細"));
+        _shapeWidthSlider = new Slider { Minimum = 1, Maximum = 20, Width = 90, VerticalAlignment = VerticalAlignment.Center, Value = _shapeWidth };
+        _shapeWidthSlider.ValueChanged += (_, e) => _shapeWidth = e.NewValue;
+        _shapeOptionsPanel.Children.Add(_shapeWidthSlider);
+        _shapeOptionsPanel.Children.Add(Label("顏色"));
+        foreach (var c in Palette) _shapeOptionsPanel.Children.Add(MakeSwatch(c));
+        _shapeOptionsPanel.Children.Add(MakeMoreColorsButton());
+        ToolbarStack.Children.Add(_shapeOptionsPanel);
+    }
+
+    private Button MakeShapeKindButton(string text, ShapeKind kind)
+    {
+        var b = MakeSmallToggle(text);
+        b.Tag = kind;
+        b.Click += (_, _) => SelectShapeKind(kind);
+        _shapeKindButtons.Add(b);
+        return b;
+    }
+
+    private Button MakeShapeStyleButton(string text, bool filled)
+    {
+        var b = MakeSmallToggle(text);
+        b.Tag = filled;
+        b.Click += (_, _) => SelectShapeStyle(filled);
+        _shapeStyleButtons.Add(b);
+        return b;
+    }
+
+    private static Button MakeSmallToggle(string text) => new()
+    {
+        Content = text,
+        Margin = new Thickness(2, 0, 2, 0),
+        Padding = new Thickness(8, 2, 8, 2),
+        Foreground = Theme.ForegroundBrush,
+        Background = Theme.ButtonBgBrush,
+        BorderBrush = Theme.ButtonBorderBrush,
+        BorderThickness = new Thickness(1),
+        FontSize = 12,
+    };
+
+    private void SelectShapeKind(ShapeKind kind)
+    {
+        _shapeKind = kind;
+        foreach (var b in _shapeKindButtons)
+            b.Background = (ShapeKind)b.Tag! == kind ? Theme.ActiveBrush : Theme.ButtonBgBrush;
+    }
+
+    private void SelectShapeStyle(bool filled)
+    {
+        _shapeFilled = filled;
+        foreach (var b in _shapeStyleButtons)
+            b.Background = (bool)b.Tag! == filled ? Theme.ActiveBrush : Theme.ButtonBgBrush;
     }
 
     private Button MakeStyleToggle(string label, Action onClick)
@@ -418,9 +505,10 @@ public partial class CaptureOverlayWindow : Window
 
     private void PositionToolbar(Point cursor)
     {
-        Toolbar.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        double tw = Toolbar.DesiredSize.Width;
-        double th = Toolbar.DesiredSize.Height;
+        // Force a full layout pass so ActualWidth/Height are valid (the toolbar was just shown).
+        Toolbar.UpdateLayout();
+        double tw = ToolbarWidth();
+        double th = ToolbarHeight();
         const double gap = 14;
 
         // Place next to the cursor (below-right); flip to the other side if off-screen.
@@ -430,11 +518,53 @@ public partial class CaptureOverlayWindow : Window
         double y = cursor.Y + gap;
         if (y + th > _vs.Height) y = cursor.Y - gap - th;
 
-        x = Math.Clamp(x, 4, Math.Max(4, _vs.Width - tw - 4));
-        y = Math.Clamp(y, 4, Math.Max(4, _vs.Height - th - 4));
-
+        ClampToolbar(ref x, ref y);
         Canvas.SetLeft(Toolbar, x);
         Canvas.SetTop(Toolbar, y);
+    }
+
+    private double ToolbarWidth() => Toolbar.ActualWidth > 0 ? Toolbar.ActualWidth : Toolbar.DesiredSize.Width;
+    private double ToolbarHeight() => Toolbar.ActualHeight > 0 ? Toolbar.ActualHeight : Toolbar.DesiredSize.Height;
+
+    /// <summary>Keep the toolbar fully within the virtual screen.</summary>
+    private void ClampToolbar(ref double x, ref double y)
+    {
+        double tw = ToolbarWidth();
+        double th = ToolbarHeight();
+        x = Math.Clamp(x, 4, Math.Max(4, _vs.Width - tw - 4));
+        y = Math.Clamp(y, 4, Math.Max(4, _vs.Height - th - 4));
+    }
+
+    // ---- Draggable toolbar ----
+    private bool _toolbarDragging;
+    private Point _toolbarGrab;
+
+    private void Toolbar_DragStart(object sender, MouseButtonEventArgs e)
+    {
+        // Only fires for clicks on empty toolbar chrome; buttons/sliders handle their own.
+        _toolbarDragging = true;
+        var p = e.GetPosition(RootCanvas);
+        _toolbarGrab = new Point(p.X - Canvas.GetLeft(Toolbar), p.Y - Canvas.GetTop(Toolbar));
+        Toolbar.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void Toolbar_DragMove(object sender, MouseEventArgs e)
+    {
+        if (!_toolbarDragging) return;
+        var p = e.GetPosition(RootCanvas);
+        double x = p.X - _toolbarGrab.X;
+        double y = p.Y - _toolbarGrab.Y;
+        ClampToolbar(ref x, ref y);
+        Canvas.SetLeft(Toolbar, x);
+        Canvas.SetTop(Toolbar, y);
+    }
+
+    private void Toolbar_DragEnd(object sender, MouseButtonEventArgs e)
+    {
+        if (!_toolbarDragging) return;
+        _toolbarDragging = false;
+        Toolbar.ReleaseMouseCapture();
     }
 
     private Button MakeToolButton(string glyph, string tooltip, ToolKind kind)
@@ -561,6 +691,7 @@ public partial class CaptureOverlayWindow : Window
         {
             case ToolKind.Highlighter: current = _hlColor; opacity = _hlOpacity; break;
             case ToolKind.Text: current = _textColor; opacity = _textColor.A / 255.0; break;
+            case ToolKind.Shape: current = _shapeColor; opacity = _shapeColor.A / 255.0; break;
             default: current = _penColor; opacity = _penOpacity; break;
         }
 
@@ -570,17 +701,27 @@ public partial class CaptureOverlayWindow : Window
         ApplyPickedColor(dlg.SelectedColor, dlg.SelectedOpacity);
 
         // Add the picked colour as a reusable swatch, just before the "+" button.
-        var panel = _tool == ToolKind.Text ? _textOptionsPanel : _penOptionsPanel;
+        var panel = _tool switch
+        {
+            ToolKind.Text => _textOptionsPanel,
+            ToolKind.Shape => _shapeOptionsPanel,
+            _ => _penOptionsPanel,
+        };
         panel.Children.Insert(panel.Children.Count - 1, MakeSwatch(dlg.SelectedColor));
     }
 
     private void ApplyPickedColor(Color rgb, double opacity)
     {
+        var a = (byte)Math.Round(opacity * 255);
         if (_tool == ToolKind.Text)
         {
-            var a = (byte)Math.Round(opacity * 255);
             _textColor = Color.FromArgb(a, rgb.R, rgb.G, rgb.B);
             ApplyTextStyle();
+            return;
+        }
+        if (_tool == ToolKind.Shape)
+        {
+            _shapeColor = Color.FromArgb(a, rgb.R, rgb.G, rgb.B);
             return;
         }
 
@@ -614,17 +755,20 @@ public partial class CaptureOverlayWindow : Window
         bool isPen = kind is ToolKind.MarkerPen or ToolKind.Highlighter;
         bool isBlur = kind is ToolKind.Blur;
         bool isText = kind is ToolKind.Text;
+        bool isShape = kind is ToolKind.Shape;
 
         _penOptionsPanel.Visibility = isPen ? Visibility.Visible : Visibility.Collapsed;
         _blurOptionsPanel.Visibility = isBlur ? Visibility.Visible : Visibility.Collapsed;
         _textOptionsPanel.Visibility = isText ? Visibility.Visible : Visibility.Collapsed;
+        _shapeOptionsPanel.Visibility = isShape ? Visibility.Visible : Visibility.Collapsed;
 
         Ink.EditingMode = isPen ? InkCanvasEditingMode.Ink : InkCanvasEditingMode.None;
         Ink.IsHitTestVisible = isPen;
-        InteractionLayer.IsHitTestVisible = isBlur || isText;
+        InteractionLayer.IsHitTestVisible = isBlur || isText || isShape;
 
         if (isPen) LoadPenControls();
         if (isBlur) SelectBlurKind(_blurKind);
+        if (isShape) { SelectShapeKind(_shapeKind); SelectShapeStyle(_shapeFilled); }
     }
 
     private void SelectBlurKind(BlurKind kind)
@@ -680,7 +824,8 @@ public partial class CaptureOverlayWindow : Window
 
     private void OnColorPicked(Color c)
     {
-        if (_tool == ToolKind.Text) { _textColor = c; ApplyTextStyle(); return; }
+        if (_tool == ToolKind.Text) { _textColor = Color.FromArgb(_textColor.A, c.R, c.G, c.B); ApplyTextStyle(); return; }
+        if (_tool == ToolKind.Shape) { _shapeColor = Color.FromArgb(_shapeColor.A, c.R, c.G, c.B); return; }
         if (_tool == ToolKind.Highlighter) _hlColor = c;
         else _penColor = c;
         ApplyDrawingAttributes();
@@ -702,6 +847,7 @@ public partial class CaptureOverlayWindow : Window
     private void Blur_MouseDown(object sender, MouseButtonEventArgs e)
     {
         if (_tool == ToolKind.Text) { PlaceText(e.GetPosition(InteractionLayer)); return; }
+        if (_tool == ToolKind.Shape) { Shape_MouseDown(e.GetPosition(InteractionLayer)); return; }
         if (_tool != ToolKind.Blur) return;
 
         _blurDragging = true;
@@ -721,6 +867,7 @@ public partial class CaptureOverlayWindow : Window
 
     private void Blur_MouseMove(object sender, MouseEventArgs e)
     {
+        if (_shapeDragging) { Shape_MouseMove(e.GetPosition(InteractionLayer)); return; }
         if (!_blurDragging || _blurPreview == null) return;
         var p = e.GetPosition(InteractionLayer);
         var r = MakeRect(_blurStart, p);
@@ -732,6 +879,7 @@ public partial class CaptureOverlayWindow : Window
 
     private void Blur_MouseUp(object sender, MouseButtonEventArgs e)
     {
+        if (_shapeDragging) { Shape_MouseUp(e.GetPosition(InteractionLayer)); return; }
         if (!_blurDragging) return;
         _blurDragging = false;
         InteractionLayer.ReleaseMouseCapture();
@@ -761,6 +909,58 @@ public partial class CaptureOverlayWindow : Window
         _history.Push(
             undo: () => BlurHost.Children.Remove(visual),
             redo: () => { if (!BlurHost.Children.Contains(visual)) BlurHost.Children.Add(visual); });
+    }
+
+    // ------------------------------------------------------- shape tool ---
+
+    private void Shape_MouseDown(Point start)
+    {
+        _shapeDragging = true;
+        _shapeStart = start;
+
+        var brush = new SolidColorBrush(_shapeColor);
+        Shape s = _shapeKind == ShapeKind.Ellipse ? new Ellipse() : new Rectangle();
+        if (_shapeFilled) { s.Fill = brush; }
+        else { s.Fill = Brushes.Transparent; s.Stroke = brush; s.StrokeThickness = _shapeWidth; }
+
+        Canvas.SetLeft(s, start.X);
+        Canvas.SetTop(s, start.Y);
+        ShapeHost.Children.Add(s);
+        _shapePreview = s;
+        InteractionLayer.CaptureMouse();
+    }
+
+    private void Shape_MouseMove(Point p)
+    {
+        if (_shapePreview == null) return;
+        var r = MakeRect(_shapeStart, p);
+        Canvas.SetLeft(_shapePreview, r.X);
+        Canvas.SetTop(_shapePreview, r.Y);
+        _shapePreview.Width = r.Width;
+        _shapePreview.Height = r.Height;
+        if (_shapePreview is Rectangle rect && _shapeKind == ShapeKind.RoundedRectangle)
+        {
+            double radius = Math.Min(16, Math.Min(r.Width, r.Height) / 3.0);
+            rect.RadiusX = radius;
+            rect.RadiusY = radius;
+        }
+    }
+
+    private void Shape_MouseUp(Point p)
+    {
+        _shapeDragging = false;
+        InteractionLayer.ReleaseMouseCapture();
+
+        var shape = _shapePreview;
+        _shapePreview = null;
+        if (shape == null) return;
+
+        var r = MakeRect(_shapeStart, p);
+        if (r.Width < 4 || r.Height < 4) { ShapeHost.Children.Remove(shape); return; }
+
+        _history.Push(
+            undo: () => ShapeHost.Children.Remove(shape),
+            redo: () => { if (!ShapeHost.Children.Contains(shape)) ShapeHost.Children.Add(shape); });
     }
 
     // -------------------------------------------------------- text tool ---
@@ -847,7 +1047,7 @@ public partial class CaptureOverlayWindow : Window
     private BitmapSource Flatten()
     {
         CommitActiveText(discardIfEmpty: true);
-        return Compositor.Compose(_screenshot, _selection, Ink.Strokes, BlurHost, TextHost);
+        return Compositor.Compose(_screenshot, _selection, Ink.Strokes, BlurHost, ShapeHost, TextHost);
     }
 
     private void DoCopy()
@@ -895,6 +1095,7 @@ public partial class CaptureOverlayWindow : Window
 
         Ink.Strokes.Clear();
         BlurHost.Children.Clear();
+        ShapeHost.Children.Clear();
         TextHost.Children.Clear();
         _history.Clear();
 
@@ -928,6 +1129,10 @@ public partial class CaptureOverlayWindow : Window
         _settings.TextBold = _textBold;
         _settings.TextItalic = _textItalic;
         _settings.TextStrikethrough = _textStrike;
+        _settings.ShapeKind = _shapeKind.ToString();
+        _settings.ShapeFilled = _shapeFilled;
+        _settings.ShapeColor = ToHex(_shapeColor);
+        _settings.ShapeWidth = _shapeWidth;
         _settings.Save();
     }
 

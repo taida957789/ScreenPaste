@@ -29,6 +29,7 @@
             <!-- The editing surface, positioned/sized to the selection in code. -->
             <Canvas x:Name="EditLayer" ClipToBounds="True" Visibility="Collapsed">
                 <Canvas x:Name="BlurHost"/>
+                <Canvas x:Name="ShapeHost" Canvas.Left="0" Canvas.Top="0"/>
                 <InkCanvas x:Name="Ink" Background="Transparent"
                            Canvas.Left="0" Canvas.Top="0"/>
                 <Canvas x:Name="TextHost" Canvas.Left="0" Canvas.Top="0"/>

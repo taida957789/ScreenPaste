@@ -16,7 +16,7 @@ public static class Compositor
     /// <paramref name="blurLayer"/> is the blur-region host (positioned at region origin).
     /// </summary>
     public static BitmapSource Compose(BitmapSource screenshot, Int32Rect regionPx,
-        StrokeCollection strokes, Visual blurLayer, Visual textLayer)
+        StrokeCollection strokes, Visual blurLayer, Visual shapeLayer, Visual textLayer)
     {
         int w = Math.Max(1, regionPx.Width);
         int h = Math.Max(1, regionPx.Height);
@@ -25,10 +25,14 @@ public static class Compositor
         // Crop the underlying screenshot for the selection.
         var crop = new CroppedBitmap(screenshot, ClampRect(regionPx, screenshot));
 
-        // Blur/text hosts have offset (0,0), so they render 1:1 into the region.
+        // Blur/shape/text hosts have offset (0,0), so they render 1:1 into the region.
         var blurRtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
         blurRtb.Render(blurLayer);
         blurRtb.Freeze();
+
+        var shapeRtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+        shapeRtb.Render(shapeLayer);
+        shapeRtb.Freeze();
 
         var textRtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
         textRtb.Render(textLayer);
@@ -39,8 +43,9 @@ public static class Compositor
         {
             dc.DrawImage(crop, full);       // 1) base screenshot
             dc.DrawImage(blurRtb, full);    // 2) blur regions
-            strokes.Draw(dc);               // 3) ink strokes (region-local coords)
-            dc.DrawImage(textRtb, full);    // 4) text annotations on top
+            dc.DrawImage(shapeRtb, full);   // 3) shapes
+            strokes.Draw(dc);               // 4) ink strokes (region-local coords)
+            dc.DrawImage(textRtb, full);    // 5) text annotations on top
         }
 
         var result = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
