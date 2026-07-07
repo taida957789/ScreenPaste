@@ -1,10 +1,10 @@
+![ScreenPaste](screenshots/banner.png)
+
 <a href='https://ko-fi.com/M6T122R1AH' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi6.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
 
 # ScreenPaste
 
 輕巧的 Windows 截圖與標註工具：一鍵截圖、即時標註、釘選到螢幕。
-
-![ScreenPaste](screenshots/ui.png)
 
 ## 功能
 
@@ -47,6 +47,8 @@
 兩者皆為自我包含，**無需另外安裝 .NET Runtime**。
 
 ## 快速使用
+
+![工具列](screenshots/ui.png)
 
 1. 啟動後常駐系統匣，按 **F1**（或雙擊系統匣圖示）開始截圖。
 2. 滑鼠移到視窗自動描框、點擊截取，或拖曳框選自訂範圍。
