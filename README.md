@@ -1,6 +1,17 @@
+<a href='https://ko-fi.com/M6T122R1AH' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi6.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
+
 # ScreenPaste
 
 仿 Snipaste 的 Windows 截圖標註工具，以 **C# + WPF (.NET 9)** 打造。
+
+## 安裝
+
+到 [Releases](https://github.com/taida957789/ScreenPaste/releases) 下載：
+
+- **`ScreenPaste-<版本>-setup.exe`** — 安裝版（免系統管理員權限，安裝於 `%APPDATA%\ScreenPaste`，含開始功能表捷徑與解除安裝程式；可選桌面捷徑、開機自動啟動）。
+- **`ScreenPaste-<版本>-win-x64-portable.zip`** — 免安裝綠色版（解壓即可執行）。
+
+兩者皆為自我包含（self-contained），使用者**無需另外安裝 .NET Runtime**。
 
 ## 功能
 

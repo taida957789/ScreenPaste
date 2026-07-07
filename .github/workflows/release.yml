@@ -40,14 +40,21 @@ jobs:
             -p:Version=$env:VERSION -p:FileVersion=$env:VERSION -p:AssemblyVersion=$env:VERSION `
             -o publish
 
-      - name: Package
+      - name: Build installer (Inno Setup)
         shell: pwsh
         run: |
-          $exe = "ScreenPaste-$env:VERSION-win-x64.exe"
-          $zip = "ScreenPaste-$env:VERSION-win-x64.zip"
-          Copy-Item publish/ScreenPaste.exe $exe
+          choco install innosetup -y --no-progress
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          & $iscc "/DMyAppVersion=$env:VERSION" installer\ScreenPaste.iss
+          $setup = "dist\ScreenPaste-$env:VERSION-setup.exe"
+          if (-not (Test-Path $setup)) { throw "Installer not found at $setup" }
+          "ASSET_SETUP=$setup" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Package portable zip
+        shell: pwsh
+        run: |
+          $zip = "dist\ScreenPaste-$env:VERSION-win-x64-portable.zip"
           Compress-Archive -Path publish/ScreenPaste.exe -DestinationPath $zip -Force
-          "ASSET_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "ASSET_ZIP=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Create release and upload assets
@@ -56,12 +63,12 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            ${{ env.ASSET_EXE }}
+            ${{ env.ASSET_SETUP }}
             ${{ env.ASSET_ZIP }}
 
-      - name: Upload build artifact (manual runs)
+      - name: Upload build artifacts (manual runs)
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: ScreenPaste-win-x64
-          path: publish/ScreenPaste.exe
+          path: dist/*

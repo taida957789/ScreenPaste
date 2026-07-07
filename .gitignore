@@ -5,6 +5,7 @@ obj/
 [Rr]elease/
 publish/
 publish_test/
+dist/
 *.user
 
 # Release packaging artifacts
