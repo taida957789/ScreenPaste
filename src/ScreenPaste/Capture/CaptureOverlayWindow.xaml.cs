@@ -6,6 +6,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
+using Microsoft.Win32;
 using ScreenPaste.Editor;
 using ScreenPaste.Native;
 using ScreenPaste.Output;
@@ -66,9 +67,13 @@ public partial class CaptureOverlayWindow : Window
     private Point _shapeStart;
     private Shape? _shapePreview;
 
+    // Sticker (pasted image) drag state
+    private Image? _stickerDrag;
+    private Point _stickerGrab;
+
     // Toolbar controls we need to read/update
     private Slider _widthSlider = null!, _opacitySlider = null!, _blurSlider = null!, _textSizeSlider = null!, _shapeWidthSlider = null!;
-    private StackPanel _blurOptionsPanel = null!, _penOptionsPanel = null!, _textOptionsPanel = null!, _shapeOptionsPanel = null!;
+    private StackPanel _blurOptionsPanel = null!, _penOptionsPanel = null!, _textOptionsPanel = null!, _shapeOptionsPanel = null!, _stickerOptionsPanel = null!;
     private ComboBox _fontCombo = null!;
     private Button _boldButton = null!, _italicButton = null!, _strikeButton = null!;
     private Button _redoButton = null!;
@@ -316,7 +321,8 @@ public partial class CaptureOverlayWindow : Window
     private static readonly string GlyphHighlighter = Glyph(0xE891); // Highlight
     private static readonly string GlyphText = Glyph(0xE8D2);        // Font (A)
     private static readonly string GlyphShape = Glyph(0xE71A);       // Stop (square/block)
-    private static readonly string GlyphBlur = Glyph(0xE7B3);        // blur metaphor
+    private static readonly string GlyphSticker = Glyph(0xE8B9);     // Pictures (paste image)
+    private static readonly string GlyphBlur = Glyph(0xE80A);        // GridView (mosaic look)
     private static readonly string GlyphRedo = Glyph(0xE7A6);        // Redo
     private static readonly string GlyphCopy = Glyph(0xE8C8);        // Copy
     private static readonly string GlyphSave = Glyph(0xE74E);        // Save
@@ -339,6 +345,7 @@ public partial class CaptureOverlayWindow : Window
         toolsRow.Children.Add(MakeToolButton(GlyphHighlighter, "螢光筆", ToolKind.Highlighter));
         toolsRow.Children.Add(MakeToolButton(GlyphText, "文字", ToolKind.Text));
         toolsRow.Children.Add(MakeToolButton(GlyphShape, "形狀", ToolKind.Shape));
+        toolsRow.Children.Add(MakeToolButton(GlyphSticker, "貼圖", ToolKind.Sticker));
         toolsRow.Children.Add(MakeToolButton(GlyphBlur, "模糊", ToolKind.Blur));
         toolsRow.Children.Add(MakeSeparator());
         // 復原改由設定中的熱鍵觸發（預設 Ctrl+Z），不再放工具列按鈕。
@@ -428,6 +435,29 @@ public partial class CaptureOverlayWindow : Window
         foreach (var c in Palette) _shapeOptionsPanel.Children.Add(MakeSwatch(c));
         _shapeOptionsPanel.Children.Add(MakeMoreColorsButton());
         ToolbarStack.Children.Add(_shapeOptionsPanel);
+
+        // ---- Sticker options (add image; placed stickers are draggable / wheel-resizable) ----
+        _stickerOptionsPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+        var addImage = new Button
+        {
+            Content = "選擇圖片…",
+            Padding = new Thickness(10, 3, 10, 3),
+            Foreground = Theme.ForegroundBrush,
+            Background = Theme.ButtonBgBrush,
+            BorderBrush = Theme.ButtonBorderBrush,
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+        };
+        addImage.Click += (_, _) => AddSticker();
+        _stickerOptionsPanel.Children.Add(addImage);
+        _stickerOptionsPanel.Children.Add(new TextBlock
+        {
+            Text = "  可拖曳移動、滾輪縮放",
+            Foreground = Theme.ForegroundBrush,
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        ToolbarStack.Children.Add(_stickerOptionsPanel);
 
         // The toolbar itself shows a move cursor (drag); interactive controls override it.
         ApplyControlCursors(ToolbarStack);
@@ -775,19 +805,24 @@ public partial class CaptureOverlayWindow : Window
         bool isBlur = kind is ToolKind.Blur;
         bool isText = kind is ToolKind.Text;
         bool isShape = kind is ToolKind.Shape;
+        bool isSticker = kind is ToolKind.Sticker;
 
         _penOptionsPanel.Visibility = isPen ? Visibility.Visible : Visibility.Collapsed;
         _blurOptionsPanel.Visibility = isBlur ? Visibility.Visible : Visibility.Collapsed;
         _textOptionsPanel.Visibility = isText ? Visibility.Visible : Visibility.Collapsed;
         _shapeOptionsPanel.Visibility = isShape ? Visibility.Visible : Visibility.Collapsed;
+        _stickerOptionsPanel.Visibility = isSticker ? Visibility.Visible : Visibility.Collapsed;
 
         Ink.EditingMode = isPen ? InkCanvasEditingMode.Ink : InkCanvasEditingMode.None;
         Ink.IsHitTestVisible = isPen;
+        // Region tools capture via InteractionLayer; sticker mode lets clicks reach the
+        // sticker images below so they can be dragged/resized.
         InteractionLayer.IsHitTestVisible = isBlur || isText || isShape;
 
         if (isPen) LoadPenControls();
         if (isBlur) SelectBlurKind(_blurKind);
         if (isShape) { SelectShapeKind(_shapeKind); SelectShapeStyle(_shapeFilled); }
+        if (isSticker && StickerHost.Children.Count == 0) AddSticker();
     }
 
     private void SelectBlurKind(BlurKind kind)
@@ -982,6 +1017,82 @@ public partial class CaptureOverlayWindow : Window
             redo: () => { if (!ShapeHost.Children.Contains(shape)) ShapeHost.Children.Add(shape); });
     }
 
+    // ----------------------------------------------------- sticker tool ---
+
+    private void AddSticker()
+    {
+        var dlg = new OpenFileDialog { Title = "選擇圖片", Filter = ImageLoader.FileFilter };
+        if (dlg.ShowDialog() != true) return;
+
+        var src = ImageLoader.TryLoad(dlg.FileName);
+        if (src == null)
+        {
+            System.Windows.MessageBox.Show(this, "無法載入這個圖片檔。", "ScreenPaste",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        // Fit within ~90% of the selection while keeping aspect ratio.
+        double scale = Math.Min(1.0, Math.Min(
+            _selection.Width * 0.9 / src.PixelWidth,
+            _selection.Height * 0.9 / src.PixelHeight));
+        double w = Math.Max(16, src.PixelWidth * scale);
+        double h = Math.Max(16, src.PixelHeight * scale);
+
+        var image = new Image { Source = src, Width = w, Height = h, Stretch = Stretch.Fill };
+        RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
+        Canvas.SetLeft(image, (_selection.Width - w) / 2);
+        Canvas.SetTop(image, (_selection.Height - h) / 2);
+        AttachStickerInteractions(image);
+        StickerHost.Children.Add(image);
+
+        _history.Push(
+            undo: () => StickerHost.Children.Remove(image),
+            redo: () => { if (!StickerHost.Children.Contains(image)) StickerHost.Children.Add(image); });
+    }
+
+    private void AttachStickerInteractions(Image image)
+    {
+        image.Cursor = Cursors.SizeAll;
+
+        image.MouseLeftButtonDown += (_, e) =>
+        {
+            if (_tool != ToolKind.Sticker) return;
+            _stickerDrag = image;
+            var p = e.GetPosition(StickerHost);
+            _stickerGrab = new Point(p.X - Canvas.GetLeft(image), p.Y - Canvas.GetTop(image));
+            image.CaptureMouse();
+            e.Handled = true;
+        };
+        image.MouseMove += (_, e) =>
+        {
+            if (_stickerDrag != image) return;
+            var p = e.GetPosition(StickerHost);
+            Canvas.SetLeft(image, p.X - _stickerGrab.X);
+            Canvas.SetTop(image, p.Y - _stickerGrab.Y);
+        };
+        image.MouseLeftButtonUp += (_, e) =>
+        {
+            if (_stickerDrag != image) return;
+            _stickerDrag = null;
+            image.ReleaseMouseCapture();
+            e.Handled = true;
+        };
+        image.MouseWheel += (_, e) =>
+        {
+            if (_tool != ToolKind.Sticker) return;
+            double factor = e.Delta > 0 ? 1.1 : 1 / 1.1;
+            double nw = Math.Max(16, image.Width * factor);
+            double nh = Math.Max(16, image.Height * factor);
+            // Keep the image centred while scaling.
+            Canvas.SetLeft(image, Canvas.GetLeft(image) - (nw - image.Width) / 2);
+            Canvas.SetTop(image, Canvas.GetTop(image) - (nh - image.Height) / 2);
+            image.Width = nw;
+            image.Height = nh;
+            e.Handled = true;
+        };
+    }
+
     // -------------------------------------------------------- text tool ---
 
     private void PlaceText(Point rel)
@@ -1066,7 +1177,7 @@ public partial class CaptureOverlayWindow : Window
     private BitmapSource Flatten()
     {
         CommitActiveText(discardIfEmpty: true);
-        return Compositor.Compose(_screenshot, _selection, Ink.Strokes, BlurHost, ShapeHost, TextHost);
+        return Compositor.Compose(_screenshot, _selection, Ink.Strokes, BlurHost, ShapeHost, StickerHost, TextHost);
     }
 
     private void DoCopy()
@@ -1115,6 +1226,7 @@ public partial class CaptureOverlayWindow : Window
         Ink.Strokes.Clear();
         BlurHost.Children.Clear();
         ShapeHost.Children.Clear();
+        StickerHost.Children.Clear();
         TextHost.Children.Clear();
         _history.Clear();
 

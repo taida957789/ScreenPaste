@@ -16,7 +16,7 @@ public static class Compositor
     /// <paramref name="blurLayer"/> is the blur-region host (positioned at region origin).
     /// </summary>
     public static BitmapSource Compose(BitmapSource screenshot, Int32Rect regionPx,
-        StrokeCollection strokes, Visual blurLayer, Visual shapeLayer, Visual textLayer)
+        StrokeCollection strokes, Visual blurLayer, Visual shapeLayer, Visual stickerLayer, Visual textLayer)
     {
         int w = Math.Max(1, regionPx.Width);
         int h = Math.Max(1, regionPx.Height);
@@ -25,18 +25,19 @@ public static class Compositor
         // Crop the underlying screenshot for the selection.
         var crop = new CroppedBitmap(screenshot, ClampRect(regionPx, screenshot));
 
-        // Blur/shape/text hosts have offset (0,0), so they render 1:1 into the region.
-        var blurRtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
-        blurRtb.Render(blurLayer);
-        blurRtb.Freeze();
+        // The annotation hosts have offset (0,0), so they render 1:1 into the region.
+        BitmapSource RenderLayer(Visual v)
+        {
+            var rtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+            rtb.Render(v);
+            rtb.Freeze();
+            return rtb;
+        }
 
-        var shapeRtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
-        shapeRtb.Render(shapeLayer);
-        shapeRtb.Freeze();
-
-        var textRtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
-        textRtb.Render(textLayer);
-        textRtb.Freeze();
+        var blurRtb = RenderLayer(blurLayer);
+        var shapeRtb = RenderLayer(shapeLayer);
+        var stickerRtb = RenderLayer(stickerLayer);
+        var textRtb = RenderLayer(textLayer);
 
         var dv = new DrawingVisual();
         using (var dc = dv.RenderOpen())
@@ -44,8 +45,9 @@ public static class Compositor
             dc.DrawImage(crop, full);       // 1) base screenshot
             dc.DrawImage(blurRtb, full);    // 2) blur regions
             dc.DrawImage(shapeRtb, full);   // 3) shapes
-            strokes.Draw(dc);               // 4) ink strokes (region-local coords)
-            dc.DrawImage(textRtb, full);    // 5) text annotations on top
+            dc.DrawImage(stickerRtb, full); // 4) pasted image stickers
+            strokes.Draw(dc);               // 5) ink strokes (region-local coords)
+            dc.DrawImage(textRtb, full);    // 6) text annotations on top
         }
 
         var result = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);

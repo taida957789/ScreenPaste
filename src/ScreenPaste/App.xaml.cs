@@ -19,6 +19,7 @@ public partial class App : Application
     private HotkeyManager? _hotkey;
     private AppSettings _settings = new();
     private CaptureOverlayWindow? _overlay;
+    private SettingsWindow? _settingsWindow;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -47,64 +48,48 @@ public partial class App : Application
 
     private void SetupTray()
     {
-        var menu = new Forms.ContextMenuStrip();
-        menu.Items.Add("截圖 (" + _settings.CaptureHotkey + ")", null, (_, _) => StartCapture());
-        menu.Items.Add(new Forms.ToolStripSeparator());
-
-        // Appearance submenu: System / Light / Dark
-        var themeMenu = new Forms.ToolStripMenuItem("外觀主題");
-        AddThemeItem(themeMenu, "跟隨系統", "System");
-        AddThemeItem(themeMenu, "淺色", "Light");
-        AddThemeItem(themeMenu, "深色", "Dark");
-        menu.Items.Add(themeMenu);
-
-        var startup = new Forms.ToolStripMenuItem("開機時自動啟動")
-        {
-            CheckOnClick = true,
-            Checked = StartupManager.IsEnabled(),
-        };
-        startup.Click += (_, _) =>
-        {
-            _settings.RunAtStartup = startup.Checked;
-            StartupManager.SetEnabled(startup.Checked);
-            _settings.Save();
-        };
-        menu.Items.Add(startup);
-
-        menu.Items.Add(new Forms.ToolStripSeparator());
-        menu.Items.Add("開啟儲存資料夾", null, (_, _) => OpenSaveFolder());
-        menu.Items.Add("設定檔…", null, (_, _) => OpenSettingsFile());
-        menu.Items.Add(new Forms.ToolStripSeparator());
-        menu.Items.Add("結束", null, (_, _) => ExitApp());
-
-        ApplyMenuTheme(menu);
-
         _tray = new Forms.NotifyIcon
         {
             Icon = TrayIconFactory.Create(),
             Visible = true,
-            Text = "ScreenPaste — 按 " + _settings.CaptureHotkey + " 截圖",
-            ContextMenuStrip = menu,
         };
         _tray.DoubleClick += (_, _) => StartCapture();
+        RefreshTray();
     }
 
-    private void AddThemeItem(Forms.ToolStripMenuItem parent, string label, string value)
+    /// <summary>(Re)build the tray menu — reflects the current hotkey label and theme.</summary>
+    private void RefreshTray()
     {
-        var item = new Forms.ToolStripMenuItem(label)
-        {
-            Checked = string.Equals(_settings.Theme, value, StringComparison.OrdinalIgnoreCase),
-        };
-        item.Click += (_, _) =>
-        {
-            _settings.Theme = value;
-            _settings.Save();
-            Theme.Apply(value);
-            foreach (Forms.ToolStripMenuItem sib in parent.DropDownItems)
-                sib.Checked = sib == item;
-            if (_tray?.ContextMenuStrip != null) ApplyMenuTheme(_tray.ContextMenuStrip);
-        };
-        parent.DropDownItems.Add(item);
+        if (_tray == null) return;
+        var menu = new Forms.ContextMenuStrip();
+        menu.Items.Add("截圖 (" + _settings.CaptureHotkey + ")", null, (_, _) => StartCapture());
+        menu.Items.Add(new Forms.ToolStripSeparator());
+        menu.Items.Add("設定…", null, (_, _) => OpenSettings());
+        menu.Items.Add("開啟儲存資料夾", null, (_, _) => OpenSaveFolder());
+        menu.Items.Add(new Forms.ToolStripSeparator());
+        menu.Items.Add("結束", null, (_, _) => ExitApp());
+        ApplyMenuTheme(menu);
+        _tray.ContextMenuStrip = menu;
+        _tray.Text = "ScreenPaste — 按 " + _settings.CaptureHotkey + " 截圖";
+    }
+
+    private void OpenSettings()
+    {
+        if (_settingsWindow is { IsVisible: true }) { _settingsWindow.Activate(); return; }
+        _settingsWindow = new SettingsWindow(_settings, ApplySettingsChanged);
+        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+        _settingsWindow.Show();
+        _settingsWindow.Activate();
+    }
+
+    /// <summary>Apply GUI settings changes: theme, startup, capture hotkey, tray.</summary>
+    private void ApplySettingsChanged()
+    {
+        Theme.Apply(_settings.Theme);
+        StartupManager.Sync(_settings.RunAtStartup);
+        var win32 = HotkeyGesture.ToWin32(_settings.CaptureHotkey);
+        if (win32 is { } hk) _hotkey?.Register(hk.modifiers, hk.virtualKey);
+        RefreshTray();
     }
 
     /// <summary>Tint the tray menu to match the current theme.</summary>
@@ -173,16 +158,6 @@ public partial class App : Application
         {
             Directory.CreateDirectory(_settings.SaveDirectory);
             Process.Start(new ProcessStartInfo(_settings.SaveDirectory) { UseShellExecute = true });
-        }
-        catch { /* ignore */ }
-    }
-
-    private void OpenSettingsFile()
-    {
-        try
-        {
-            _settings.Save(); // ensure it exists
-            Process.Start(new ProcessStartInfo(AppSettings.ConfigPath) { UseShellExecute = true });
         }
         catch { /* ignore */ }
     }

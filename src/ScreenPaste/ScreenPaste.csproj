@@ -26,6 +26,11 @@
     <FileVersion>1.0.0.0</FileVersion>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Decodes PNG / JPEG / WebP for the paste-image (sticker) feature. -->
+    <PackageReference Include="SkiaSharp" Version="2.88.8" />
+  </ItemGroup>
+
   <!-- Keep WinForms/Drawing OUT of the implicit global usings so WPF types
        (Color, Point, Button, MouseEventArgs, …) resolve unambiguously.
        The two files that need GDI+ import System.Drawing explicitly. -->
