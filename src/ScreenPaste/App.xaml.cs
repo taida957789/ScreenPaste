@@ -48,6 +48,29 @@ public partial class App : Application
 
         SetupTray();
         SetupHotkey();
+
+        if (_settings.CheckUpdateOnStartup) CheckForUpdates(silentIfNone: true);
+    }
+
+    private UpdateWindow? _updateWindow;
+
+    /// <summary>Check GitHub for a newer release; prompt if found.</summary>
+    private async void CheckForUpdates(bool silentIfNone)
+    {
+        var info = await UpdateChecker.CheckAsync();
+        if (info != null)
+        {
+            if (_updateWindow is { IsVisible: true }) { _updateWindow.Activate(); return; }
+            _updateWindow = new UpdateWindow(info);
+            _updateWindow.Closed += (_, _) => _updateWindow = null;
+            _updateWindow.Show();
+            _updateWindow.Activate();
+        }
+        else if (!silentIfNone)
+        {
+            Forms.MessageBox.Show(Loc.T("upd.upToDate", UpdateChecker.Current.ToString()), "ScreenPaste",
+                Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Information);
+        }
     }
 
     private void SetupTray()
@@ -81,7 +104,7 @@ public partial class App : Application
     private void OpenSettings()
     {
         if (_settingsWindow is { IsVisible: true }) { _settingsWindow.Activate(); return; }
-        _settingsWindow = new SettingsWindow(_settings, ApplySettingsChanged);
+        _settingsWindow = new SettingsWindow(_settings, ApplySettingsChanged, () => CheckForUpdates(silentIfNone: false));
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
         _settingsWindow.Activate();

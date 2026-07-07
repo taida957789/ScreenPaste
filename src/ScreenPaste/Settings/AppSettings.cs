@@ -52,6 +52,9 @@ public sealed class AppSettings
     // ---- Startup ----
     public bool RunAtStartup { get; set; }
 
+    // ---- Updates ----
+    public bool CheckUpdateOnStartup { get; set; } = true;
+
     // ---- Output ----
     public string SaveDirectory { get; set; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "ScreenPaste");

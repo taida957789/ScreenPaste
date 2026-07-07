@@ -104,6 +104,19 @@ public static class Loc
         Add("about.version", "Version",              "版本",          "バージョン",         "버전",            "Version",           "Version",           "Versión");
         Add("about.repo",    "Project page",         "專案首頁",       "プロジェクトページ",   "프로젝트 페이지",   "Page du projet",    "Projektseite",      "Página del proyecto");
         Add("about.support", "Support the author",   "支持作者",       "作者を支援",         "개발자 후원",      "Soutenir l'auteur", "Autor unterstützen","Apoyar al autor");
+
+        // Updates
+        Add("set.updates",   "Updates",              "更新",          "更新",              "업데이트",         "Mises à jour",      "Updates",           "Actualizaciones");
+        Add("set.checkStartup","Check for updates on startup", "啟動時檢查更新", "起動時に更新を確認", "시작 시 업데이트 확인", "Vérifier au démarrage", "Beim Start prüfen", "Buscar al iniciar");
+        Add("set.checkNow",  "Check now",            "立即檢查更新",   "今すぐ確認",         "지금 확인",        "Vérifier maintenant","Jetzt prüfen",      "Buscar ahora");
+        Add("upd.title",     "Software update",      "軟體更新",       "ソフトウェア更新",    "소프트웨어 업데이트","Mise à jour",       "Softwareupdate",    "Actualización");
+        Add("upd.available", "A new version {0} is available (current {1}). Update now?", "有新版本 {0}（目前 {1}）。是否要更新？", "新しいバージョン {0} が利用可能です（現在 {1}）。更新しますか？", "새 버전 {0} 사용 가능(현재 {1}). 업데이트할까요?", "Nouvelle version {0} disponible (actuelle {1}). Mettre à jour ?", "Neue Version {0} verfügbar (aktuell {1}). Jetzt aktualisieren?", "Nueva versión {0} disponible (actual {1}). ¿Actualizar?");
+        Add("upd.upToDate",  "You're on the latest version ({0}).", "已是最新版本（{0}）。", "最新バージョンです（{0}）。", "최신 버전입니다({0}).", "Vous avez la dernière version ({0}).", "Sie haben die neueste Version ({0}).", "Ya tienes la última versión ({0}).");
+        Add("upd.failed",    "Could not check for updates.", "檢查更新失敗。", "更新を確認できませんでした。", "업데이트를 확인할 수 없습니다.", "Échec de la vérification.", "Update-Prüfung fehlgeschlagen.", "No se pudo comprobar.");
+        Add("upd.now",       "Update now",           "立即更新",       "今すぐ更新",         "지금 업데이트",    "Mettre à jour",     "Jetzt aktualisieren","Actualizar");
+        Add("upd.later",     "Later",                "稍後",          "後で",              "나중에",          "Plus tard",         "Später",            "Más tarde");
+        Add("upd.openPage",  "Open page",            "開啟頁面",       "ページを開く",        "페이지 열기",      "Ouvrir la page",    "Seite öffnen",      "Abrir página");
+        Add("upd.downloading","Downloading…",        "下載中…",        "ダウンロード中…",     "다운로드 중…",     "Téléchargement…",   "Wird geladen…",     "Descargando…");
         Add("tray.tip",      "ScreenPaste — press {0} to capture", "ScreenPaste — 按 {0} 截圖", "ScreenPaste — {0} でキャプチャ", "ScreenPaste — {0} 키로 캡처", "ScreenPaste — {0} pour capturer", "ScreenPaste — {0} zum Aufnehmen", "ScreenPaste — {0} para capturar");
         Add("msg.running",   "ScreenPaste is already running (check the system tray).", "ScreenPaste 已經在執行中（請查看系統匣）。", "ScreenPaste は既に実行中です（システムトレイを確認してください）。", "ScreenPaste가 이미 실행 중입니다(시스템 트레이 확인).", "ScreenPaste est déjà en cours d'exécution (voir la barre d'état).", "ScreenPaste läuft bereits (siehe Infobereich).", "ScreenPaste ya se está ejecutando (mira la bandeja).");
         Add("msg.hotkeyFail","Capture hotkey \"{0}\" could not be registered (invalid or in use). You can still capture from the tray.", "截圖熱鍵「{0}」註冊失敗（無效或被占用）。仍可由系統匣截圖。", "キャプチャのホットキー「{0}」を登録できません（無効か使用中）。トレイからは可能です。", "캡처 단축키 \"{0}\" 등록 실패(잘못되었거나 사용 중). 트레이에서 캡처 가능합니다.", "Le raccourci de capture « {0} » n'a pas pu être enregistré (invalide ou occupé). Utilisez la barre d'état.", "Aufnahme-Hotkey „{0}“ konnte nicht registriert werden (ungültig/belegt). Nutzung über Infobereich möglich.", "No se pudo registrar el atajo « {0} » (inválido u ocupado). Puedes capturar desde la bandeja.");

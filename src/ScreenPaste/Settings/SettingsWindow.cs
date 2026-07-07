@@ -15,17 +15,20 @@ public sealed class SettingsWindow : Window
 {
     private readonly AppSettings _s;
     private readonly Action _onApplied;
+    private readonly Action _onCheckUpdates;
 
     private TextBox _capture = null!, _undo = null!, _redo = null!, _copy = null!, _save = null!, _quickSave = null!;
     private ComboBox _language = null!;
     private ComboBox _theme = null!;
     private CheckBox _startup = null!;
+    private CheckBox _checkUpdate = null!;
     private TextBox _saveDir = null!;
 
-    public SettingsWindow(AppSettings settings, Action onApplied)
+    public SettingsWindow(AppSettings settings, Action onApplied, Action onCheckUpdates)
     {
         _s = settings;
         _onApplied = onApplied;
+        _onCheckUpdates = onCheckUpdates;
 
         Title = Loc.T("set.title");
         Width = 470;
@@ -55,6 +58,14 @@ public sealed class SettingsWindow : Window
 
         _startup = new CheckBox { IsChecked = _s.RunAtStartup, Content = Loc.T("set.startup"), Foreground = Theme.ForegroundBrush, VerticalAlignment = VerticalAlignment.Center };
         body.Children.Add(Row("", _startup));
+
+        body.Children.Add(Header(Loc.T("set.updates")));
+        _checkUpdate = new CheckBox { IsChecked = _s.CheckUpdateOnStartup, Content = Loc.T("set.checkStartup"), Foreground = Theme.ForegroundBrush, VerticalAlignment = VerticalAlignment.Center };
+        body.Children.Add(Row("", _checkUpdate));
+        var checkNow = TextButton(Loc.T("set.checkNow"), () => _onCheckUpdates());
+        checkNow.HorizontalAlignment = HorizontalAlignment.Left;
+        checkNow.Margin = new Thickness(0);
+        body.Children.Add(Row("", checkNow));
 
         body.Children.Add(Header(Loc.T("set.hotkeys")));
         body.Children.Add(new TextBlock
@@ -92,6 +103,7 @@ public sealed class SettingsWindow : Window
         _s.Language = ComboValue(_language);
         _s.Theme = ComboValue(_theme);
         _s.RunAtStartup = _startup.IsChecked == true;
+        _s.CheckUpdateOnStartup = _checkUpdate.IsChecked == true;
         _s.SaveDirectory = _saveDir.Text.Trim();
 
         _s.CaptureHotkey = _capture.Text.Trim();
