@@ -20,6 +20,7 @@ public partial class App : Application
     private AppSettings _settings = new();
     private CaptureOverlayWindow? _overlay;
     private SettingsWindow? _settingsWindow;
+    private AboutWindow? _aboutWindow;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -69,6 +70,7 @@ public partial class App : Application
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(Loc.T("tray.settings"), null, (_, _) => OpenSettings());
         menu.Items.Add(Loc.T("tray.openFolder"), null, (_, _) => OpenSaveFolder());
+        menu.Items.Add(Loc.T("tray.about"), null, (_, _) => OpenAbout());
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(Loc.T("tray.exit"), null, (_, _) => ExitApp());
         ApplyMenuTheme(menu);
@@ -83,6 +85,15 @@ public partial class App : Application
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
         _settingsWindow.Activate();
+    }
+
+    private void OpenAbout()
+    {
+        if (_aboutWindow is { IsVisible: true }) { _aboutWindow.Activate(); return; }
+        _aboutWindow = new AboutWindow();
+        _aboutWindow.Closed += (_, _) => _aboutWindow = null;
+        _aboutWindow.Show();
+        _aboutWindow.Activate();
     }
 
     /// <summary>Apply GUI settings changes: theme, startup, capture hotkey, tray.</summary>
