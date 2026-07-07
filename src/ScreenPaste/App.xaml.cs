@@ -49,6 +49,9 @@ public partial class App : Application
         SetupTray();
         SetupHotkey();
 
+        _tray?.ShowBalloonTip(3000, "ScreenPaste",
+            Loc.T("tray.started", _settings.CaptureHotkey), Forms.ToolTipIcon.Info);
+
         if (_settings.CheckUpdateOnStartup) CheckForUpdates(silentIfNone: true);
     }
 
