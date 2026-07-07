@@ -341,44 +341,44 @@ public partial class CaptureOverlayWindow : Window
         Toolbar.BorderBrush = Theme.ButtonBorderBrush;
 
         var toolsRow = new StackPanel { Orientation = Orientation.Horizontal };
-        toolsRow.Children.Add(MakeToolButton(GlyphMarker, "麥克筆", ToolKind.MarkerPen));
-        toolsRow.Children.Add(MakeToolButton(GlyphHighlighter, "螢光筆", ToolKind.Highlighter));
-        toolsRow.Children.Add(MakeToolButton(GlyphText, "文字", ToolKind.Text));
-        toolsRow.Children.Add(MakeToolButton(GlyphShape, "形狀", ToolKind.Shape));
-        toolsRow.Children.Add(MakeToolButton(GlyphSticker, "貼圖", ToolKind.Sticker));
-        toolsRow.Children.Add(MakeToolButton(GlyphBlur, "模糊", ToolKind.Blur));
+        toolsRow.Children.Add(MakeToolButton(GlyphMarker, Loc.T("tool.marker"), ToolKind.MarkerPen));
+        toolsRow.Children.Add(MakeToolButton(GlyphHighlighter, Loc.T("tool.highlighter"), ToolKind.Highlighter));
+        toolsRow.Children.Add(MakeToolButton(GlyphText, Loc.T("tool.text"), ToolKind.Text));
+        toolsRow.Children.Add(MakeToolButton(GlyphShape, Loc.T("tool.shape"), ToolKind.Shape));
+        toolsRow.Children.Add(MakeToolButton(GlyphSticker, Loc.T("tool.sticker"), ToolKind.Sticker));
+        toolsRow.Children.Add(MakeToolButton(GlyphBlur, Loc.T("tool.blur"), ToolKind.Blur));
         toolsRow.Children.Add(MakeSeparator());
         // 復原改由設定中的熱鍵觸發（預設 Ctrl+Z），不再放工具列按鈕。
-        _redoButton = MakeActionButton(GlyphRedo, "重做 (" + _settings.RedoHotkey + ")", () => _history.Redo());
+        _redoButton = MakeActionButton(GlyphRedo, Loc.T("action.redo") + " (" + _settings.RedoHotkey + ")", () => _history.Redo());
         toolsRow.Children.Add(_redoButton);
         toolsRow.Children.Add(MakeSeparator());
-        toolsRow.Children.Add(MakeActionButton(GlyphCopy, "複製 (" + _settings.CopyHotkey + ")", DoCopy));
-        toolsRow.Children.Add(MakeActionButton(GlyphSave, "儲存 (" + _settings.SaveHotkey + ")", DoSave));
-        toolsRow.Children.Add(MakeActionButton(GlyphPin, "釘選到螢幕", DoPin));
-        toolsRow.Children.Add(MakeActionButton(GlyphClose, "關閉 (Esc)", Cancel));
+        toolsRow.Children.Add(MakeActionButton(GlyphCopy, Loc.T("action.copy") + " (" + _settings.CopyHotkey + ")", DoCopy));
+        toolsRow.Children.Add(MakeActionButton(GlyphSave, Loc.T("action.save") + " (" + _settings.SaveHotkey + ")", DoSave));
+        toolsRow.Children.Add(MakeActionButton(GlyphPin, Loc.T("action.pin"), DoPin));
+        toolsRow.Children.Add(MakeActionButton(GlyphClose, Loc.T("action.close") + " (Esc)", Cancel));
         ToolbarStack.Children.Add(toolsRow);
 
         // ---- Pen options (width / opacity / colours) ----
         _penOptionsPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
-        _penOptionsPanel.Children.Add(Label("粗細"));
+        _penOptionsPanel.Children.Add(Label(Loc.T("lbl.width")));
         _widthSlider = new Slider { Minimum = 1, Maximum = 40, Width = 90, VerticalAlignment = VerticalAlignment.Center };
         _widthSlider.ValueChanged += (_, _) => OnWidthChanged();
         _penOptionsPanel.Children.Add(_widthSlider);
-        _penOptionsPanel.Children.Add(Label("透明度"));
+        _penOptionsPanel.Children.Add(Label(Loc.T("lbl.opacity")));
         _opacitySlider = new Slider { Minimum = 0.1, Maximum = 1.0, Width = 80, VerticalAlignment = VerticalAlignment.Center };
         _opacitySlider.ValueChanged += (_, _) => OnOpacityChanged();
         _penOptionsPanel.Children.Add(_opacitySlider);
-        _penOptionsPanel.Children.Add(Label("顏色"));
+        _penOptionsPanel.Children.Add(Label(Loc.T("lbl.color")));
         foreach (var c in Palette) _penOptionsPanel.Children.Add(MakeSwatch(c));
         _penOptionsPanel.Children.Add(MakeMoreColorsButton());
         ToolbarStack.Children.Add(_penOptionsPanel);
 
         // ---- Blur options (type selector + strength) ----
         _blurOptionsPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
-        _blurOptionsPanel.Children.Add(Label("類型"));
-        _blurOptionsPanel.Children.Add(MakeBlurKindButton("高斯", BlurKind.Gaussian));
-        _blurOptionsPanel.Children.Add(MakeBlurKindButton("馬賽克", BlurKind.Mosaic));
-        _blurOptionsPanel.Children.Add(Label("模糊程度"));
+        _blurOptionsPanel.Children.Add(Label(Loc.T("lbl.type")));
+        _blurOptionsPanel.Children.Add(MakeBlurKindButton(Loc.T("lbl.gaussian"), BlurKind.Gaussian));
+        _blurOptionsPanel.Children.Add(MakeBlurKindButton(Loc.T("lbl.mosaic"), BlurKind.Mosaic));
+        _blurOptionsPanel.Children.Add(Label(Loc.T("lbl.blurStrength")));
         _blurSlider = new Slider { Minimum = 2, Maximum = 40, Width = 130, VerticalAlignment = VerticalAlignment.Center, Value = _blurStrength };
         _blurSlider.ValueChanged += (_, e) => _blurStrength = e.NewValue;
         _blurOptionsPanel.Children.Add(_blurSlider);
@@ -386,7 +386,7 @@ public partial class CaptureOverlayWindow : Window
 
         // ---- Text options (font / size / style / colour) ----
         _textOptionsPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
-        _textOptionsPanel.Children.Add(Label("字體"));
+        _textOptionsPanel.Children.Add(Label(Loc.T("lbl.font")));
         _fontCombo = new ComboBox { Width = 150, VerticalAlignment = VerticalAlignment.Center };
         foreach (var fam in Fonts.SystemFontFamilies
                      .Select(f => f.Source).OrderBy(s => s, StringComparer.OrdinalIgnoreCase))
@@ -399,12 +399,12 @@ public partial class CaptureOverlayWindow : Window
         };
         _textOptionsPanel.Children.Add(_fontCombo);
 
-        _textOptionsPanel.Children.Add(Label("大小"));
+        _textOptionsPanel.Children.Add(Label(Loc.T("lbl.size")));
         _textSizeSlider = new Slider { Minimum = 10, Maximum = 96, Width = 90, VerticalAlignment = VerticalAlignment.Center, Value = _textSize };
         _textSizeSlider.ValueChanged += (_, e) => { _textSize = e.NewValue; ApplyTextStyle(); };
         _textOptionsPanel.Children.Add(_textSizeSlider);
 
-        _textOptionsPanel.Children.Add(Label("樣式"));
+        _textOptionsPanel.Children.Add(Label(Loc.T("lbl.style")));
         _boldButton = MakeStyleToggle("B", () => { _textBold = !_textBold; RefreshStyleToggles(); ApplyTextStyle(); RefocusText(); });
         _italicButton = MakeStyleToggle("I", () => { _textItalic = !_textItalic; RefreshStyleToggles(); ApplyTextStyle(); RefocusText(); });
         _strikeButton = MakeStyleToggle("S", () => { _textStrike = !_textStrike; RefreshStyleToggles(); ApplyTextStyle(); RefocusText(); });
@@ -412,7 +412,7 @@ public partial class CaptureOverlayWindow : Window
         _textOptionsPanel.Children.Add(_italicButton);
         _textOptionsPanel.Children.Add(_strikeButton);
 
-        _textOptionsPanel.Children.Add(Label("顏色"));
+        _textOptionsPanel.Children.Add(Label(Loc.T("lbl.color")));
         foreach (var c in Palette) _textOptionsPanel.Children.Add(MakeSwatch(c));
         _textOptionsPanel.Children.Add(MakeMoreColorsButton());
         RefreshStyleToggles();
@@ -420,18 +420,18 @@ public partial class CaptureOverlayWindow : Window
 
         // ---- Shape options (shape / style / thickness / colour) ----
         _shapeOptionsPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
-        _shapeOptionsPanel.Children.Add(Label("形狀"));
-        _shapeOptionsPanel.Children.Add(MakeShapeKindButton("方形", ShapeKind.Rectangle));
-        _shapeOptionsPanel.Children.Add(MakeShapeKindButton("圓角", ShapeKind.RoundedRectangle));
-        _shapeOptionsPanel.Children.Add(MakeShapeKindButton("圓形", ShapeKind.Ellipse));
-        _shapeOptionsPanel.Children.Add(Label("樣式"));
-        _shapeOptionsPanel.Children.Add(MakeShapeStyleButton("外框", filled: false));
-        _shapeOptionsPanel.Children.Add(MakeShapeStyleButton("填滿", filled: true));
-        _shapeOptionsPanel.Children.Add(Label("粗細"));
+        _shapeOptionsPanel.Children.Add(Label(Loc.T("lbl.shape")));
+        _shapeOptionsPanel.Children.Add(MakeShapeKindButton(Loc.T("shape.rect"), ShapeKind.Rectangle));
+        _shapeOptionsPanel.Children.Add(MakeShapeKindButton(Loc.T("shape.rounded"), ShapeKind.RoundedRectangle));
+        _shapeOptionsPanel.Children.Add(MakeShapeKindButton(Loc.T("shape.ellipse"), ShapeKind.Ellipse));
+        _shapeOptionsPanel.Children.Add(Label(Loc.T("lbl.style")));
+        _shapeOptionsPanel.Children.Add(MakeShapeStyleButton(Loc.T("style.outline"), filled: false));
+        _shapeOptionsPanel.Children.Add(MakeShapeStyleButton(Loc.T("style.fill"), filled: true));
+        _shapeOptionsPanel.Children.Add(Label(Loc.T("lbl.lineWidth")));
         _shapeWidthSlider = new Slider { Minimum = 1, Maximum = 20, Width = 90, VerticalAlignment = VerticalAlignment.Center, Value = _shapeWidth };
         _shapeWidthSlider.ValueChanged += (_, e) => _shapeWidth = e.NewValue;
         _shapeOptionsPanel.Children.Add(_shapeWidthSlider);
-        _shapeOptionsPanel.Children.Add(Label("顏色"));
+        _shapeOptionsPanel.Children.Add(Label(Loc.T("lbl.color")));
         foreach (var c in Palette) _shapeOptionsPanel.Children.Add(MakeSwatch(c));
         _shapeOptionsPanel.Children.Add(MakeMoreColorsButton());
         ToolbarStack.Children.Add(_shapeOptionsPanel);
@@ -440,7 +440,7 @@ public partial class CaptureOverlayWindow : Window
         _stickerOptionsPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
         var addImage = new Button
         {
-            Content = "選擇圖片…",
+            Content = Loc.T("sticker.choose"),
             Padding = new Thickness(10, 3, 10, 3),
             Foreground = Theme.ForegroundBrush,
             Background = Theme.ButtonBgBrush,
@@ -452,7 +452,7 @@ public partial class CaptureOverlayWindow : Window
         _stickerOptionsPanel.Children.Add(addImage);
         _stickerOptionsPanel.Children.Add(new TextBlock
         {
-            Text = "  可拖曳移動、滾輪縮放",
+            Text = Loc.T("sticker.hint"),
             Foreground = Theme.ForegroundBrush,
             FontSize = 12,
             VerticalAlignment = VerticalAlignment.Center,
@@ -726,7 +726,7 @@ public partial class CaptureOverlayWindow : Window
             BorderBrush = Theme.ButtonBorderBrush,
             BorderThickness = new Thickness(1),
             FontSize = 11,
-            ToolTip = "更多顏色 / 輸入 Hex",
+            ToolTip = Loc.T("color.more"),
         };
         b.Click += (_, _) => OpenColorPicker();
         return b;
@@ -1022,13 +1022,13 @@ public partial class CaptureOverlayWindow : Window
 
     private void AddSticker()
     {
-        var dlg = new OpenFileDialog { Title = "選擇圖片", Filter = ImageLoader.FileFilter };
+        var dlg = new OpenFileDialog { Title = Loc.T("img.chooseTitle"), Filter = Loc.T("img.filter") };
         if (dlg.ShowDialog() != true) return;
 
         var src = ImageLoader.TryLoad(dlg.FileName);
         if (src == null)
         {
-            System.Windows.MessageBox.Show(this, "無法載入這個圖片檔。", "ScreenPaste",
+            MessageBox.Show(this, Loc.T("img.loadFail"), "ScreenPaste",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }

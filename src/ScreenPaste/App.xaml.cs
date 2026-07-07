@@ -29,16 +29,19 @@ public partial class App : Application
 
         base.OnStartup(e);
 
+        Loc.Init(null);   // system language until settings load
+
         _mutex = new Mutex(true, MutexName, out bool isNew);
         if (!isNew)
         {
-            Forms.MessageBox.Show("ScreenPaste 已經在執行中（請查看系統匣）。", "ScreenPaste",
+            Forms.MessageBox.Show(Loc.T("msg.running"), "ScreenPaste",
                 Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Information);
             Shutdown();
             return;
         }
 
         _settings = AppSettings.Load();
+        Loc.Init(_settings.Language);
         Theme.Apply(_settings.Theme);
         StartupManager.Sync(_settings.RunAtStartup);
 
@@ -62,15 +65,15 @@ public partial class App : Application
     {
         if (_tray == null) return;
         var menu = new Forms.ContextMenuStrip();
-        menu.Items.Add("截圖 (" + _settings.CaptureHotkey + ")", null, (_, _) => StartCapture());
+        menu.Items.Add(Loc.T("tray.capture") + " (" + _settings.CaptureHotkey + ")", null, (_, _) => StartCapture());
         menu.Items.Add(new Forms.ToolStripSeparator());
-        menu.Items.Add("設定…", null, (_, _) => OpenSettings());
-        menu.Items.Add("開啟儲存資料夾", null, (_, _) => OpenSaveFolder());
+        menu.Items.Add(Loc.T("tray.settings"), null, (_, _) => OpenSettings());
+        menu.Items.Add(Loc.T("tray.openFolder"), null, (_, _) => OpenSaveFolder());
         menu.Items.Add(new Forms.ToolStripSeparator());
-        menu.Items.Add("結束", null, (_, _) => ExitApp());
+        menu.Items.Add(Loc.T("tray.exit"), null, (_, _) => ExitApp());
         ApplyMenuTheme(menu);
         _tray.ContextMenuStrip = menu;
-        _tray.Text = "ScreenPaste — 按 " + _settings.CaptureHotkey + " 截圖";
+        _tray.Text = Loc.T("tray.tip", _settings.CaptureHotkey);
     }
 
     private void OpenSettings()
@@ -85,6 +88,7 @@ public partial class App : Application
     /// <summary>Apply GUI settings changes: theme, startup, capture hotkey, tray.</summary>
     private void ApplySettingsChanged()
     {
+        Loc.Init(_settings.Language);
         Theme.Apply(_settings.Theme);
         StartupManager.Sync(_settings.RunAtStartup);
         var win32 = HotkeyGesture.ToWin32(_settings.CaptureHotkey);
@@ -153,7 +157,7 @@ public partial class App : Application
         if (!ok)
         {
             _tray!.ShowBalloonTip(3000, "ScreenPaste",
-                $"截圖熱鍵「{_settings.CaptureHotkey}」註冊失敗（無效或被占用）。仍可由系統匣截圖。",
+                Loc.T("msg.hotkeyFail", _settings.CaptureHotkey),
                 Forms.ToolTipIcon.Warning);
         }
     }
@@ -175,7 +179,7 @@ public partial class App : Application
         catch (Exception ex)
         {
             _overlay = null;
-            _tray?.ShowBalloonTip(3000, "ScreenPaste", "截圖失敗：" + ex.Message, Forms.ToolTipIcon.Error);
+            _tray?.ShowBalloonTip(3000, "ScreenPaste", Loc.T("msg.captureFail", ex.Message), Forms.ToolTipIcon.Error);
         }
     }
 

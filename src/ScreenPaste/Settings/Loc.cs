@@ -1,0 +1,180 @@
+using System.Globalization;
+
+namespace ScreenPaste.Settings;
+
+/// <summary>A selectable UI language.</summary>
+public readonly record struct LangOption(string Code, string Native, string FlagCode);
+
+/// <summary>
+/// Lightweight string localization. Call <see cref="Init"/> once at startup (and again
+/// when the language changes), then use <see cref="T"/> to look up UI strings.
+/// Simplified Chinese is intentionally excluded.
+/// </summary>
+public static class Loc
+{
+    public static readonly LangOption[] Languages =
+    {
+        new("zh-Hant", "繁體中文", "tw"),
+        new("en", "English", "us"),
+        new("ja", "日本語", "jp"),
+        new("ko", "한국어", "kr"),
+        new("fr", "Français", "fr"),
+        new("de", "Deutsch", "de"),
+        new("es", "Español", "es"),
+    };
+
+    private const string Fallback = "en";
+    public static string Current { get; private set; } = "zh-Hant";
+
+    // key -> (langCode -> text)
+    private static readonly Dictionary<string, Dictionary<string, string>> Table = new();
+
+    static Loc() => Seed();
+
+    /// <summary>Resolve the effective language ("System" follows the OS UI culture).</summary>
+    public static void Init(string? setting)
+    {
+        Current = Resolve(setting);
+    }
+
+    public static string Resolve(string? setting)
+    {
+        if (!string.IsNullOrWhiteSpace(setting) &&
+            !setting.Equals("System", StringComparison.OrdinalIgnoreCase))
+        {
+            return Normalize(setting);
+        }
+
+        var c = CultureInfo.CurrentUICulture;
+        // Traditional Chinese regions only; Simplified falls back to English.
+        if (c.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
+        {
+            var n = c.Name.ToLowerInvariant();
+            if (n.Contains("hant") || n.Contains("tw") || n.Contains("hk") || n.Contains("mo"))
+                return "zh-Hant";
+            return Fallback;
+        }
+        return Normalize(c.TwoLetterISOLanguageName);
+    }
+
+    private static string Normalize(string code)
+    {
+        code = code.Trim();
+        foreach (var l in Languages)
+            if (l.Code.Equals(code, StringComparison.OrdinalIgnoreCase)) return l.Code;
+        // match by two-letter prefix (e.g. "ja-JP" -> "ja")
+        var two = code.Length >= 2 ? code[..2].ToLowerInvariant() : code;
+        foreach (var l in Languages)
+            if (l.Code.StartsWith(two, StringComparison.OrdinalIgnoreCase)) return l.Code;
+        return Fallback;
+    }
+
+    /// <summary>Look up a localized string; falls back to English then the key itself.</summary>
+    public static string T(string key)
+    {
+        if (Table.TryGetValue(key, out var langs))
+        {
+            if (langs.TryGetValue(Current, out var s)) return s;
+            if (langs.TryGetValue(Fallback, out var f)) return f;
+        }
+        return key;
+    }
+
+    /// <summary>Localized string with string.Format arguments.</summary>
+    public static string T(string key, params object[] args) => string.Format(T(key), args);
+
+    private static void Add(string key, string en, string zh, string ja, string ko, string fr, string de, string es)
+        => Table[key] = new Dictionary<string, string>
+        {
+            ["en"] = en, ["zh-Hant"] = zh, ["ja"] = ja, ["ko"] = ko, ["fr"] = fr, ["de"] = de, ["es"] = es,
+        };
+
+    private static void Seed()
+    {
+        // key,              en,                     zh-Hant,        ja,                 ko,               fr,                  de,                  es
+        Add("app.name",      "ScreenPaste",          "ScreenPaste",  "ScreenPaste",      "ScreenPaste",    "ScreenPaste",       "ScreenPaste",       "ScreenPaste");
+
+        // Tray
+        Add("tray.capture",  "Capture",              "截圖",          "キャプチャ",         "캡처",            "Capture",           "Aufnehmen",         "Capturar");
+        Add("tray.settings", "Settings…",            "設定…",         "設定…",             "설정…",           "Paramètres…",       "Einstellungen…",    "Ajustes…");
+        Add("tray.openFolder","Open save folder",    "開啟儲存資料夾", "保存フォルダーを開く", "저장 폴더 열기",   "Ouvrir le dossier", "Speicherordner öffnen","Abrir carpeta");
+        Add("tray.exit",     "Exit",                 "結束",          "終了",              "종료",            "Quitter",           "Beenden",           "Salir");
+        Add("tray.tip",      "ScreenPaste — press {0} to capture", "ScreenPaste — 按 {0} 截圖", "ScreenPaste — {0} でキャプチャ", "ScreenPaste — {0} 키로 캡처", "ScreenPaste — {0} pour capturer", "ScreenPaste — {0} zum Aufnehmen", "ScreenPaste — {0} para capturar");
+        Add("msg.running",   "ScreenPaste is already running (check the system tray).", "ScreenPaste 已經在執行中（請查看系統匣）。", "ScreenPaste は既に実行中です（システムトレイを確認してください）。", "ScreenPaste가 이미 실행 중입니다(시스템 트레이 확인).", "ScreenPaste est déjà en cours d'exécution (voir la barre d'état).", "ScreenPaste läuft bereits (siehe Infobereich).", "ScreenPaste ya se está ejecutando (mira la bandeja).");
+        Add("msg.hotkeyFail","Capture hotkey \"{0}\" could not be registered (invalid or in use). You can still capture from the tray.", "截圖熱鍵「{0}」註冊失敗（無效或被占用）。仍可由系統匣截圖。", "キャプチャのホットキー「{0}」を登録できません（無効か使用中）。トレイからは可能です。", "캡처 단축키 \"{0}\" 등록 실패(잘못되었거나 사용 중). 트레이에서 캡처 가능합니다.", "Le raccourci de capture « {0} » n'a pas pu être enregistré (invalide ou occupé). Utilisez la barre d'état.", "Aufnahme-Hotkey „{0}“ konnte nicht registriert werden (ungültig/belegt). Nutzung über Infobereich möglich.", "No se pudo registrar el atajo « {0} » (inválido u ocupado). Puedes capturar desde la bandeja.");
+        Add("msg.captureFail","Capture failed: {0}", "截圖失敗：{0}", "キャプチャに失敗しました：{0}", "캡처 실패: {0}", "Échec de la capture : {0}", "Aufnahme fehlgeschlagen: {0}", "Error de captura: {0}");
+
+        // Tools
+        Add("tool.marker",   "Marker",               "麥克筆",        "マーカー",           "마커",            "Marqueur",          "Marker",            "Marcador");
+        Add("tool.highlighter","Highlighter",        "螢光筆",        "蛍光ペン",           "형광펜",          "Surligneur",        "Textmarker",        "Resaltador");
+        Add("tool.text",     "Text",                 "文字",          "テキスト",           "텍스트",          "Texte",             "Text",              "Texto");
+        Add("tool.shape",    "Shape",                "形狀",          "図形",              "도형",            "Forme",             "Form",              "Forma");
+        Add("tool.sticker",  "Paste image",          "貼圖",          "画像を貼り付け",      "이미지 붙여넣기",  "Coller une image",  "Bild einfügen",     "Pegar imagen");
+        Add("tool.blur",     "Blur",                 "模糊",          "ぼかし",             "흐림",            "Flou",              "Weichzeichnen",     "Desenfoque");
+
+        // Actions (hotkey appended in code)
+        Add("action.undo",   "Undo",                 "復原",          "元に戻す",           "실행 취소",        "Annuler",           "Rückgängig",        "Deshacer");
+        Add("action.redo",   "Redo",                 "重做",          "やり直し",           "다시 실행",        "Rétablir",          "Wiederholen",       "Rehacer");
+        Add("action.copy",   "Copy",                 "複製",          "コピー",             "복사",            "Copier",            "Kopieren",          "Copiar");
+        Add("action.save",   "Save",                 "儲存",          "保存",              "저장",            "Enregistrer",       "Speichern",         "Guardar");
+        Add("action.pin",    "Pin to screen",        "釘選到螢幕",     "画面に固定",         "화면에 고정",      "Épingler à l'écran","Am Bildschirm anheften","Fijar en pantalla");
+        Add("action.close",  "Close",                "關閉",          "閉じる",             "닫기",            "Fermer",            "Schließen",         "Cerrar");
+
+        // Option labels
+        Add("lbl.width",     "Width",                "粗細",          "太さ",              "굵기",            "Épaisseur",         "Stärke",            "Grosor");
+        Add("lbl.opacity",   "Opacity",              "透明度",        "不透明度",           "투명도",          "Opacité",           "Deckkraft",         "Opacidad");
+        Add("lbl.color",     "Color",                "顏色",          "色",                "색",             "Couleur",           "Farbe",             "Color");
+        Add("lbl.type",      "Type",                 "類型",          "種類",              "종류",            "Type",              "Typ",               "Tipo");
+        Add("lbl.gaussian",  "Gaussian",             "高斯",          "ガウス",             "가우시안",        "Gaussien",          "Gauß",              "Gaussiano");
+        Add("lbl.mosaic",    "Mosaic",               "馬賽克",        "モザイク",           "모자이크",        "Mosaïque",          "Mosaik",            "Mosaico");
+        Add("lbl.blurStrength","Strength",           "模糊程度",       "強さ",              "강도",            "Intensité",         "Stärke",            "Intensidad");
+        Add("lbl.font",      "Font",                 "字體",          "フォント",           "글꼴",            "Police",            "Schrift",           "Fuente");
+        Add("lbl.size",      "Size",                 "大小",          "サイズ",             "크기",            "Taille",            "Größe",             "Tamaño");
+        Add("lbl.style",     "Style",                "樣式",          "スタイル",           "스타일",          "Style",             "Stil",              "Estilo");
+        Add("lbl.shape",     "Shape",                "形狀",          "図形",              "도형",            "Forme",             "Form",              "Forma");
+        Add("shape.rect",    "Rectangle",            "方形",          "四角形",             "사각형",          "Rectangle",         "Rechteck",          "Rectángulo");
+        Add("shape.rounded", "Rounded",              "圓角",          "角丸",              "둥근 사각형",     "Arrondi",           "Abgerundet",        "Redondeado");
+        Add("shape.ellipse", "Ellipse",              "圓形",          "楕円",              "원",             "Ellipse",           "Ellipse",           "Elipse");
+        Add("style.outline", "Outline",              "外框",          "枠線",              "테두리",          "Contour",           "Umriss",            "Contorno");
+        Add("style.fill",    "Fill",                 "填滿",          "塗りつぶし",          "채우기",          "Rempli",            "Gefüllt",           "Relleno");
+        Add("lbl.lineWidth", "Line width",           "線條粗細",       "線の太さ",           "선 굵기",         "Épaisseur",         "Linienstärke",      "Grosor de línea");
+        Add("sticker.choose","Choose image…",        "選擇圖片…",      "画像を選択…",         "이미지 선택…",     "Choisir une image…","Bild wählen…",      "Elegir imagen…");
+        Add("sticker.hint",  "  drag to move, wheel to resize", "  可拖曳移動、滾輪縮放", "  ドラッグで移動・ホイールで拡大縮小", "  드래그 이동, 휠 크기 조절", "  glisser/molette", "  ziehen/scrollen", "  arrastrar/rueda");
+        Add("color.more",    "More colors / enter Hex","更多顏色 / 輸入 Hex", "他の色 / Hex 入力", "더 많은 색 / Hex 입력", "Plus de couleurs / Hex", "Mehr Farben / Hex", "Más colores / Hex");
+
+        // Color picker
+        Add("cp.title",      "Choose color",         "選擇顏色",       "色の選択",           "색 선택",         "Choisir une couleur","Farbe wählen",     "Elegir color");
+        Add("cp.opacity",    "Opacity",              "透明度",        "不透明度",           "투명도",          "Opacité",           "Deckkraft",         "Opacidad");
+        Add("common.ok",     "OK",                   "確定",          "OK",                "확인",            "OK",                "OK",                "Aceptar");
+        Add("common.cancel", "Cancel",               "取消",          "キャンセル",         "취소",            "Annuler",           "Abbrechen",         "Cancelar");
+        Add("common.save",   "Save",                 "儲存",          "保存",              "저장",            "Enregistrer",       "Speichern",         "Guardar");
+
+        // Pin window
+        Add("pin.copy",      "Copy (Ctrl+C)",        "複製 (Ctrl+C)", "コピー (Ctrl+C)",    "복사 (Ctrl+C)",   "Copier (Ctrl+C)",   "Kopieren (Strg+C)", "Copiar (Ctrl+C)");
+        Add("pin.save",      "Save…",                "儲存…",         "保存…",             "저장…",           "Enregistrer…",      "Speichern…",        "Guardar…");
+        Add("pin.reset",     "Reset zoom (100%)",    "重設縮放 (100%)","ズームをリセット (100%)","확대/축소 초기화 (100%)","Zoom 100 %",   "Zoom zurücksetzen (100%)","Restablecer zoom (100%)");
+        Add("pin.close",     "Close (Esc)",          "關閉 (Esc)",    "閉じる (Esc)",       "닫기 (Esc)",      "Fermer (Échap)",    "Schließen (Esc)",   "Cerrar (Esc)");
+
+        // Settings window
+        Add("set.title",     "ScreenPaste Settings", "ScreenPaste 設定","ScreenPaste 設定",  "ScreenPaste 설정","Paramètres ScreenPaste","ScreenPaste-Einstellungen","Ajustes de ScreenPaste");
+        Add("set.hotkeys",   "Hotkeys",              "熱鍵",          "ホットキー",         "단축키",          "Raccourcis",        "Tastenkürzel",      "Atajos");
+        Add("set.hotkeyHint","Click a field and press the desired key combo; Delete clears it.", "點選欄位後直接按下想要的按鍵組合；Delete 可清除。", "欄をクリックして希望のキーを押します。Delete で消去。", "칸을 클릭하고 원하는 키 조합을 누르세요. Delete로 지웁니다.", "Cliquez puis appuyez sur la combinaison ; Suppr pour effacer.", "Feld anklicken und Tastenkombination drücken; Entf löscht.", "Haz clic y pulsa la combinación; Supr para borrar.");
+        Add("set.capture",   "Capture",              "截圖",          "キャプチャ",         "캡처",            "Capture",           "Aufnehmen",         "Capturar");
+        Add("set.quickSave", "Quick save",           "快速儲存",       "クイック保存",        "빠른 저장",        "Enreg. rapide",     "Schnellspeichern",  "Guardado rápido");
+        Add("set.appearance","Appearance & startup", "外觀與啟動",     "外観と起動",         "모양 및 시작",     "Apparence & démarrage","Aussehen & Start", "Apariencia e inicio");
+        Add("set.language",  "Language",             "語言",          "言語",              "언어",            "Langue",            "Sprache",           "Idioma");
+        Add("set.theme",     "Theme",                "主題",          "テーマ",             "테마",            "Thème",             "Design",            "Tema");
+        Add("set.startup",   "Run at startup",       "開機時自動啟動",  "起動時に自動実行",    "시작 시 자동 실행", "Lancer au démarrage","Beim Start ausführen","Ejecutar al inicio");
+        Add("set.saveSection","Saving",              "儲存",          "保存",              "저장",            "Enregistrement",    "Speichern",         "Guardado");
+        Add("set.saveFolder","Default folder",       "預設資料夾",     "既定のフォルダー",    "기본 폴더",        "Dossier par défaut","Standardordner",    "Carpeta predeterminada");
+        Add("set.browse",    "Browse…",              "瀏覽…",         "参照…",             "찾아보기…",        "Parcourir…",        "Durchsuchen…",      "Examinar…");
+        Add("theme.system",  "Follow system",        "跟隨系統",       "システムに従う",      "시스템 설정",      "Système",           "System",            "Sistema");
+        Add("theme.light",   "Light",                "淺色",          "ライト",             "라이트",          "Clair",             "Hell",              "Claro");
+        Add("theme.dark",    "Dark",                 "深色",          "ダーク",             "다크",            "Sombre",            "Dunkel",            "Oscuro");
+
+        // Misc
+        Add("img.filter",    "Images (*.png;*.jpg;*.jpeg;*.webp)|*.png;*.jpg;*.jpeg;*.webp|All files (*.*)|*.*", "圖片 (*.png;*.jpg;*.jpeg;*.webp)|*.png;*.jpg;*.jpeg;*.webp|所有檔案 (*.*)|*.*", "画像 (*.png;*.jpg;*.jpeg;*.webp)|*.png;*.jpg;*.jpeg;*.webp|すべてのファイル (*.*)|*.*", "이미지 (*.png;*.jpg;*.jpeg;*.webp)|*.png;*.jpg;*.jpeg;*.webp|모든 파일 (*.*)|*.*", "Images (*.png;*.jpg;*.jpeg;*.webp)|*.png;*.jpg;*.jpeg;*.webp|Tous les fichiers (*.*)|*.*", "Bilder (*.png;*.jpg;*.jpeg;*.webp)|*.png;*.jpg;*.jpeg;*.webp|Alle Dateien (*.*)|*.*", "Imágenes (*.png;*.jpg;*.jpeg;*.webp)|*.png;*.jpg;*.jpeg;*.webp|Todos los archivos (*.*)|*.*");
+        Add("img.chooseTitle","Choose image",        "選擇圖片",       "画像を選択",         "이미지 선택",      "Choisir une image", "Bild wählen",       "Elegir imagen");
+        Add("img.loadFail",  "Could not load this image file.", "無法載入這個圖片檔。", "この画像ファイルを読み込めません。", "이 이미지 파일을 불러올 수 없습니다.", "Impossible de charger cette image.", "Diese Bilddatei konnte nicht geladen werden.", "No se pudo cargar la imagen.");
+    }
+}

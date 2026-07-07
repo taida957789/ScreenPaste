@@ -5,6 +5,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using ScreenPaste.Native;
+using ScreenPaste.Settings;
 
 namespace ScreenPaste.Output;
 
@@ -69,16 +70,16 @@ public sealed class PinWindow : Window
     {
         var menu = new ContextMenu();
 
-        var copy = new MenuItem { Header = "複製 (Ctrl+C)" };
+        var copy = new MenuItem { Header = Loc.T("pin.copy") };
         copy.Click += (_, _) => ClipboardService.CopyImage(_image);
 
-        var save = new MenuItem { Header = "儲存…" };
+        var save = new MenuItem { Header = Loc.T("pin.save") };
         save.Click += (_, _) => FileSaveService.SaveAs(_image, saveDirectory);
 
-        var reset = new MenuItem { Header = "重設縮放 (100%)" };
+        var reset = new MenuItem { Header = Loc.T("pin.reset") };
         reset.Click += (_, _) => { _zoom = 1.0; ApplyZoom(); };
 
-        var close = new MenuItem { Header = "關閉 (Esc)" };
+        var close = new MenuItem { Header = Loc.T("pin.close") };
         close.Click += (_, _) => Close();
 
         menu.Items.Add(copy);

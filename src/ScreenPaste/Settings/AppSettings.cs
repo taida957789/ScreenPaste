@@ -47,6 +47,7 @@ public sealed class AppSettings
 
     // ---- Appearance ----
     public string Theme { get; set; } = "System";   // System | Light | Dark
+    public string Language { get; set; } = "System"; // System | zh-Hant | en | ja | ko | fr | de | es
 
     // ---- Startup ----
     public bool RunAtStartup { get; set; }

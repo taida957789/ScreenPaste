@@ -29,7 +29,7 @@ public sealed class ColorPickerWindow : Window
         SelectedOpacity = Math.Clamp(initialOpacity, 0, 1);
         _anchorScreenPx = anchorScreenPx;
 
-        Title = "選擇顏色";
+        Title = Loc.T("cp.title");
         Width = 300;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.Manual;
@@ -70,7 +70,7 @@ public sealed class ColorPickerWindow : Window
         _r = MakeChannel(root, "R", initial.R, 255);
         _g = MakeChannel(root, "G", initial.G, 255);
         _b = MakeChannel(root, "B", initial.B, 255);
-        _opacity = MakeChannel(root, "透明度", SelectedOpacity * 100, 100);
+        _opacity = MakeChannel(root, Loc.T("cp.opacity"), SelectedOpacity * 100, 100);
 
         var buttons = new StackPanel
         {
@@ -78,8 +78,8 @@ public sealed class ColorPickerWindow : Window
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 6, 0, 0),
         };
-        var ok = ThemedButton("確定", isDefault: true);
-        var cancel = ThemedButton("取消", isCancel: true);
+        var ok = ThemedButton(Loc.T("common.ok"), isDefault: true);
+        var cancel = ThemedButton(Loc.T("common.cancel"), isCancel: true);
         ok.Click += (_, _) => { DialogResult = true; };
         buttons.Children.Add(ok);
         buttons.Children.Add(cancel);
