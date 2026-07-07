@@ -1,4 +1,4 @@
-; Inno Setup script for ScreenPaste — per-user install (no admin), like Snipaste.
+; Inno Setup script for ScreenPaste — per-user install (no admin).
 ; Version is injected from CI:  ISCC /DMyAppVersion=1.2.3 installer\ScreenPaste.iss
 
 #ifndef MyAppVersion

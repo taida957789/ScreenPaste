@@ -2,7 +2,7 @@
 
 # ScreenPaste
 
-仿 Snipaste 的 Windows 截圖標註工具，以 **C# + WPF (.NET 9)** 打造。
+Windows 截圖標註工具，以 **C# + WPF (.NET 9)** 打造。
 
 ## 安裝
 
