@@ -54,6 +54,10 @@ public static class Theme
     public static Color Accent => C(0xFF, 0x3D, 0xA9, 0xFC);
     public static Color ActiveBg => IsDark ? C(0x88, 0x3D, 0xA9, 0xFC) : C(0x66, 0x3D, 0xA9, 0xFC);
 
+    // Input controls (text boxes, combos) in dialogs.
+    public static Color ControlBg => IsDark ? C(0xFF, 0x3A, 0x3A, 0x3A) : C(0xFF, 0xFF, 0xFF, 0xFF);
+    public static Color ControlBorder => IsDark ? C(0xFF, 0x5A, 0x5A, 0x5A) : C(0xFF, 0xAB, 0xAD, 0xB3);
+
     public static SolidColorBrush PanelBrush => new(PanelBg);
     public static SolidColorBrush WindowBrush => new(WindowBg);
     public static SolidColorBrush ForegroundBrush => new(Foreground);
@@ -61,6 +65,8 @@ public static class Theme
     public static SolidColorBrush ButtonBorderBrush => new(ButtonBorder);
     public static SolidColorBrush SeparatorBrush => new(Separator);
     public static SolidColorBrush ActiveBrush => new(ActiveBg);
+    public static SolidColorBrush ControlBgBrush => new(ControlBg);
+    public static SolidColorBrush ControlBorderBrush => new(ControlBorder);
 
     private static Color C(byte a, byte r, byte g, byte b) => Color.FromArgb(a, r, g, b);
 }

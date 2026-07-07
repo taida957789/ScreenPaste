@@ -92,7 +92,7 @@ public partial class App : Application
         RefreshTray();
     }
 
-    /// <summary>Tint the tray menu to match the current theme.</summary>
+    /// <summary>Tint the tray menu to match the current theme (colours + renderer).</summary>
     private static void ApplyMenuTheme(Forms.ContextMenuStrip menu)
     {
         var back = Theme.IsDark ? Drawing.Color.FromArgb(0x2A, 0x2A, 0x2A) : Drawing.Color.FromArgb(0xFA, 0xFA, 0xFA);
@@ -100,6 +100,33 @@ public partial class App : Application
         ApplyMenuColors(menu.Items, back, fore);
         menu.BackColor = back;
         menu.ForeColor = fore;
+        // A renderer is required to theme the borders / image-margin gutter / separators.
+        menu.RenderMode = Forms.ToolStripRenderMode.Professional;
+        menu.Renderer = new Forms.ToolStripProfessionalRenderer(
+            Theme.IsDark ? new DarkColorTable() : new Forms.ProfessionalColorTable());
+    }
+
+    /// <summary>Dark palette for the tray menu (borders, gutter, hover, separators).</summary>
+    private sealed class DarkColorTable : Forms.ProfessionalColorTable
+    {
+        private static readonly Drawing.Color Bg = Drawing.Color.FromArgb(0x2A, 0x2A, 0x2A);
+        private static readonly Drawing.Color Sel = Drawing.Color.FromArgb(0x3D, 0x3D, 0x3D);
+        private static readonly Drawing.Color Bord = Drawing.Color.FromArgb(0x55, 0x55, 0x55);
+
+        public override Drawing.Color ToolStripDropDownBackground => Bg;
+        public override Drawing.Color ImageMarginGradientBegin => Bg;
+        public override Drawing.Color ImageMarginGradientMiddle => Bg;
+        public override Drawing.Color ImageMarginGradientEnd => Bg;
+        public override Drawing.Color MenuBorder => Bord;
+        public override Drawing.Color MenuItemBorder => Sel;
+        public override Drawing.Color MenuItemSelected => Sel;
+        public override Drawing.Color MenuItemSelectedGradientBegin => Sel;
+        public override Drawing.Color MenuItemSelectedGradientEnd => Sel;
+        public override Drawing.Color MenuItemPressedGradientBegin => Bg;
+        public override Drawing.Color MenuItemPressedGradientEnd => Bg;
+        public override Drawing.Color SeparatorDark => Bord;
+        public override Drawing.Color SeparatorLight => Bord;
+        public override Drawing.Color ToolStripBorder => Bg;
     }
 
     private static void ApplyMenuColors(Forms.ToolStripItemCollection items, Drawing.Color back, Drawing.Color fore)

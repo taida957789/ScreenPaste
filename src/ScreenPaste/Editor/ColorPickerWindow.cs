@@ -54,7 +54,15 @@ public sealed class ColorPickerWindow : Window
 
         var hexRow = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
         hexRow.Children.Add(MakeLabel("Hex", 44));
-        _hex = new TextBox { FontFamily = new FontFamily("Consolas"), Padding = new Thickness(4, 2, 4, 2) };
+        _hex = new TextBox
+        {
+            FontFamily = new FontFamily("Consolas"),
+            Padding = new Thickness(4, 2, 4, 2),
+            Background = Theme.ControlBgBrush,
+            Foreground = Theme.ForegroundBrush,
+            BorderBrush = Theme.ControlBorderBrush,
+            CaretBrush = Theme.ForegroundBrush,
+        };
         _hex.TextChanged += (_, _) => UpdateFromHex();
         hexRow.Children.Add(_hex);
         root.Children.Add(hexRow);
@@ -70,8 +78,8 @@ public sealed class ColorPickerWindow : Window
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 6, 0, 0),
         };
-        var ok = new Button { Content = "確定", Width = 72, Margin = new Thickness(6, 0, 0, 0), IsDefault = true };
-        var cancel = new Button { Content = "取消", Width = 72, Margin = new Thickness(6, 0, 0, 0), IsCancel = true };
+        var ok = ThemedButton("確定", isDefault: true);
+        var cancel = ThemedButton("取消", isCancel: true);
         ok.Click += (_, _) => { DialogResult = true; };
         buttons.Children.Add(ok);
         buttons.Children.Add(cancel);
@@ -101,6 +109,19 @@ public sealed class ColorPickerWindow : Window
         parent.Children.Add(row);
         return slider;
     }
+
+    private static Button ThemedButton(string text, bool isDefault = false, bool isCancel = false) => new()
+    {
+        Content = text,
+        Width = 72,
+        Margin = new Thickness(6, 0, 0, 0),
+        Padding = new Thickness(4, 3, 4, 3),
+        IsDefault = isDefault,
+        IsCancel = isCancel,
+        Background = Theme.ButtonBgBrush,
+        Foreground = Theme.ForegroundBrush,
+        BorderBrush = Theme.ButtonBorderBrush,
+    };
 
     private TextBlock MakeLabel(string text, double width) => new()
     {
