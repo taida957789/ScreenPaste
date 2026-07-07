@@ -3,7 +3,13 @@ bin/
 obj/
 [Dd]ebug/
 [Rr]elease/
+publish/
+publish_test/
 *.user
+
+# Release packaging artifacts
+ScreenPaste-*-win-x64.exe
+ScreenPaste-*-win-x64.zip
 
 # Rider / VS
 .vs/

@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:      # allow manual runs for testing
+
+permissions:
+  contents: write         # needed to upload assets to the release
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Resolve version from tag
+        shell: pwsh
+        run: |
+          $tag = "${{ github.event.release.tag_name }}"
+          $ver = ($tag -replace '^v', '')
+          if ($ver -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') { $ver = '1.0.0' }
+          "VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "Resolved version: $ver"
+
+      - name: Publish (self-contained single file, win-x64)
+        shell: pwsh
+        run: |
+          dotnet publish src/ScreenPaste/ScreenPaste.csproj `
+            -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:Version=$env:VERSION -p:FileVersion=$env:VERSION -p:AssemblyVersion=$env:VERSION `
+            -o publish
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $exe = "ScreenPaste-$env:VERSION-win-x64.exe"
+          $zip = "ScreenPaste-$env:VERSION-win-x64.zip"
+          Copy-Item publish/ScreenPaste.exe $exe
+          Compress-Archive -Path publish/ScreenPaste.exe -DestinationPath $zip -Force
+          "ASSET_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "ASSET_ZIP=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Upload assets to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ env.ASSET_EXE }}
+            ${{ env.ASSET_ZIP }}
+
+      - name: Upload build artifact (manual runs)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ScreenPaste-win-x64
+          path: publish/ScreenPaste.exe

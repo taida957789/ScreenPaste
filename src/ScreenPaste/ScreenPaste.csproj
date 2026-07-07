@@ -11,6 +11,19 @@
     <AssemblyName>ScreenPaste</AssemblyName>
     <RootNamespace>ScreenPaste</RootNamespace>
     <LangVersion>latest</LangVersion>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <!-- Product / version metadata (overridable at build via -p:Version=x.y.z) -->
+  <PropertyGroup>
+    <Product>ScreenPaste</Product>
+    <Company>ScreenPaste</Company>
+    <Authors>taida957789</Authors>
+    <Description>Snipaste 風格的截圖與標註工具</Description>
+    <Copyright>Copyright © 2026</Copyright>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
   </PropertyGroup>
 
   <!-- Keep WinForms/Drawing OUT of the implicit global usings so WPF types
