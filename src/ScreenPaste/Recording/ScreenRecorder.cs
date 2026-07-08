@@ -18,7 +18,8 @@ public sealed class FFmpegNotFoundException : Exception { }
 /// </summary>
 public sealed class ScreenRecorder
 {
-    private readonly int _x, _y, _w, _h, _fps;
+    private readonly int _w, _h, _fps;
+    private volatile int _x, _y;              // capture origin; movable mid-recording
     private readonly RecordingFormat? _format;
     private readonly bool _captureCursor;
 
@@ -36,6 +37,16 @@ public sealed class ScreenRecorder
     public int Fps => _fps;
     public int FrameWidth => _w;
     public int FrameHeight => _h;
+
+    /// <summary>
+    /// Move the capture origin mid-recording (the frame SIZE is fixed by the encoder
+    /// stream). The capture loop picks the new origin up on its next frame.
+    /// </summary>
+    public void MoveTo(int x, int y)
+    {
+        _x = x;
+        _y = y;
+    }
 
     /// <param name="format">Final output format, or null to record a near-lossless
     /// intermediate MP4 that the post-recording editor trims and re-encodes.</param>
@@ -97,8 +108,11 @@ public sealed class ScreenRecorder
     {
         if (_g == null || _bmp == null || _encoder == null) return;
 
-        _g.CopyFromScreen(_x, _y, 0, 0, new Size(_w, _h), CopyPixelOperation.SourceCopy);
-        if (_captureCursor) CursorCapture.Draw(_g, _x, _y);
+        // Snapshot the origin once so the frame and its cursor overlay agree even if
+        // the region is being dragged mid-frame.
+        int x = _x, y = _y;
+        _g.CopyFromScreen(x, y, 0, 0, new Size(_w, _h), CopyPixelOperation.SourceCopy);
+        if (_captureCursor) CursorCapture.Draw(_g, x, y);
 
         var rect = new Rectangle(0, 0, _w, _h);
         BitmapData data = _bmp.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);

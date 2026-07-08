@@ -322,6 +322,7 @@ public partial class App : Application
 
             _hud = new RecordingHud(region);
             _hud.StopRequested += StopRecording;
+            _hud.RegionMoved += recorder.MoveTo;   // drag the red frame to move the region
             _hud.Show();
             RefreshTray();
         }

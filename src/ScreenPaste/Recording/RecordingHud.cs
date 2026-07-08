@@ -9,6 +9,8 @@ using System.Windows.Threading;
 using ScreenPaste.Native;
 using ScreenPaste.Settings;
 using static ScreenPaste.Native.NativeMethods;
+using Forms = System.Windows.Forms;
+using DPoint = System.Drawing.Point;
 
 namespace ScreenPaste.Recording;
 
@@ -22,16 +24,23 @@ public sealed class RecordingHud
     private const double BorderDip = 3.0;
     private const double Gap = 8.0;
 
-    private readonly Int32Rect _region;   // physical px, screen coords
+    private Int32Rect _region;            // physical px, screen coords; movable by dragging
     private readonly VirtualScreen _vs;
     private readonly Window _frame = new();
     private readonly Window _bar = new();
     private readonly TextBlock _time = new();
     private readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private readonly Stopwatch _elapsed = Stopwatch.StartNew();
+    private int _physBorder = 3;          // frame border in physical px (set at DPI resolve)
+    private bool _dragging;
+    private DPoint _dragStartCursor;
+    private Int32Rect _dragStartRegion;
 
     /// <summary>Raised (on the UI thread) when the user clicks Stop.</summary>
     public event Action? StopRequested;
+
+    /// <summary>Raised while the user drags the red frame: new region origin (physical px).</summary>
+    public event Action<int, int>? RegionMoved;
 
     public RecordingHud(Int32Rect region)
     {
@@ -63,7 +72,7 @@ public sealed class RecordingHud
         _time.Text = $"{(int)t.TotalMinutes:00}:{t.Seconds:00}";
     }
 
-    // ---- Red frame around the region (click-through) ----
+    // ---- Red frame around the region (centre is click-through; the border drags) ----
 
     private void BuildFrame()
     {
@@ -74,31 +83,80 @@ public sealed class RecordingHud
         _frame.AllowsTransparency = true;
         _frame.Background = Brushes.Transparent;
         _frame.WindowStartupLocation = WindowStartupLocation.Manual;
-        _frame.IsHitTestVisible = false;
-        _frame.Content = new Border
+
+        // Null background: only the border ring hit-tests, so the recorded app stays
+        // fully interactive through the middle while the red edge can be grabbed to
+        // move the region mid-recording.
+        var border = new Border
         {
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xE8, 0x1B, 0x1B)),
-            Background = Brushes.Transparent,
+            Background = null,
+            Cursor = Cursors.SizeAll,
         };
+        border.MouseLeftButtonDown += Frame_DragStart;
+        border.MouseMove += Frame_DragMove;
+        border.MouseLeftButtonUp += Frame_DragEnd;
+        _frame.Content = border;
 
         _frame.SourceInitialized += (_, _) =>
         {
             var hwnd = new WindowInteropHelper(_frame).Handle;
             uint dpiRaw = GetDpiForWindow(hwnd);
             double dpi = dpiRaw <= 0 ? 1.0 : dpiRaw / 96.0;
-            int physT = (int)Math.Round(BorderDip * dpi);
+            _physBorder = (int)Math.Round(BorderDip * dpi);
 
-            ((Border)_frame.Content).BorderThickness = new Thickness(physT / dpi);
+            border.BorderThickness = new Thickness(_physBorder / dpi);
 
-            // Ex-styles: click-through + tool window (out of Alt+Tab).
-            AddExStyle(hwnd, (int)(WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE));
+            // Tool window (out of Alt+Tab), no focus stealing — but NOT click-through:
+            // the border ring must receive the drag.
+            AddExStyle(hwnd, (int)(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE));
 
-            // Sit the frame OUTSIDE the recorded rect so the border pixels are never captured.
-            SetWindowPos(hwnd, HWND_TOPMOST,
-                _region.X - physT, _region.Y - physT,
-                _region.Width + 2 * physT, _region.Height + 2 * physT,
-                SWP_NOACTIVATE | SWP_SHOWWINDOW);
+            PositionFrame();
         };
+    }
+
+    /// <summary>Sit the frame OUTSIDE the recorded rect so its pixels are never captured.</summary>
+    private void PositionFrame()
+    {
+        var hwnd = new WindowInteropHelper(_frame).Handle;
+        if (hwnd == IntPtr.Zero) return;
+        SetWindowPos(hwnd, HWND_TOPMOST,
+            _region.X - _physBorder, _region.Y - _physBorder,
+            _region.Width + 2 * _physBorder, _region.Height + 2 * _physBorder,
+            SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    }
+
+    private void Frame_DragStart(object sender, MouseButtonEventArgs e)
+    {
+        _dragging = true;
+        _dragStartCursor = Forms.Cursor.Position;   // physical px, DPI-safe
+        _dragStartRegion = _region;
+        (sender as UIElement)?.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void Frame_DragMove(object sender, MouseEventArgs e)
+    {
+        if (!_dragging) return;
+        var cur = Forms.Cursor.Position;
+        int nx = Math.Clamp(_dragStartRegion.X + (cur.X - _dragStartCursor.X),
+            _vs.X, _vs.X + _vs.Width - _region.Width);
+        int ny = Math.Clamp(_dragStartRegion.Y + (cur.Y - _dragStartCursor.Y),
+            _vs.Y, _vs.Y + _vs.Height - _region.Height);
+        if (nx == _region.X && ny == _region.Y) return;
+
+        _region = new Int32Rect(nx, ny, _region.Width, _region.Height);
+        PositionFrame();
+        PositionBar();
+        RegionMoved?.Invoke(nx, ny);
+    }
+
+    private void Frame_DragEnd(object sender, MouseButtonEventArgs e)
+    {
+        if (!_dragging) return;
+        _dragging = false;
+        (sender as UIElement)?.ReleaseMouseCapture();
+        e.Handled = true;
     }
 
     // ---- Elapsed-time + Stop bar (clickable, positioned outside the region) ----

@@ -69,7 +69,7 @@ public sealed class RecordingEditorWindow : Window
     private readonly List<(Rectangle Visual, BlurRegion Region)> _blurs = new();
     private StackPanel _toolsPanel = null!;
     private Button _undoButton = null!, _redoButton = null!;
-    private KeyGesture? _undoGesture, _redoGesture;
+    private KeyGesture? _undoGesture, _redoGesture, _copyGesture;
     private TextBox? _editingText;
     private Point _toolDragStart;
     private Shape? _shapePreview;
@@ -142,6 +142,7 @@ public sealed class RecordingEditorWindow : Window
         _mosaicStrength = settings.MosaicStrength;
         _undoGesture = HotkeyGesture.Parse(settings.UndoHotkey);
         _redoGesture = HotkeyGesture.Parse(settings.RedoHotkey);
+        _copyGesture = HotkeyGesture.Parse(settings.CopyHotkey);
         foreach (var hex in settings.CustomColors)
         {
             try { _customColors.Add((Color)ColorConverter.ConvertFromString(hex)); }
@@ -1512,6 +1513,9 @@ public sealed class RecordingEditorWindow : Window
 
         if (Matches(_undoGesture, e)) { _history.Undo(); e.Handled = true; return; }
         if (Matches(_redoGesture, e)) { _history.Redo(); e.Handled = true; return; }
+        // Copy = quick-export to the save folder and put the FILE on the clipboard
+        // (an animated GIF can't ride the clipboard as an image), then close.
+        if (Matches(_copyGesture, e)) { Export(quick: true, copyToClipboard: true); e.Handled = true; return; }
 
         if (e.Key == Key.Delete && _selected != null)
         {
@@ -1549,7 +1553,7 @@ public sealed class RecordingEditorWindow : Window
 
     // --------------------------------------------------------------- export ---
 
-    private async void Export(bool quick)
+    private async void Export(bool quick, bool copyToClipboard = false)
     {
         if (_exporting || _duration <= 0) return;
         CommitActiveText();
@@ -1607,6 +1611,15 @@ public sealed class RecordingEditorWindow : Window
             _saved = true;
             _settings.RecordFormat = format.Token();
             PersistToolSettings();
+            if (copyToClipboard)
+            {
+                try
+                {
+                    var files = new System.Collections.Specialized.StringCollection { path };
+                    Clipboard.SetFileDropList(files);
+                }
+                catch { /* clipboard busy — the file is saved regardless */ }
+            }
             _onSaved?.Invoke(path);
             Close();
             return;
