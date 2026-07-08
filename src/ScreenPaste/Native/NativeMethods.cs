@@ -74,6 +74,10 @@ internal static class NativeMethods
     // ---- DWM: true visible bounds (excludes drop shadow) & cloak state ----
     public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
     public const int DWMWA_CLOAKED = 14;
+    public const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmSetWindowAttribute(IntPtr hwnd, int dwAttribute, ref int pvAttribute, int cbAttribute);
 
     [DllImport("dwmapi.dll")]
     public static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
@@ -94,6 +98,8 @@ internal static class NativeMethods
 
     // ---- Window placement (used to pin the overlay in physical px) ----
     public static readonly IntPtr HWND_TOPMOST = new(-1);
+    public const uint SWP_NOSIZE = 0x0001;
+    public const uint SWP_NOZORDER = 0x0004;
     public const uint SWP_NOACTIVATE = 0x0010;
     public const uint SWP_SHOWWINDOW = 0x0040;
 
@@ -142,4 +148,51 @@ internal static class NativeMethods
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     public static extern IntPtr GetModuleHandle(string? lpModuleName);
+
+    // ---- Extended window styles (click-through recording border) ----
+    public const long WS_EX_LAYERED = 0x00080000L;
+    public const long WS_EX_TRANSPARENT = 0x00000020L;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+    // ---- Cursor capture (drawing the pointer into recorded frames) ----
+    public const int CURSOR_SHOWING = 0x0001;
+    public const int DI_NORMAL = 0x0003;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct CURSORINFO
+    {
+        public int cbSize;
+        public int flags;
+        public IntPtr hCursor;
+        public POINT ptScreenPos;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct ICONINFO
+    {
+        [MarshalAs(UnmanagedType.Bool)] public bool fIcon;
+        public int xHotspot;
+        public int yHotspot;
+        public IntPtr hbmMask;
+        public IntPtr hbmColor;
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetCursorInfo(ref CURSORINFO pci);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetIconInfo(IntPtr hIcon, out ICONINFO piconinfo);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool DrawIconEx(IntPtr hdc, int xLeft, int yTop, IntPtr hIcon,
+        int cxWidth, int cyWidth, int istepIfAniCur, IntPtr hbrFlickerFreeDraw, int diFlags);
+
+    [DllImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool DeleteObject(IntPtr hObject);
 }

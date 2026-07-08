@@ -21,14 +21,21 @@
     <Authors>taida957789</Authors>
     <Description>截圖與標註工具</Description>
     <Copyright>Copyright © 2026</Copyright>
-    <Version>1.1.3</Version>
-    <AssemblyVersion>1.1.3.0</AssemblyVersion>
-    <FileVersion>1.1.3.0</FileVersion>
+    <Version>1.2.0</Version>
+    <AssemblyVersion>1.2.0.0</AssemblyVersion>
+    <FileVersion>1.2.0.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- Decodes PNG / JPEG / WebP for the paste-image (sticker) feature. -->
     <PackageReference Include="SkiaSharp" Version="2.88.8" />
+  </ItemGroup>
+
+  <!-- Bundle ffmpeg for region recording (GIF now; MP4/WebP later). Place the
+       binary at ffmpeg\ffmpeg.exe; the wildcard is a no-op until it exists so
+       the project still builds without it. FFmpegLocator also falls back to PATH. -->
+  <ItemGroup>
+    <None Include="ffmpeg\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="ffmpeg\" />
   </ItemGroup>
 
   <!-- Keep WinForms/Drawing OUT of the implicit global usings so WPF types

@@ -4,17 +4,17 @@ using static ScreenPaste.Native.NativeMethods;
 namespace ScreenPaste.Native;
 
 /// <summary>
-/// Registers a system-wide hotkey against a hidden message-only WPF window and
-/// raises <see cref="Pressed"/> when it fires. Dispose to unregister.
+/// Registers system-wide hotkeys against a hidden message-only WPF window and
+/// raises <see cref="Pressed"/> (with the hotkey id) when one fires. Multiple
+/// hotkeys can share the single sink, each identified by its id. Dispose to unregister all.
 /// </summary>
 public sealed class HotkeyManager : IDisposable
 {
-    private const int HotkeyId = 0xB001;
-
     private readonly HwndSource _source;
-    private bool _registered;
+    private readonly HashSet<int> _registered = new();
 
-    public event Action? Pressed;
+    /// <summary>Raised on the UI thread with the id of the hotkey that fired.</summary>
+    public event Action<int>? Pressed;
 
     public HotkeyManager()
     {
@@ -32,36 +32,39 @@ public sealed class HotkeyManager : IDisposable
 
     public IntPtr Handle => _source.Handle;
 
-    /// <summary>Register (or re-register) the hotkey. Returns false if the combo is taken.</summary>
-    public bool Register(uint modifiers, uint virtualKey)
+    /// <summary>Register (or re-register) a hotkey by id. Returns false if the combo is taken.</summary>
+    public bool Register(int id, uint modifiers, uint virtualKey)
     {
-        Unregister();
-        _registered = RegisterHotKey(_source.Handle, HotkeyId, modifiers | MOD_NOREPEAT, virtualKey);
-        return _registered;
+        Unregister(id);
+        bool ok = RegisterHotKey(_source.Handle, id, modifiers | MOD_NOREPEAT, virtualKey);
+        if (ok) _registered.Add(id);
+        return ok;
     }
 
-    public void Unregister()
+    public void Unregister(int id)
     {
-        if (_registered)
-        {
-            UnregisterHotKey(_source.Handle, HotkeyId);
-            _registered = false;
-        }
+        if (_registered.Remove(id))
+            UnregisterHotKey(_source.Handle, id);
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == WM_HOTKEY && wParam.ToInt32() == HotkeyId)
+        if (msg == WM_HOTKEY)
         {
-            handled = true;
-            Pressed?.Invoke();
+            int id = wParam.ToInt32();
+            if (_registered.Contains(id))
+            {
+                handled = true;
+                Pressed?.Invoke(id);
+            }
         }
         return IntPtr.Zero;
     }
 
     public void Dispose()
     {
-        Unregister();
+        foreach (var id in _registered) UnregisterHotKey(_source.Handle, id);
+        _registered.Clear();
         _source.RemoveHook(WndProc);
         _source.Dispose();
     }

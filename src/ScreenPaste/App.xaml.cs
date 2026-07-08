@@ -4,6 +4,7 @@ using System.Windows;
 using ScreenPaste.Capture;
 using ScreenPaste.Native;
 using ScreenPaste.Output;
+using ScreenPaste.Recording;
 using ScreenPaste.Settings;
 using Drawing = System.Drawing;
 using Forms = System.Windows.Forms;
@@ -13,6 +14,8 @@ namespace ScreenPaste;
 public partial class App : Application
 {
     private const string MutexName = "ScreenPaste_SingleInstance_Mutex";
+    private const int HkCapture = 0xB001;
+    private const int HkRecord = 0xB002;
 
     private Mutex? _mutex;
     private Forms.NotifyIcon? _tray;
@@ -21,6 +24,9 @@ public partial class App : Application
     private CaptureOverlayWindow? _overlay;
     private SettingsWindow? _settingsWindow;
     private AboutWindow? _aboutWindow;
+    private ScreenRecorder? _recorder;
+    private RecordingHud? _hud;
+    private bool _selecting;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -29,6 +35,11 @@ public partial class App : Application
         catch { /* older OS: falls back to manifest/default */ }
 
         base.OnStartup(e);
+
+        // Every window gets a theme-matched (dark/light) title bar; borderless windows
+        // (overlay, HUD, pins) simply have no title bar for this to affect.
+        EventManager.RegisterClassHandler(typeof(Window), Window.LoadedEvent,
+            new RoutedEventHandler((s, _) => { if (s is Window w) Theme.StyleTitleBar(w); }));
 
         Loc.Init(null);   // system language until settings load
 
@@ -93,6 +104,11 @@ public partial class App : Application
         if (_tray == null) return;
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add(Loc.T("tray.capture") + " (" + _settings.CaptureHotkey + ")", null, (_, _) => StartCapture());
+        menu.Items.Add(
+            _recorder != null
+                ? Loc.T("tray.recordStop")
+                : Loc.T("tray.record") + " (" + _settings.RecordHotkey + ")",
+            null, (_, _) => ToggleRecord());
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(Loc.T("tray.settings"), null, (_, _) => OpenSettings());
         menu.Items.Add(Loc.T("tray.openFolder"), null, (_, _) => OpenSaveFolder());
@@ -122,14 +138,13 @@ public partial class App : Application
         _aboutWindow.Activate();
     }
 
-    /// <summary>Apply GUI settings changes: theme, startup, capture hotkey, tray.</summary>
+    /// <summary>Apply GUI settings changes: theme, startup, hotkeys, tray.</summary>
     private void ApplySettingsChanged()
     {
         Loc.Init(_settings.Language);
         Theme.Apply(_settings.Theme);
         StartupManager.Sync(_settings.RunAtStartup);
-        var win32 = HotkeyGesture.ToWin32(_settings.CaptureHotkey);
-        if (win32 is { } hk) _hotkey?.Register(hk.modifiers, hk.virtualKey);
+        RegisterHotkeys(warn: false);
         RefreshTray();
     }
 
@@ -187,16 +202,34 @@ public partial class App : Application
     private void SetupHotkey()
     {
         _hotkey = new HotkeyManager();
-        _hotkey.Pressed += StartCapture;
+        _hotkey.Pressed += OnHotkeyPressed;
+        RegisterHotkeys(warn: true);
+    }
 
-        var win32 = HotkeyGesture.ToWin32(_settings.CaptureHotkey);
-        bool ok = win32 is { } hk && _hotkey.Register(hk.modifiers, hk.virtualKey);
-        if (!ok)
-        {
-            _tray!.ShowBalloonTip(3000, "ScreenPaste",
-                Loc.T("msg.hotkeyFail", _settings.CaptureHotkey),
-                Forms.ToolTipIcon.Warning);
-        }
+    /// <summary>(Re)register the capture and record global hotkeys from settings.</summary>
+    private void RegisterHotkeys(bool warn)
+    {
+        if (_hotkey == null) return;
+
+        var cap = HotkeyGesture.ToWin32(_settings.CaptureHotkey);
+        bool capOk = cap is { } c && _hotkey.Register(HkCapture, c.modifiers, c.virtualKey);
+        if (!capOk && warn)
+            _tray?.ShowBalloonTip(3000, "ScreenPaste",
+                Loc.T("msg.hotkeyFail", _settings.CaptureHotkey), Forms.ToolTipIcon.Warning);
+
+        var rec = HotkeyGesture.ToWin32(_settings.RecordHotkey);
+        bool recWanted = !string.IsNullOrWhiteSpace(_settings.RecordHotkey);
+        bool recOk = rec is { } r && _hotkey.Register(HkRecord, r.modifiers, r.virtualKey);
+        if (!recOk) _hotkey.Unregister(HkRecord);
+        if (recWanted && !recOk && warn)
+            _tray?.ShowBalloonTip(3000, "ScreenPaste",
+                Loc.T("msg.hotkeyFail", _settings.RecordHotkey), Forms.ToolTipIcon.Warning);
+    }
+
+    private void OnHotkeyPressed(int id)
+    {
+        if (id == HkCapture) StartCapture();
+        else if (id == HkRecord) ToggleRecord();
     }
 
     private void StartCapture()
@@ -220,6 +253,111 @@ public partial class App : Application
         }
     }
 
+    /// <summary>Hotkey/menu entry point: start a region recording, or stop the running one.</summary>
+    private void ToggleRecord()
+    {
+        if (_recorder != null) { StopRecording(); return; }
+        if (_selecting) return;
+        StartRecording();
+    }
+
+    private void StartRecording()
+    {
+        Int32Rect region;
+        _selecting = true;
+        try
+        {
+            Theme.Apply(_settings.Theme);
+            var selector = new RegionSelectorWindow();
+            if (selector.ShowDialog() != true || selector.Selection is not { } sel) return;
+            region = sel;
+        }
+        finally { _selecting = false; }
+
+        // Default flow records a near-lossless intermediate for the post-record editor;
+        // the "skip editor" setting keeps the original record-straight-to-file behavior.
+        RecordingFormat? format;
+        string path;
+        if (_settings.RecordSkipEditor)
+        {
+            var final = RecordingFormats.Parse(_settings.RecordFormat);
+            format = final;
+            Directory.CreateDirectory(_settings.SaveDirectory);
+            path = Path.Combine(_settings.SaveDirectory,
+                "ScreenPaste_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + final.Extension());
+        }
+        else
+        {
+            format = null;
+            var tempDir = Path.Combine(Path.GetTempPath(), "ScreenPaste");
+            Directory.CreateDirectory(tempDir);
+            path = Path.Combine(tempDir, "rec_" + Guid.NewGuid().ToString("N") + ".mp4");
+        }
+
+        try
+        {
+            var recorder = new ScreenRecorder(region, _settings.RecordFps, format, path,
+                _settings.RecordCaptureCursor);
+            recorder.Start();
+            _recorder = recorder;
+
+            _hud = new RecordingHud(region);
+            _hud.StopRequested += StopRecording;
+            _hud.Show();
+            RefreshTray();
+        }
+        catch (FFmpegNotFoundException)
+        {
+            _tray?.ShowBalloonTip(6000, "ScreenPaste", Loc.T("rec.noFfmpeg"), Forms.ToolTipIcon.Error);
+        }
+        catch (Exception ex)
+        {
+            _tray?.ShowBalloonTip(4000, "ScreenPaste", Loc.T("rec.failed", ex.Message), Forms.ToolTipIcon.Error);
+        }
+    }
+
+    private async void StopRecording()
+    {
+        var recorder = _recorder;
+        if (recorder == null) return;
+        _recorder = null;
+
+        _hud?.Close();
+        _hud = null;
+        RefreshTray();
+
+        // Direct-save recordings encode the final GIF while flushing, which can take a
+        // moment; intermediate flushes are near-instant, so no balloon there.
+        if (recorder.Format != null)
+            _tray?.ShowBalloonTip(2000, "ScreenPaste", Loc.T("rec.encoding"), Forms.ToolTipIcon.Info);
+
+        bool ok = await recorder.StopAsync();
+        if (!ok)
+        {
+            _tray?.ShowBalloonTip(5000, "ScreenPaste",
+                Loc.T("rec.failed", "ffmpeg"), Forms.ToolTipIcon.Error);
+            if (recorder.Format == null)
+                try { File.Delete(recorder.OutputPath); } catch { /* temp cleanup */ }
+            return;
+        }
+
+        if (recorder.Format != null)
+        {
+            _tray?.ShowBalloonTip(4000, "ScreenPaste",
+                Loc.T("rec.saved", Path.GetFileName(recorder.OutputPath)), Forms.ToolTipIcon.Info);
+            return;
+        }
+
+        // Editor flow: open the trim/export editor on the intermediate clip.
+        var editor = new RecordingEditorWindow(
+            recorder.OutputPath, recorder.FrameWidth, recorder.FrameHeight, recorder.Fps,
+            _settings,
+            saved => _tray?.ShowBalloonTip(4000, "ScreenPaste",
+                Loc.T("rec.saved", Path.GetFileName(saved)), Forms.ToolTipIcon.Info));
+        editor.Show();
+        editor.Activate();
+    }
+
     private void OpenSaveFolder()
     {
         try
@@ -233,6 +371,7 @@ public partial class App : Application
     private void ExitApp()
     {
         _overlay?.Close();
+        _hud?.Close();
         Shutdown();
     }
 
