@@ -46,12 +46,50 @@
 
             <!-- Size readout chip. -->
             <Border x:Name="SizeReadout" Visibility="Collapsed" IsHitTestVisible="False"
-                    Background="#CC1E1E1E" CornerRadius="3" Padding="6,2">
-                <TextBlock x:Name="SizeText" Foreground="White" FontSize="12" FontFamily="Consolas"/>
+                    Background="#CC1E1E1E" CornerRadius="3" Padding="8,3">
+                <TextBlock x:Name="SizeText" Foreground="White" FontSize="14" FontFamily="Consolas"
+                           HorizontalAlignment="Center"/>
             </Border>
 
             <!-- Selection resize handles (editing phase): 4 corners + 4 edge midpoints. -->
             <Canvas x:Name="HandleLayer" Visibility="Collapsed"/>
+
+            <!-- Pixel magnifier + colour readout: follows the cursor while framing the
+                 region and while dragging the resize handles / moving the region. -->
+            <StackPanel x:Name="Magnifier" Visibility="Collapsed" IsHitTestVisible="False">
+                <Border BorderBrush="White" BorderThickness="1" Background="Black">
+                    <Grid Width="180" Height="132">
+                        <Image x:Name="MagImage" Stretch="Fill"
+                               RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                        <Canvas>
+                            <!-- Crosshair in four segments that stop at the centre cell,
+                                 so the inspected pixel keeps its true colour. -->
+                            <Rectangle x:Name="MagCrossT" Width="6" Fill="#503DA9FC"/>
+                            <Rectangle x:Name="MagCrossB" Width="6" Fill="#503DA9FC"/>
+                            <Rectangle x:Name="MagCrossL" Height="6" Fill="#503DA9FC"/>
+                            <Rectangle x:Name="MagCrossR" Height="6" Fill="#503DA9FC"/>
+                            <Rectangle x:Name="MagCenter" Width="6" Height="6"
+                                       Stroke="White" StrokeThickness="1"/>
+                        </Canvas>
+                    </Grid>
+                </Border>
+                <Border Background="#CC1E1E1E" Padding="8,6,8,7" Width="182">
+                    <StackPanel>
+                        <TextBlock x:Name="MagPos" Foreground="White" FontSize="13" FontFamily="Consolas"
+                                   HorizontalAlignment="Center"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,2,0,0" HorizontalAlignment="Center">
+                            <Rectangle x:Name="MagSwatch" Width="13" Height="13"
+                                       Stroke="#66FFFFFF" StrokeThickness="1" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="MagColor" Foreground="White" FontSize="13"
+                                       FontFamily="Consolas" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <TextBlock x:Name="MagHint1" Foreground="#CCFFFFFF" FontSize="11" Margin="0,4,0,0"
+                                   HorizontalAlignment="Center"/>
+                        <TextBlock x:Name="MagHint2" Foreground="#CCFFFFFF" FontSize="11"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
 
             <!-- Floating toolbar (built/positioned in code). NOTE: no DropShadowEffect
                  here — a WPF Effect rasterizes the whole subtree into an intermediate

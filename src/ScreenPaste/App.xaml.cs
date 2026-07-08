@@ -248,8 +248,13 @@ public partial class App : Application
 
     private void StartCapture()
     {
-        // Ignore if a capture is already in progress.
-        if (_overlay is { IsVisible: true }) return;
+        // A capture is already in progress: surface it (it may be hidden behind its own
+        // modal dialog) instead of silently swallowing the hotkey.
+        if (_overlay is { IsVisible: true })
+        {
+            _overlay.Activate();
+            return;
+        }
 
         try
         {

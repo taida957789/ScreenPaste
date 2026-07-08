@@ -13,7 +13,7 @@ Ein leichtgewichtiges Windows-Tool für Screenshots, Anmerkungen und Bildschirma
 ### Aufnahme
 - Der gesamte Bildschirm (Multi-Monitor-Unterstützung)
 - **Automatische Fenster- und UI-Element-Erkennung**: Fahren Sie über ein Fenster oder ein Interface-Element (Schaltflächen, Panels, Webseiten-Blöcke), um es automatisch zu umranden, und klicken Sie zum Aufnehmen; das **Mausrad** wechselt die Erkennungsebene (Element ⇄ Fenster)
-- Ziehen zum Auswählen eines eigenen Bereichs, mit Größenanzeige und Lupe für pixelgenaue Kanten
+- Ziehen zum Auswählen eines eigenen Bereichs, mit Größenanzeige; eine **Pixel-Lupe** folgt dem Cursor durchgehend (Auswahl- und Bearbeitungsmodus) mit Fadenkreuz, Koordinaten und Pixelfarbe — `C` kopiert den Farbwert, `Umschalt` wechselt Hex/Dezimal
 - **Nach der Auswahl anpassbar**: Ziehen Sie die Griffe an Ecken und Kantenmitten zum Ändern der Größe; ohne aktives Werkzeug verschiebt Ziehen im Inneren den Bereich — vorhandene Anmerkungen bleiben am Inhalt verankert
 
 ### Anmerkungen
@@ -78,6 +78,8 @@ Aufzeichnung: **F2** drücken und den Bereich per Ziehen wählen; erneut **F2** 
 | Global | `F1` | Aufnahme starten (konfigurierbar) |
 | Global | `F2` | Bereichsaufnahme starten / stoppen (konfigurierbar) |
 | Auswahl | Mausrad | Erkennungsebene wechseln (UI-Element ⇄ Fenster) |
+| Auswahl / Anmerkung | `C` | Farbwert des Pixels unter der Lupe kopieren |
+| Auswahl / Anmerkung | `Umschalt` | Farbanzeige Hex / Dezimal umschalten |
 | Anmerkung | `Strg+Z` / `Strg+Y` | Rückgängig / wiederholen (konfigurierbar) |
 | Anmerkung | `Strg+C` | In die Zwischenablage kopieren (konfigurierbar) |
 | Anmerkung | `Strg+S` / `Strg+Umschalt+S` | Speichern unter / Schnellspeichern (konfigurierbar) |

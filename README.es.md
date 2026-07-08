@@ -13,7 +13,7 @@ Una herramienta ligera de Windows para capturas de pantalla, anotaciones y graba
 ### Captura
 - Toda la pantalla (compatible con varios monitores)
 - **Detección automática de ventanas y elementos de la interfaz**: pasa el ratón sobre una ventana o un elemento (botones, paneles, bloques de páginas web) para delinearlo automáticamente y haz clic para capturar; la **rueda del ratón** cambia el nivel de detección (elemento ⇄ ventana)
-- Arrastra para seleccionar una zona personalizada, con indicador de tamaño y lupa para bordes al píxel
+- Arrastra para seleccionar una zona personalizada, con indicador de tamaño; una **lupa de píxeles** sigue el cursor en todo momento (selección y edición) con retícula, coordenadas y el color del píxel — `C` copia el valor, `Mayús` alterna hex/decimal
 - **Ajustable tras seleccionar**: arrastra los tiradores de las esquinas y los puntos medios de los lados para redimensionar; sin herramienta activa, arrastra el interior de la zona para moverla — las anotaciones existentes permanecen fijadas al contenido
 
 ### Anotación
@@ -78,6 +78,8 @@ Grabación: pulsa **F2** y arrastra para elegir la zona; pulsa **F2** de nuevo (
 | Global | `F1` | Iniciar captura (configurable) |
 | Global | `F2` | Iniciar / detener grabación de zona (configurable) |
 | Selección | Rueda del ratón | Cambiar nivel de detección (elemento ⇄ ventana) |
+| Selección / anotación | `C` | Copiar el color del píxel bajo la lupa |
+| Selección / anotación | `Mayús` | Alternar la lectura hex / decimal |
 | Anotación | `Ctrl+Z` / `Ctrl+Y` | Deshacer / rehacer (configurable) |
 | Anotación | `Ctrl+C` | Copiar al portapapeles (configurable) |
 | Anotación | `Ctrl+S` / `Ctrl+Mayús+S` | Guardar como / guardado rápido (configurable) |

@@ -13,7 +13,7 @@ Un outil Windows léger de capture d'écran, d'annotation et d'enregistrement : 
 ### Capture
 - L'écran entier (multi-écrans pris en charge)
 - **Détection automatique des fenêtres et des éléments d'interface** : survolez une fenêtre ou un élément (bouton, panneau, bloc de page web) pour l'encadrer automatiquement, puis cliquez pour capturer ; la **molette** change le niveau de détection (élément ⇄ fenêtre)
-- Glissez pour sélectionner une zone personnalisée, avec affichage des dimensions et loupe pour des bords au pixel près
+- Glissez pour sélectionner une zone personnalisée, avec affichage des dimensions ; une **loupe pixel** suit le curseur en permanence (sélection et édition) avec un réticule, les coordonnées et la couleur du pixel — `C` copie la valeur, `Maj` bascule hex/décimal
 - **Ajustable après la sélection** : faites glisser les poignées des coins et des milieux de côtés pour redimensionner ; sans outil actif, glissez l'intérieur de la zone pour la déplacer — les annotations existantes restent fixées au contenu
 
 ### Annotation
@@ -78,6 +78,8 @@ Enregistrement : appuyez sur **F2** et glissez pour choisir la zone ; appuyez à
 | Global | `F1` | Démarrer une capture (configurable) |
 | Global | `F2` | Démarrer / arrêter l'enregistrement de zone (configurable) |
 | Sélection | Molette | Changer le niveau de détection (élément ⇄ fenêtre) |
+| Sélection / annotation | `C` | Copier la couleur du pixel sous la loupe |
+| Sélection / annotation | `Maj` | Basculer l'affichage hex / décimal |
 | Annotation | `Ctrl+Z` / `Ctrl+Y` | Annuler / rétablir (configurable) |
 | Annotation | `Ctrl+C` | Copier dans le presse-papiers (configurable) |
 | Annotation | `Ctrl+S` / `Ctrl+Maj+S` | Enregistrer sous / enregistrement rapide (configurable) |

@@ -83,6 +83,13 @@ public partial class CaptureOverlayWindow : Window
     private Image? _stickerDrag;
     private Point _stickerGrab;
 
+    // Magnifier state (framing + region-adjust drags)
+    private const int MagSrcW = 30, MagSrcH = 22, MagZoom = 6;   // 30×22 px shown at 180×132
+    private byte[]? _pixels;                  // cached BGRA snapshot for pixel lookups
+    private int _pixStride;
+    private bool _magHex = true;              // Shift toggles hex ⇄ decimal
+    private Color _magColor;
+
     // Selection-adjust state (editing phase): 8 resize handles + drag-to-move.
     // Handle indices: 0=NW 1=N 2=NE 3=W 4=E 5=SW 6=S 7=SE.
     private const double HandleSize = 12;
@@ -176,6 +183,12 @@ public partial class CaptureOverlayWindow : Window
         // direct-manipulation grab of annotations with ANY tool, and commit-on-click-
         // outside for the text box.
         PreviewMouseLeftButtonDown += Window_PreviewMouseDown;
+        // The magnifier keeps following the cursor throughout the editing phase
+        // (the selecting phase updates it from RootCanvas_MouseMove).
+        PreviewMouseMove += (_, e) =>
+        {
+            if (_phase == Phase.Editing) UpdateMagnifier(e.GetPosition(RootCanvas));
+        };
         EditLayer.PreviewMouseLeftButtonDown += EditLayer_PreviewMouseDown;
         EditLayer.PreviewMouseMove += EditLayer_PreviewMouseMove;
         EditLayer.PreviewMouseLeftButtonUp += EditLayer_PreviewMouseUp;
@@ -215,6 +228,16 @@ public partial class CaptureOverlayWindow : Window
         Toolbar.UseLayoutRounding = true;
         TextOptions.SetTextFormattingMode(Toolbar, TextFormattingMode.Display);
 
+        // Same treatment for the magnifier and size chip (UI chrome, not content).
+        Magnifier.RenderTransform = new ScaleTransform(_dpiScale, _dpiScale);
+        Magnifier.UseLayoutRounding = true;
+        TextOptions.SetTextFormattingMode(Magnifier, TextFormattingMode.Display);
+        MagHint1.Text = Loc.T("mag.copy");
+        MagHint2.Text = Loc.T("mag.format");
+        SizeReadout.RenderTransform = new ScaleTransform(_dpiScale, _dpiScale);
+        SizeReadout.UseLayoutRounding = true;
+        TextOptions.SetTextFormattingMode(SizeReadout, TextFormattingMode.Display);
+
         NativeMethods.SetWindowPos(hwnd, NativeMethods.HWND_TOPMOST,
             _vs.X, _vs.Y, _vs.Width, _vs.Height,
             NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
@@ -240,6 +263,7 @@ public partial class CaptureOverlayWindow : Window
     {
         if (_phase != Phase.Selecting) return;
         var p = e.GetPosition(RootCanvas);
+        UpdateMagnifier(p);
 
         if (e.LeftButton == MouseButtonState.Pressed)
         {
@@ -361,11 +385,12 @@ public partial class CaptureOverlayWindow : Window
     private void ShowSizeReadout(Rect r)
     {
         SizeText.Text = $"{(int)r.Width} × {(int)r.Height}";
+        double chipH = 30 * _dpiScale;   // physical footprint (chip is counter-scaled)
         double x = r.X;
-        double y = r.Y - 24;
+        double y = r.Y - chipH;
         if (y < 2) y = r.Y + 4;
-        Canvas.SetLeft(SizeReadout, x);
-        Canvas.SetTop(SizeReadout, y);
+        Canvas.SetLeft(SizeReadout, Math.Round(x));
+        Canvas.SetTop(SizeReadout, Math.Round(y));
         SizeReadout.Visibility = Visibility.Visible;
     }
 
@@ -1281,6 +1306,107 @@ public partial class CaptureOverlayWindow : Window
             redo: () => { if (!ShapeHost.Children.Contains(shape)) ShapeHost.Children.Add(shape); });
     }
 
+    // -------------------------------------------------------- magnifier ---
+    // Follows the cursor while framing and while dragging the region handles: a 6×
+    // pixel view with a translucent crosshair and a white box on the hovered pixel,
+    // plus a readout panel (position, colour, copy/format hints). C copies the colour,
+    // Shift toggles hex ⇄ decimal.
+
+    private void EnsurePixelCache()
+    {
+        if (_pixels != null) return;
+        _pixStride = _screenshot.PixelWidth * 4;
+        _pixels = new byte[_pixStride * _screenshot.PixelHeight];
+        _screenshot.CopyPixels(_pixels, _pixStride, 0);
+    }
+
+    private Color PixelAt(int x, int y)
+    {
+        int i = y * _pixStride + x * 4;   // Pbgra32, opaque screen pixels
+        return Color.FromRgb(_pixels![i + 2], _pixels[i + 1], _pixels[i]);
+    }
+
+    private void UpdateMagnifier(Point p)
+    {
+        int px = Math.Clamp((int)Math.Round(p.X), 0, _screenshot.PixelWidth - 1);
+        int py = Math.Clamp((int)Math.Round(p.Y), 0, _screenshot.PixelHeight - 1);
+        EnsurePixelCache();
+
+        // Magnified view: crop stays inside the screenshot; the marker shifts instead,
+        // so the hovered pixel is always the one outlined even at screen edges.
+        int sx = Math.Clamp(px - MagSrcW / 2, 0, _screenshot.PixelWidth - MagSrcW);
+        int sy = Math.Clamp(py - MagSrcH / 2, 0, _screenshot.PixelHeight - MagSrcH);
+        MagImage.Source = new CroppedBitmap(_screenshot, new Int32Rect(sx, sy, MagSrcW, MagSrcH));
+
+        double mx = (px - sx) * MagZoom;
+        double my = (py - sy) * MagZoom;
+        const double viewW = MagSrcW * MagZoom, viewH = MagSrcH * MagZoom;
+        // Four segments stopping at the centre cell — no blue tint on the pixel itself.
+        Canvas.SetLeft(MagCrossT, mx);
+        Canvas.SetTop(MagCrossT, 0);
+        MagCrossT.Height = Math.Max(0, my);
+        Canvas.SetLeft(MagCrossB, mx);
+        Canvas.SetTop(MagCrossB, my + MagZoom);
+        MagCrossB.Height = Math.Max(0, viewH - my - MagZoom);
+        Canvas.SetLeft(MagCrossL, 0);
+        Canvas.SetTop(MagCrossL, my);
+        MagCrossL.Width = Math.Max(0, mx);
+        Canvas.SetLeft(MagCrossR, mx + MagZoom);
+        Canvas.SetTop(MagCrossR, my);
+        MagCrossR.Width = Math.Max(0, viewW - mx - MagZoom);
+        Canvas.SetLeft(MagCenter, mx);
+        Canvas.SetTop(MagCenter, my);
+
+        _magColor = PixelAt(px, py);
+        MagSwatch.Fill = new SolidColorBrush(_magColor);
+        MagPos.Text = $"({_vs.X + px}, {_vs.Y + py})";
+        RefreshMagColorText();
+
+        PositionMagnifier(px, py);
+        Magnifier.Visibility = Visibility.Visible;
+    }
+
+    private void RefreshMagColorText() =>
+        MagColor.Text = _magHex
+            ? $"#{_magColor.R:X2}{_magColor.G:X2}{_magColor.B:X2}"
+            : $"RGB({_magColor.R}, {_magColor.G}, {_magColor.B})";
+
+    /// <summary>Bottom-right of the cursor by default; flips left/up near screen edges.</summary>
+    private void PositionMagnifier(int px, int py)
+    {
+        if (Magnifier.ActualWidth <= 0) Magnifier.UpdateLayout();
+        double w = Magnifier.ActualWidth * _dpiScale;    // physical footprint (counter-scaled UI)
+        double h = Magnifier.ActualHeight * _dpiScale;
+        double gap = 20 * _dpiScale;
+
+        double x = px + gap;
+        if (x + w > _vs.Width) x = px - gap - w;
+        double y = py + gap;
+        if (y + h > _vs.Height) y = py - gap - h;
+
+        Canvas.SetLeft(Magnifier, Math.Round(Math.Max(2, x)));
+        Canvas.SetTop(Magnifier, Math.Round(Math.Max(2, y)));
+    }
+
+    private void CopyMagColor()
+    {
+        try
+        {
+            Clipboard.SetText(MagColor.Text);
+        }
+        catch (Exception ex)
+        {
+            // Diagnosable rather than silent: clipboard failures land in crash.log.
+            try
+            {
+                System.IO.File.AppendAllText(
+                    System.IO.Path.Combine(AppSettings.ConfigDirectory, "crash.log"),
+                    $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] magnifier copy failed: {ex}{Environment.NewLine}");
+            }
+            catch { /* never fail while reporting a failure */ }
+        }
+    }
+
     // ---------------------------------------------------- region adjust ---
     // Editing-phase selection tweaks: 8 handles resize, dragging the interior (with no
     // tool active) moves the whole region. Annotations stay glued to the SCREENSHOT
@@ -1347,6 +1473,7 @@ public partial class CaptureOverlayWindow : Window
     {
         if (_resizeHandle < 0) return;
         var p = e.GetPosition(RootCanvas);
+        UpdateMagnifier(p);
         double dx = p.X - _regionGrab.X;
         double dy = p.Y - _regionGrab.Y;
 
@@ -1386,6 +1513,7 @@ public partial class CaptureOverlayWindow : Window
 
     private void Region_MoveTo(Point p)
     {
+        UpdateMagnifier(p);
         int dx = (int)Math.Round(p.X - _regionGrab.X);
         int dy = (int)Math.Round(p.Y - _regionGrab.Y);
         int x = Math.Clamp(_regionStart.X + dx, 0, _screenshot.PixelWidth - _regionStart.Width);
@@ -1988,6 +2116,24 @@ public partial class CaptureOverlayWindow : Window
             else Cancel();
             e.Handled = true;
             return;
+        }
+
+        // Magnifier keys (framing, or mid-drag while adjusting the region).
+        if (Magnifier.Visibility == Visibility.Visible && _editingText == null)
+        {
+            if (e.Key == Key.C && Keyboard.Modifiers == ModifierKeys.None)
+            {
+                CopyMagColor();
+                e.Handled = true;
+                return;
+            }
+            if (e.Key is Key.LeftShift or Key.RightShift && !e.IsRepeat)
+            {
+                _magHex = !_magHex;
+                RefreshMagColorText();
+                e.Handled = true;
+                return;
+            }
         }
 
         if (_phase != Phase.Editing) return;

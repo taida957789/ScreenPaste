@@ -187,6 +187,10 @@ public static class Loc
         Add("color.more",    "More colors / enter Hex","更多顏色 / 輸入 Hex", "他の色 / Hex 入力", "더 많은 색 / Hex 입력", "Plus de couleurs / Hex", "Mehr Farben / Hex", "Más colores / Hex");
         Add("color.removeHint","Custom color — right-click to remove", "自訂顏色 — 右鍵點擊移除", "カスタム色 — 右クリックで削除", "사용자 지정 색 — 우클릭으로 삭제", "Couleur personnalisée — clic droit pour supprimer", "Eigene Farbe — Rechtsklick zum Entfernen", "Color personalizado — clic derecho para eliminar");
 
+        // Magnifier readout
+        Add("mag.copy",      "C: copy color",        "C 複製色彩值",   "C でカラー値をコピー", "C: 색상 값 복사",  "C : copier la couleur","C: Farbwert kopieren","C: copiar color");
+        Add("mag.format",    "Shift: hex / decimal", "Shift 切換 16/10 進制", "Shift で 16/10 進数切替", "Shift: 16/10진수 전환", "Maj : hex / décimal","Umschalt: Hex/Dezimal","Mayús: hex / decimal");
+
         // Discard-capture confirmation
         Add("dlg.discardTitle","Cancel capture",     "取消截圖",       "キャプチャを中止",     "캡처 취소",        "Annuler la capture","Aufnahme abbrechen","Cancelar captura");
         Add("dlg.discardMsg","Discard this capture? Your annotations will be lost.", "要取消這次截圖嗎？未儲存的標註將會遺失。", "このキャプチャを破棄しますか？注釈は失われます。", "이 캡처를 취소할까요? 주석이 사라집니다.", "Abandonner cette capture ? Vos annotations seront perdues.", "Diese Aufnahme verwerfen? Ihre Anmerkungen gehen verloren.", "¿Descartar esta captura? Se perderán tus anotaciones.");

@@ -13,7 +13,7 @@ A lightweight Windows screenshot, annotation and screen-recording tool: capture 
 ### Capture
 - The whole screen (multi-monitor support)
 - **Automatic window & UI-element detection**: hover over a window or an interface element (buttons, panels, web-page blocks) to outline it, then click to capture; scroll the **mouse wheel** to switch the detection level (element ⇄ window)
-- Drag to select a custom region, with a size readout and a magnifier for pixel-perfect edges
+- Drag to select a custom region, with a size readout; a **pixel magnifier** follows the cursor throughout (framing and editing) with a crosshair, coordinates and the pixel color — `C` copies the color value, `Shift` toggles hex/decimal
 - **Adjustable after selecting**: drag the corner and edge-midpoint handles to resize; with no tool active, drag inside the region to move it — existing annotations stay pinned to the content
 
 ### Annotate
@@ -78,6 +78,8 @@ Recording: press **F2** and drag-select a region to start; press **F2** again (o
 | Global | `F1` | Start a capture (configurable) |
 | Global | `F2` | Start / stop region recording (configurable) |
 | Selecting | Mouse wheel | Switch detection level (UI element ⇄ window) |
+| Selecting / annotating | `C` | Copy the magnified pixel's color value |
+| Selecting / annotating | `Shift` | Toggle the color readout hex / decimal |
 | Annotating | `Ctrl+Z` / `Ctrl+Y` | Undo / redo (configurable) |
 | Annotating | `Ctrl+C` | Copy to clipboard (configurable) |
 | Annotating | `Ctrl+S` / `Ctrl+Shift+S` | Save as / quick save (configurable) |
