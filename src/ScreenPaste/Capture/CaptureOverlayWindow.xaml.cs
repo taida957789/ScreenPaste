@@ -1738,33 +1738,32 @@ public partial class CaptureOverlayWindow : Window
         Close();
     }
 
-    /// <summary>Discard annotations and return to the framing/selection step.</summary>
-    private void ResetToSelection()
+    /// <summary>
+    /// Leave the capture from the editing phase. When annotations would be lost, ask
+    /// first — with a "don't ask again" option that persists to settings.
+    /// </summary>
+    private void ConfirmCancel()
     {
+        bool hasEdits = _editingText != null || Ink.Strokes.Count > 0 ||
+            BlurHost.Children.Count > 0 || ShapeHost.Children.Count > 0 ||
+            StickerHost.Children.Count > 0 || TextHost.Children.Count > 0;
+
+        if (!hasEdits || !_settings.ConfirmDiscardEdits)
+        {
+            Cancel();
+            return;
+        }
+
         CommitActiveText(discardIfEmpty: true);
-        Deselect();
+        var dlg = new ConfirmDiscardDialog { Owner = this };
+        bool? discard = dlg.ShowDialog();
 
-        _phase = Phase.Selecting;
-        Cursor = Cursors.Cross;
-
-        Ink.Strokes.Clear();
-        BlurHost.Children.Clear();
-        ShapeHost.Children.Clear();
-        StickerHost.Children.Clear();
-        TextHost.Children.Clear();
-        _history.Clear();
-
-        _selection = default;
-        EditLayer.Visibility = Visibility.Collapsed;
-        Toolbar.Visibility = Visibility.Collapsed;
-        SelectionBorder.Visibility = Visibility.Collapsed;
-        SizeReadout.Visibility = Visibility.Collapsed;
-        DetectBorder.Visibility = Visibility.Collapsed;
-        InteractionLayer.IsHitTestVisible = false;
-        Ink.EditingMode = InkCanvasEditingMode.None;
-
-        _dragging = false;
-        UpdateMask(null);
+        if (dlg.DontAskAgain)
+        {
+            _settings.ConfirmDiscardEdits = false;
+            _settings.Save();
+        }
+        if (discard == true) Cancel();
     }
 
     private void Cancel() => Close();
@@ -1802,9 +1801,10 @@ public partial class CaptureOverlayWindow : Window
     {
         if (e.Key == Key.Escape)
         {
-            // Selection cleared first; then editing → back to framing; framing → cancel.
+            // Snipaste-style: Esc clears the selection first, then LEAVES the capture
+            // (confirming when annotations would be lost) — no reselect step.
             if (_phase == Phase.Editing && _selected != null) Deselect();
-            else if (_phase == Phase.Editing) ResetToSelection();
+            else if (_phase == Phase.Editing) ConfirmCancel();
             else Cancel();
             e.Handled = true;
             return;

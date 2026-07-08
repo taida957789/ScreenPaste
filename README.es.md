@@ -66,7 +66,7 @@ Ambos son autocontenidos — **no se necesita .NET Runtime aparte**, y `ffmpeg` 
 1. Una vez iniciado permanece en la bandeja del sistema; pulsa **F1** (o doble clic en el icono) para capturar.
 2. Pasa el ratón sobre una ventana o elemento de la interfaz para delinearlo y haz clic, o arrastra para seleccionar una zona.
 3. Elige una herramienta de la barra emergente, ajusta sus parámetros y anota sobre la selección.
-4. Pulsa **Copiar / Guardar / Fijar** para la salida; `Esc` vuelve a la selección o cancela.
+4. Pulsa **Copiar / Guardar / Fijar** para la salida; `Esc` sale de la captura (pregunta primero si hay anotaciones, con opción de no volver a preguntar).
 
 Grabación: pulsa **F2** y arrastra para elegir la zona; pulsa **F2** de nuevo (o Detener) para terminar, y luego previsualiza, recorta y exporta como GIF/MP4/WebP en el editor (un ajuste permite guardar inmediatamente en su lugar).
 
@@ -83,7 +83,7 @@ Grabación: pulsa **F2** y arrastra para elegir la zona; pulsa **F2** de nuevo (
 | Anotación | `Supr` | Eliminar la anotación seleccionada |
 | Anotación | `Mayús` + arrastrar (línea) | Ajustar a ángulos de 45° |
 | Anotación | `Intro` o clic fuera | Confirmar el texto (`Mayús+Intro` para salto de línea) |
-| Anotación | `Esc` | Deseleccionar → reseleccionar zona → cerrar |
+| Anotación | `Esc` | Deseleccionar → salir de la captura (pregunta si hay anotaciones) |
 | Editor de grabación | `Espacio` | Reproducir / pausar |
 | Editor de grabación | `←` / `→` | Fotograma a fotograma |
 | Editor de grabación | `Inicio` / `Fin` | Ir al inicio / fin del recorte |

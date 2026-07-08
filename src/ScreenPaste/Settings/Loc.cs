@@ -187,6 +187,14 @@ public static class Loc
         Add("color.more",    "More colors / enter Hex","更多顏色 / 輸入 Hex", "他の色 / Hex 入力", "더 많은 색 / Hex 입력", "Plus de couleurs / Hex", "Mehr Farben / Hex", "Más colores / Hex");
         Add("color.removeHint","Custom color — right-click to remove", "自訂顏色 — 右鍵點擊移除", "カスタム色 — 右クリックで削除", "사용자 지정 색 — 우클릭으로 삭제", "Couleur personnalisée — clic droit pour supprimer", "Eigene Farbe — Rechtsklick zum Entfernen", "Color personalizado — clic derecho para eliminar");
 
+        // Discard-capture confirmation
+        Add("dlg.discardTitle","Cancel capture",     "取消截圖",       "キャプチャを中止",     "캡처 취소",        "Annuler la capture","Aufnahme abbrechen","Cancelar captura");
+        Add("dlg.discardMsg","Discard this capture? Your annotations will be lost.", "要取消這次截圖嗎？未儲存的標註將會遺失。", "このキャプチャを破棄しますか？注釈は失われます。", "이 캡처를 취소할까요? 주석이 사라집니다.", "Abandonner cette capture ? Vos annotations seront perdues.", "Diese Aufnahme verwerfen? Ihre Anmerkungen gehen verloren.", "¿Descartar esta captura? Se perderán tus anotaciones.");
+        Add("dlg.discardYes","Discard",              "放棄截圖",       "破棄",              "취소",            "Abandonner",        "Verwerfen",         "Descartar");
+        Add("dlg.discardNo", "Keep editing",         "繼續編輯",       "編集を続ける",        "계속 편집",        "Continuer l'édition","Weiter bearbeiten","Seguir editando");
+        Add("dlg.dontAsk",   "Don't ask again",      "下次不再詢問",   "今後は確認しない",     "다시 묻지 않음",    "Ne plus demander",  "Nicht mehr fragen", "No volver a preguntar");
+        Add("set.confirmDiscard","Ask before discarding an annotated capture", "取消含標註的截圖前先詢問", "注釈付きキャプチャの破棄前に確認", "주석이 있는 캡처 취소 전 확인", "Confirmer avant d'abandonner une capture annotée", "Vor dem Verwerfen einer beschrifteten Aufnahme fragen", "Preguntar antes de descartar una captura anotada");
+
         // Color picker
         Add("cp.title",      "Choose color",         "選擇顏色",       "色の選択",           "색 선택",         "Choisir une couleur","Farbe wählen",     "Elegir color");
         Add("cp.opacity",    "Opacity",              "透明度",        "不透明度",           "투명도",          "Opacité",           "Deckkraft",         "Opacidad");

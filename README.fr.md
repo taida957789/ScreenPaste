@@ -66,7 +66,7 @@ Les deux sont autonomes — **aucun .NET Runtime séparé n'est requis**, et `ff
 1. Une fois lancé, il reste dans la barre d'état ; appuyez sur **F1** (ou double-cliquez l'icône) pour capturer.
 2. Survolez une fenêtre ou un élément d'interface pour l'encadrer et cliquez, ou glissez pour sélectionner une zone.
 3. Choisissez un outil dans la barre, ajustez ses paramètres et annotez la sélection.
-4. **Copier / Enregistrer / Épingler** pour la sortie ; `Échap` revient à la sélection ou annule.
+4. **Copier / Enregistrer / Épingler** pour la sortie ; `Échap` quitte la capture (confirmation si des annotations existent, avec option « ne plus demander »).
 
 Enregistrement : appuyez sur **F2** et glissez pour choisir la zone ; appuyez à nouveau sur **F2** (ou Stop) pour terminer, puis prévisualisez, découpez et exportez en GIF/MP4/WebP dans l'éditeur (une option enregistre immédiatement à la place).
 
@@ -83,7 +83,7 @@ Enregistrement : appuyez sur **F2** et glissez pour choisir la zone ; appuyez à
 | Annotation | `Suppr` | Supprimer l'annotation sélectionnée |
 | Annotation | `Maj` + glisser (ligne) | Aligner sur 45° |
 | Annotation | `Entrée` ou clic à l'extérieur | Valider le texte (`Maj+Entrée` pour un saut de ligne) |
-| Annotation | `Échap` | Désélectionner → resélectionner la zone → fermer |
+| Annotation | `Échap` | Désélectionner → quitter la capture (confirmation si annotée) |
 | Éditeur d'enregistrement | `Espace` | Lecture / pause |
 | Éditeur d'enregistrement | `←` / `→` | Image par image |
 | Éditeur d'enregistrement | `Début` / `Fin` | Aller au début / à la fin de la découpe |

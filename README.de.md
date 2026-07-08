@@ -66,7 +66,7 @@ Beide sind eigenständig — **kein separates .NET Runtime erforderlich**, und `
 1. Nach dem Start bleibt das Tool im Infobereich; **F1** (oder Doppelklick auf das Symbol) startet eine Aufnahme.
 2. Über ein Fenster oder UI-Element fahren, um es zu umranden, und klicken — oder einen Bereich per Ziehen auswählen.
 3. Ein Werkzeug aus der Leiste wählen, Parameter anpassen und die Auswahl beschriften.
-4. **Kopieren / Speichern / Anheften** zur Ausgabe; `Esc` kehrt zur Auswahl zurück oder bricht ab.
+4. **Kopieren / Speichern / Anheften** zur Ausgabe; `Esc` verlässt die Aufnahme (fragt nach, wenn Anmerkungen vorhanden sind — mit „Nicht mehr fragen“-Option).
 
 Aufzeichnung: **F2** drücken und den Bereich per Ziehen wählen; erneut **F2** (oder Stopp) beendet, danach im Editor prüfen, trimmen und als GIF/MP4/WebP exportieren (per Einstellung auch Sofortspeichern).
 
@@ -83,7 +83,7 @@ Aufzeichnung: **F2** drücken und den Bereich per Ziehen wählen; erneut **F2** 
 | Anmerkung | `Entf` | Ausgewählte Anmerkung löschen |
 | Anmerkung | `Umschalt` + Ziehen (Linie) | An 45°-Winkeln einrasten |
 | Anmerkung | `Eingabe` oder Klick außerhalb | Text bestätigen (`Umschalt+Eingabe` für Zeilenumbruch) |
-| Anmerkung | `Esc` | Auswahl aufheben → Bereich neu wählen → schließen |
+| Anmerkung | `Esc` | Auswahl aufheben → Aufnahme verlassen (fragt bei Anmerkungen) |
 | Aufnahme-Editor | `Leertaste` | Wiedergabe / Pause |
 | Aufnahme-Editor | `←` / `→` | Einzelbild vor / zurück |
 | Aufnahme-Editor | `Pos1` / `Ende` | Zum Trimm-Anfang / -Ende springen |

@@ -60,6 +60,10 @@ public sealed class AppSettings
     public string Theme { get; set; } = "System";   // System | Light | Dark
     public string Language { get; set; } = "System"; // System | zh-Hant | en | ja | ko | fr | de | es
 
+    // ---- Behavior ----
+    // Esc 離開編輯模式時，若有標註先跳確認對話框（可於對話框勾選「不再詢問」關閉）
+    public bool ConfirmDiscardEdits { get; set; } = true;
+
     // ---- Startup ----
     public bool RunAtStartup { get; set; }
 

@@ -25,6 +25,7 @@ public sealed class SettingsWindow : Window
     private CheckBox _recordCursor = null!;
     private CheckBox _recordSkipEditor = null!;
     private CheckBox _startup = null!;
+    private CheckBox _confirmDiscard = null!;
     private CheckBox _checkUpdate = null!;
     private TextBox _saveDir = null!;
 
@@ -62,6 +63,8 @@ public sealed class SettingsWindow : Window
 
         _startup = new CheckBox { IsChecked = _s.RunAtStartup, Content = Loc.T("set.startup"), Foreground = Theme.ForegroundBrush, VerticalAlignment = VerticalAlignment.Center };
         body.Children.Add(Row("", _startup));
+        _confirmDiscard = new CheckBox { IsChecked = _s.ConfirmDiscardEdits, Content = Loc.T("set.confirmDiscard"), Foreground = Theme.ForegroundBrush, VerticalAlignment = VerticalAlignment.Center };
+        body.Children.Add(Row("", _confirmDiscard));
 
         body.Children.Add(Header(Loc.T("set.updates")));
         _checkUpdate = new CheckBox { IsChecked = _s.CheckUpdateOnStartup, Content = Loc.T("set.checkStartup"), Foreground = Theme.ForegroundBrush, VerticalAlignment = VerticalAlignment.Center };
@@ -132,6 +135,7 @@ public sealed class SettingsWindow : Window
         _s.Language = ComboValue(_language);
         _s.Theme = ComboValue(_theme);
         _s.RunAtStartup = _startup.IsChecked == true;
+        _s.ConfirmDiscardEdits = _confirmDiscard.IsChecked == true;
         _s.CheckUpdateOnStartup = _checkUpdate.IsChecked == true;
         _s.SaveDirectory = _saveDir.Text.Trim();
 
