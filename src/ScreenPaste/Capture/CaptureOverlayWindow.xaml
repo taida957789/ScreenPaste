@@ -31,7 +31,9 @@
                 <Canvas x:Name="BlurHost"/>
                 <Canvas x:Name="ShapeHost" Canvas.Left="0" Canvas.Top="0"/>
                 <Canvas x:Name="StickerHost" Canvas.Left="0" Canvas.Top="0"/>
-                <InkCanvas x:Name="Ink" Background="Transparent"
+                <!-- Focusable=False: InkCanvas class-binds Ctrl+C/X/V for stroke editing;
+                     if it ever takes keyboard focus, it swallows our Copy/Save hotkeys. -->
+                <InkCanvas x:Name="Ink" Background="Transparent" Focusable="False"
                            Canvas.Left="0" Canvas.Top="0"/>
                 <Canvas x:Name="TextHost" Canvas.Left="0" Canvas.Top="0"/>
                 <Rectangle x:Name="InteractionLayer" Fill="#01000000"
