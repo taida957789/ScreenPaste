@@ -15,7 +15,7 @@ namespace ScreenPaste.Capture;
 /// </summary>
 internal sealed class ElementDetector
 {
-    private const int MaxElementsPerWindow = 800;   // huge trees (browsers) get truncated
+    private const int MaxElementsPerWindow = 3000;  // huge trees (browsers) get truncated
     private const int MinElementSize = 8;           // physical px; skip specks
     private static readonly TimeSpan ScanBudget = TimeSpan.FromSeconds(5);
 
