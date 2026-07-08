@@ -36,6 +36,18 @@ public partial class App : Application
 
         base.OnStartup(e);
 
+        // Safety net: an unhandled exception inside the full-screen topmost overlay
+        // (with the mouse captured) looks like a system freeze — the error dialog is
+        // hidden behind it. Close the overlay first, then surface the error as a balloon.
+        DispatcherUnhandledException += (_, args) =>
+        {
+            args.Handled = true;
+            try { _overlay?.Close(); } catch { /* best effort */ }
+            _overlay = null;
+            _tray?.ShowBalloonTip(5000, "ScreenPaste",
+                Loc.T("msg.captureFail", args.Exception.Message), Forms.ToolTipIcon.Error);
+        };
+
         // Every window gets a theme-matched (dark/light) title bar; borderless windows
         // (overlay, HUD, pins) simply have no title bar for this to affect.
         EventManager.RegisterClassHandler(typeof(Window), Window.LoadedEvent,

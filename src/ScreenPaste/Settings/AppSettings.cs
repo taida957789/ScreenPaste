@@ -47,6 +47,12 @@ public sealed class AppSettings
     public string ShapeColor { get; set; } = "#FFFF3B30"; // red
     public double ShapeWidth { get; set; } = 3;
 
+    // ---- Line defaults (each end can be an arrowhead) ----
+    public double LineWidth { get; set; } = 3;
+    public string LineColor { get; set; } = "#FFFF3B30"; // red
+    public bool LineArrowStart { get; set; }
+    public bool LineArrowEnd { get; set; } = true;
+
     // ---- Appearance ----
     public string Theme { get; set; } = "System";   // System | Light | Dark
     public string Language { get; set; } = "System"; // System | zh-Hant | en | ja | ko | fr | de | es

@@ -512,12 +512,12 @@ public sealed class RecordingEditorWindow : Window
         switch (_drag)
         {
             case DragTarget.Start:
-                _trimStart = Math.Clamp(t, 0, _trimEnd - MinTrimGap);
+                _trimStart = Math.Clamp(t, 0, Math.Max(0, _trimEnd - MinTrimGap));
                 SetPlaying(false);
                 Seek(_trimStart);      // scrub the frame under the handle
                 break;
             case DragTarget.End:
-                _trimEnd = Math.Clamp(t, _trimStart + MinTrimGap, _duration);
+                _trimEnd = Math.Clamp(t, Math.Min(_duration, _trimStart + MinTrimGap), _duration);
                 SetPlaying(false);
                 Seek(_trimEnd);
                 break;
@@ -872,10 +872,10 @@ public sealed class RecordingEditorWindow : Window
             case Key.Home: SetPlaying(false); Seek(_trimStart); e.Handled = true; break;
             case Key.End: SetPlaying(false); Seek(_trimEnd); e.Handled = true; break;
             case Key.I:
-                _trimStart = Math.Clamp(pos, 0, _trimEnd - MinTrimGap);
+                _trimStart = Math.Clamp(pos, 0, Math.Max(0, _trimEnd - MinTrimGap));
                 LayoutTimeline(); e.Handled = true; break;
             case Key.O:
-                _trimEnd = Math.Clamp(pos, _trimStart + MinTrimGap, _duration);
+                _trimEnd = Math.Clamp(pos, Math.Min(_duration, _trimStart + MinTrimGap), _duration);
                 LayoutTimeline(); e.Handled = true; break;
         }
     }

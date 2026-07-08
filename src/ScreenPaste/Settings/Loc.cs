@@ -150,6 +150,9 @@ public static class Loc
         Add("tool.highlighter","Highlighter",        "螢光筆",        "蛍光ペン",           "형광펜",          "Surligneur",        "Textmarker",        "Resaltador");
         Add("tool.text",     "Text",                 "文字",          "テキスト",           "텍스트",          "Texte",             "Text",              "Texto");
         Add("tool.shape",    "Shape",                "形狀",          "図形",              "도형",            "Forme",             "Form",              "Forma");
+        Add("tool.line",     "Line / arrow",         "直線 / 箭頭",   "直線 / 矢印",        "직선 / 화살표",    "Ligne / flèche",    "Linie / Pfeil",     "Línea / flecha");
+        Add("line.arrowStart","Start arrow",         "起點箭頭",       "始点の矢印",         "시작 화살표",      "Flèche au début",   "Pfeil am Anfang",   "Flecha al inicio");
+        Add("line.arrowEnd", "End arrow",            "終點箭頭",       "終点の矢印",         "끝 화살표",        "Flèche à la fin",   "Pfeil am Ende",     "Flecha al final");
         Add("tool.sticker",  "Paste image",          "貼圖",          "画像を貼り付け",      "이미지 붙여넣기",  "Coller une image",  "Bild einfügen",     "Pegar imagen");
         Add("tool.blur",     "Blur",                 "模糊",          "ぼかし",             "흐림",            "Flou",              "Weichzeichnen",     "Desenfoque");
 

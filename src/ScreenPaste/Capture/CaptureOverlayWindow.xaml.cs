@@ -67,13 +67,22 @@ public partial class CaptureOverlayWindow : Window
     private Point _shapeStart;
     private Shape? _shapePreview;
 
+    // Line-tool settings + state (each end can be an arrowhead)
+    private Color _lineColor;
+    private double _lineWidth = 3;
+    private bool _lineArrowStart, _lineArrowEnd;
+    private bool _lineDragging;
+    private Point _lineStart;
+    private Path? _linePreview;
+
     // Sticker (pasted image) drag state
     private Image? _stickerDrag;
     private Point _stickerGrab;
 
     // Toolbar controls we need to read/update
-    private Slider _widthSlider = null!, _opacitySlider = null!, _blurSlider = null!, _textSizeSlider = null!, _shapeWidthSlider = null!;
-    private StackPanel _blurOptionsPanel = null!, _penOptionsPanel = null!, _textOptionsPanel = null!, _shapeOptionsPanel = null!, _stickerOptionsPanel = null!;
+    private Slider _widthSlider = null!, _opacitySlider = null!, _blurSlider = null!, _textSizeSlider = null!, _shapeWidthSlider = null!, _lineWidthSlider = null!;
+    private StackPanel _blurOptionsPanel = null!, _penOptionsPanel = null!, _textOptionsPanel = null!, _shapeOptionsPanel = null!, _lineOptionsPanel = null!, _stickerOptionsPanel = null!;
+    private Button _arrowStartButton = null!, _arrowEndButton = null!;
     private ComboBox _fontCombo = null!;
     private Button _boldButton = null!, _italicButton = null!, _strikeButton = null!;
     private Button _redoButton = null!;
@@ -107,6 +116,10 @@ public partial class CaptureOverlayWindow : Window
         _shapeFilled = settings.ShapeFilled;
         _shapeColor = ParseColor(settings.ShapeColor, Colors.Red);
         _shapeWidth = settings.ShapeWidth;
+        _lineColor = ParseColor(settings.LineColor, Colors.Red);
+        _lineWidth = settings.LineWidth;
+        _lineArrowStart = settings.LineArrowStart;
+        _lineArrowEnd = settings.LineArrowEnd;
 
         _undoGesture = HotkeyGesture.Parse(settings.UndoHotkey);
         _redoGesture = HotkeyGesture.Parse(settings.RedoHotkey);
@@ -152,6 +165,14 @@ public partial class CaptureOverlayWindow : Window
 
         // Author children in physical px; compensate for WPF's per-monitor scaling.
         RootCanvas.RenderTransform = new ScaleTransform(1.0 / _dpiScale, 1.0 / _dpiScale);
+
+        // The toolbar is UI chrome, not screenshot content: counter-scale it so its net
+        // transform is identity — otherwise its text renders at a fractional scale on
+        // high-DPI monitors (blurry ClearType, undersized). Display mode keeps the
+        // small labels pixel-snapped.
+        Toolbar.RenderTransform = new ScaleTransform(_dpiScale, _dpiScale);
+        Toolbar.UseLayoutRounding = true;
+        TextOptions.SetTextFormattingMode(Toolbar, TextFormattingMode.Display);
 
         NativeMethods.SetWindowPos(hwnd, NativeMethods.HWND_TOPMOST,
             _vs.X, _vs.Y, _vs.Width, _vs.Height,
@@ -321,6 +342,7 @@ public partial class CaptureOverlayWindow : Window
     private static readonly string GlyphHighlighter = Glyph(0xE891); // Highlight
     private static readonly string GlyphText = Glyph(0xE8D2);        // Font (A)
     private static readonly string GlyphShape = Glyph(0xE71A);       // Stop (square/block)
+    private static readonly string GlyphLine = Glyph(0xE72A);        // Forward (arrow) — line/arrow tool
     private static readonly string GlyphSticker = Glyph(0xE8B9);     // Pictures (paste image)
     private static readonly string GlyphBlur = Glyph(0xE80A);        // GridView (mosaic look)
     private static readonly string GlyphRedo = Glyph(0xE7A6);        // Redo
@@ -345,6 +367,7 @@ public partial class CaptureOverlayWindow : Window
         toolsRow.Children.Add(MakeToolButton(GlyphHighlighter, Loc.T("tool.highlighter"), ToolKind.Highlighter));
         toolsRow.Children.Add(MakeToolButton(GlyphText, Loc.T("tool.text"), ToolKind.Text));
         toolsRow.Children.Add(MakeToolButton(GlyphShape, Loc.T("tool.shape"), ToolKind.Shape));
+        toolsRow.Children.Add(MakeToolButton(GlyphLine, Loc.T("tool.line"), ToolKind.Line));
         toolsRow.Children.Add(MakeToolButton(GlyphSticker, Loc.T("tool.sticker"), ToolKind.Sticker));
         toolsRow.Children.Add(MakeToolButton(GlyphBlur, Loc.T("tool.blur"), ToolKind.Blur));
         toolsRow.Children.Add(MakeSeparator());
@@ -435,6 +458,24 @@ public partial class CaptureOverlayWindow : Window
         foreach (var c in Palette) _shapeOptionsPanel.Children.Add(MakeSwatch(c));
         _shapeOptionsPanel.Children.Add(MakeMoreColorsButton());
         ToolbarStack.Children.Add(_shapeOptionsPanel);
+
+        // ---- Line options (width / arrowheads / colour) ----
+        _lineOptionsPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+        _lineOptionsPanel.Children.Add(Label(Loc.T("lbl.lineWidth")));
+        _lineWidthSlider = new Slider { Minimum = 1, Maximum = 20, Width = 90, VerticalAlignment = VerticalAlignment.Center, Value = _lineWidth };
+        _lineWidthSlider.ValueChanged += (_, e) => _lineWidth = e.NewValue;
+        _lineOptionsPanel.Children.Add(_lineWidthSlider);
+        _arrowStartButton = MakeSmallToggle(Loc.T("line.arrowStart"));
+        _arrowStartButton.Click += (_, _) => { _lineArrowStart = !_lineArrowStart; RefreshArrowToggles(); };
+        _arrowEndButton = MakeSmallToggle(Loc.T("line.arrowEnd"));
+        _arrowEndButton.Click += (_, _) => { _lineArrowEnd = !_lineArrowEnd; RefreshArrowToggles(); };
+        _lineOptionsPanel.Children.Add(_arrowStartButton);
+        _lineOptionsPanel.Children.Add(_arrowEndButton);
+        _lineOptionsPanel.Children.Add(Label(Loc.T("lbl.color")));
+        foreach (var c in Palette) _lineOptionsPanel.Children.Add(MakeSwatch(c));
+        _lineOptionsPanel.Children.Add(MakeMoreColorsButton());
+        RefreshArrowToggles();
+        ToolbarStack.Children.Add(_lineOptionsPanel);
 
         // ---- Sticker options (add image; placed stickers are draggable / wheel-resizable) ----
         _stickerOptionsPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
@@ -552,6 +593,12 @@ public partial class CaptureOverlayWindow : Window
         _strikeButton.Background = _textStrike ? Theme.ActiveBrush : Theme.ButtonBgBrush;
     }
 
+    private void RefreshArrowToggles()
+    {
+        _arrowStartButton.Background = _lineArrowStart ? Theme.ActiveBrush : Theme.ButtonBgBrush;
+        _arrowEndButton.Background = _lineArrowEnd ? Theme.ActiveBrush : Theme.ButtonBgBrush;
+    }
+
     private void PositionToolbar(Point cursor)
     {
         // Force a full layout pass so ActualWidth/Height are valid (the toolbar was just shown).
@@ -572,16 +619,18 @@ public partial class CaptureOverlayWindow : Window
         Canvas.SetTop(Toolbar, y);
     }
 
-    private double ToolbarWidth() => Toolbar.ActualWidth > 0 ? Toolbar.ActualWidth : Toolbar.DesiredSize.Width;
-    private double ToolbarHeight() => Toolbar.ActualHeight > 0 ? Toolbar.ActualHeight : Toolbar.DesiredSize.Height;
+    // Toolbar footprint in canvas (physical px) space: layout size × its counter-scale.
+    private double ToolbarWidth() => (Toolbar.ActualWidth > 0 ? Toolbar.ActualWidth : Toolbar.DesiredSize.Width) * _dpiScale;
+    private double ToolbarHeight() => (Toolbar.ActualHeight > 0 ? Toolbar.ActualHeight : Toolbar.DesiredSize.Height) * _dpiScale;
 
-    /// <summary>Keep the toolbar fully within the virtual screen.</summary>
+    /// <summary>Keep the toolbar fully within the virtual screen, snapped to whole
+    /// device pixels — a fractional offset would defeat ClearType pixel alignment.</summary>
     private void ClampToolbar(ref double x, ref double y)
     {
         double tw = ToolbarWidth();
         double th = ToolbarHeight();
-        x = Math.Clamp(x, 4, Math.Max(4, _vs.Width - tw - 4));
-        y = Math.Clamp(y, 4, Math.Max(4, _vs.Height - th - 4));
+        x = Math.Round(Math.Clamp(x, 4, Math.Max(4, _vs.Width - tw - 4)));
+        y = Math.Round(Math.Clamp(y, 4, Math.Max(4, _vs.Height - th - 4)));
     }
 
     // ---- Draggable toolbar ----
@@ -741,6 +790,7 @@ public partial class CaptureOverlayWindow : Window
             case ToolKind.Highlighter: current = _hlColor; opacity = _hlOpacity; break;
             case ToolKind.Text: current = _textColor; opacity = _textColor.A / 255.0; break;
             case ToolKind.Shape: current = _shapeColor; opacity = _shapeColor.A / 255.0; break;
+            case ToolKind.Line: current = _lineColor; opacity = _lineColor.A / 255.0; break;
             default: current = _penColor; opacity = _penOpacity; break;
         }
 
@@ -754,6 +804,7 @@ public partial class CaptureOverlayWindow : Window
         {
             ToolKind.Text => _textOptionsPanel,
             ToolKind.Shape => _shapeOptionsPanel,
+            ToolKind.Line => _lineOptionsPanel,
             _ => _penOptionsPanel,
         };
         panel.Children.Insert(panel.Children.Count - 1, MakeSwatch(dlg.SelectedColor));
@@ -774,6 +825,11 @@ public partial class CaptureOverlayWindow : Window
             _shapeColor = Color.FromArgb(a, rgb.R, rgb.G, rgb.B);
             return;
         }
+        if (_tool == ToolKind.Line)
+        {
+            _lineColor = Color.FromArgb(a, rgb.R, rgb.G, rgb.B);
+            return;
+        }
 
         if (_tool == ToolKind.Highlighter) { _hlColor = rgb; _hlOpacity = opacity; }
         else { _penColor = rgb; _penOpacity = opacity; }
@@ -786,7 +842,7 @@ public partial class CaptureOverlayWindow : Window
     {
         double left = Canvas.GetLeft(Toolbar);
         double top = Canvas.GetTop(Toolbar);
-        return new Rect(_vs.X + left, _vs.Y + top, Toolbar.ActualWidth, Toolbar.ActualHeight);
+        return new Rect(_vs.X + left, _vs.Y + top, ToolbarWidth(), ToolbarHeight());
     }
 
     // ---------------------------------------------------------- tool state ---
@@ -806,23 +862,26 @@ public partial class CaptureOverlayWindow : Window
         bool isBlur = kind is ToolKind.Blur;
         bool isText = kind is ToolKind.Text;
         bool isShape = kind is ToolKind.Shape;
+        bool isLine = kind is ToolKind.Line;
         bool isSticker = kind is ToolKind.Sticker;
 
         _penOptionsPanel.Visibility = isPen ? Visibility.Visible : Visibility.Collapsed;
         _blurOptionsPanel.Visibility = isBlur ? Visibility.Visible : Visibility.Collapsed;
         _textOptionsPanel.Visibility = isText ? Visibility.Visible : Visibility.Collapsed;
         _shapeOptionsPanel.Visibility = isShape ? Visibility.Visible : Visibility.Collapsed;
+        _lineOptionsPanel.Visibility = isLine ? Visibility.Visible : Visibility.Collapsed;
         _stickerOptionsPanel.Visibility = isSticker ? Visibility.Visible : Visibility.Collapsed;
 
         Ink.EditingMode = isPen ? InkCanvasEditingMode.Ink : InkCanvasEditingMode.None;
         Ink.IsHitTestVisible = isPen;
         // Region tools capture via InteractionLayer; sticker mode lets clicks reach the
         // sticker images below so they can be dragged/resized.
-        InteractionLayer.IsHitTestVisible = isBlur || isText || isShape;
+        InteractionLayer.IsHitTestVisible = isBlur || isText || isShape || isLine;
 
         if (isPen) LoadPenControls();
         if (isBlur) SelectBlurKind(_blurKind);
         if (isShape) { SelectShapeKind(_shapeKind); SelectShapeStyle(_shapeFilled); }
+        if (isLine) RefreshArrowToggles();
         if (isSticker && StickerHost.Children.Count == 0) AddSticker();
     }
 
@@ -881,6 +940,7 @@ public partial class CaptureOverlayWindow : Window
     {
         if (_tool == ToolKind.Text) { _textColor = Color.FromArgb(_textColor.A, c.R, c.G, c.B); ApplyTextStyle(); RefocusText(); return; }
         if (_tool == ToolKind.Shape) { _shapeColor = Color.FromArgb(_shapeColor.A, c.R, c.G, c.B); return; }
+        if (_tool == ToolKind.Line) { _lineColor = Color.FromArgb(_lineColor.A, c.R, c.G, c.B); return; }
         if (_tool == ToolKind.Highlighter) _hlColor = c;
         else _penColor = c;
         ApplyDrawingAttributes();
@@ -903,6 +963,7 @@ public partial class CaptureOverlayWindow : Window
     {
         if (_tool == ToolKind.Text) { PlaceText(e.GetPosition(InteractionLayer)); return; }
         if (_tool == ToolKind.Shape) { Shape_MouseDown(e.GetPosition(InteractionLayer)); return; }
+        if (_tool == ToolKind.Line) { Line_MouseDown(e.GetPosition(InteractionLayer)); return; }
         if (_tool != ToolKind.Blur) return;
 
         _blurDragging = true;
@@ -923,6 +984,7 @@ public partial class CaptureOverlayWindow : Window
     private void Blur_MouseMove(object sender, MouseEventArgs e)
     {
         if (_shapeDragging) { Shape_MouseMove(e.GetPosition(InteractionLayer)); return; }
+        if (_lineDragging) { Line_MouseMove(e.GetPosition(InteractionLayer)); return; }
         if (!_blurDragging || _blurPreview == null) return;
         var p = e.GetPosition(InteractionLayer);
         var r = MakeRect(_blurStart, p);
@@ -935,6 +997,7 @@ public partial class CaptureOverlayWindow : Window
     private void Blur_MouseUp(object sender, MouseButtonEventArgs e)
     {
         if (_shapeDragging) { Shape_MouseUp(e.GetPosition(InteractionLayer)); return; }
+        if (_lineDragging) { Line_MouseUp(e.GetPosition(InteractionLayer)); return; }
         if (!_blurDragging) return;
         _blurDragging = false;
         InteractionLayer.ReleaseMouseCapture();
@@ -1016,6 +1079,100 @@ public partial class CaptureOverlayWindow : Window
         _history.Push(
             undo: () => ShapeHost.Children.Remove(shape),
             redo: () => { if (!ShapeHost.Children.Contains(shape)) ShapeHost.Children.Add(shape); });
+    }
+
+    // -------------------------------------------------------- line tool ---
+
+    private void Line_MouseDown(Point start)
+    {
+        _lineDragging = true;
+        _lineStart = start;
+        var brush = new SolidColorBrush(_lineColor);
+        _linePreview = new Path
+        {
+            Stroke = brush,
+            Fill = brush,                    // fills the arrowhead triangles
+            StrokeThickness = _lineWidth,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+        };
+        ShapeHost.Children.Add(_linePreview);
+        InteractionLayer.CaptureMouse();
+    }
+
+    private void Line_MouseMove(Point p)
+    {
+        if (_linePreview == null) return;
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) p = SnapTo45(_lineStart, p);
+        _linePreview.Data = BuildLineGeometry(_lineStart, p, _lineWidth, _lineArrowStart, _lineArrowEnd);
+    }
+
+    private void Line_MouseUp(Point p)
+    {
+        _lineDragging = false;
+        InteractionLayer.ReleaseMouseCapture();
+
+        var path = _linePreview;
+        _linePreview = null;
+        if (path == null) return;
+
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) p = SnapTo45(_lineStart, p);
+        if ((p - _lineStart).Length < 8) { ShapeHost.Children.Remove(path); return; }
+        path.Data = BuildLineGeometry(_lineStart, p, _lineWidth, _lineArrowStart, _lineArrowEnd);
+
+        _history.Push(
+            undo: () => ShapeHost.Children.Remove(path),
+            redo: () => { if (!ShapeHost.Children.Contains(path)) ShapeHost.Children.Add(path); });
+    }
+
+    /// <summary>Line with optional filled arrowheads; the stroked segment is shortened
+    /// under each head so the round line cap never pokes past the tip.</summary>
+    private static Geometry BuildLineGeometry(Point a, Point b, double width, bool arrowStart, bool arrowEnd)
+    {
+        var group = new GeometryGroup { FillRule = FillRule.Nonzero };
+        Vector d = b - a;
+        double len = d.Length;
+        if (len < 0.01)
+        {
+            group.Children.Add(new LineGeometry(a, b));
+            return group;
+        }
+        d /= len;
+        var perp = new Vector(-d.Y, d.X);
+        // Desired head ≈ max(10, 3.5·width), but never longer than ~half the line —
+        // computed with Min(Max(...)) because the two bounds can cross on short drags.
+        double head = Math.Min(Math.Max(10, width * 3.5), len * 0.45);
+        double halfW = head * 0.45;
+
+        Point lineA = arrowStart ? a + d * (head * 0.8) : a;
+        Point lineB = arrowEnd ? b - d * (head * 0.8) : b;
+        group.Children.Add(new LineGeometry(lineA, lineB));
+
+        if (arrowStart) group.Children.Add(Arrowhead(a, d, head, halfW, perp));
+        if (arrowEnd) group.Children.Add(Arrowhead(b, -d, head, halfW, perp));
+        return group;
+    }
+
+    /// <summary>Closed triangle with its apex at <paramref name="tip"/>, opening along
+    /// <paramref name="inward"/> (unit vector pointing back along the line).</summary>
+    private static Geometry Arrowhead(Point tip, Vector inward, double length, double halfWidth, Vector perp)
+    {
+        Point b1 = tip + inward * length + perp * halfWidth;
+        Point b2 = tip + inward * length - perp * halfWidth;
+        var figure = new PathFigure(tip,
+            new PathSegment[] { new LineSegment(b1, true), new LineSegment(b2, true) },
+            closed: true);
+        return new PathGeometry(new[] { figure });
+    }
+
+    /// <summary>Snap the drag endpoint to the nearest 45° step around the start (Shift).</summary>
+    private static Point SnapTo45(Point origin, Point p)
+    {
+        Vector v = p - origin;
+        if (v.Length < 0.01) return p;
+        double snapped = Math.Round(Math.Atan2(v.Y, v.X) / (Math.PI / 4)) * (Math.PI / 4);
+        return origin + new Vector(Math.Cos(snapped), Math.Sin(snapped)) * v.Length;
     }
 
     // ----------------------------------------------------- sticker tool ---
@@ -1278,6 +1435,10 @@ public partial class CaptureOverlayWindow : Window
         _settings.ShapeFilled = _shapeFilled;
         _settings.ShapeColor = ToHex(_shapeColor);
         _settings.ShapeWidth = _shapeWidth;
+        _settings.LineWidth = _lineWidth;
+        _settings.LineColor = ToHex(_lineColor);
+        _settings.LineArrowStart = _lineArrowStart;
+        _settings.LineArrowEnd = _lineArrowEnd;
         _settings.Save();
     }
 

@@ -7,6 +7,7 @@ public enum ToolKind
     Highlighter,   // 螢光筆：半透明疊色
     Text,          // 文字標註
     Shape,         // 形狀：方形 / 圓角方形 / 圓形，外框或填滿
+    Line,          // 直線：兩端可各自選擇是否為箭頭
     Sticker,       // 貼圖：貼上 PNG / JPEG / WebP 圖片
     Blur,          // 模糊：於選項列再選高斯 / 馬賽克
 }
