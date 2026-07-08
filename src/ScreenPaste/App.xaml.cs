@@ -42,11 +42,13 @@ public partial class App : Application
         DispatcherUnhandledException += (_, args) =>
         {
             args.Handled = true;
+            LogCrash(args.Exception);
             try { _overlay?.Close(); } catch { /* best effort */ }
             _overlay = null;
             _tray?.ShowBalloonTip(5000, "ScreenPaste",
                 Loc.T("msg.captureFail", args.Exception.Message), Forms.ToolTipIcon.Error);
         };
+        AppDomain.CurrentDomain.UnhandledException += (_, args) => LogCrash(args.ExceptionObject);
 
         // Every window gets a theme-matched (dark/light) title bar; borderless windows
         // (overlay, HUD, pins) simply have no title bar for this to affect.
@@ -368,6 +370,18 @@ public partial class App : Application
                 Loc.T("rec.saved", Path.GetFileName(saved)), Forms.ToolTipIcon.Info));
         editor.Show();
         editor.Activate();
+    }
+
+    /// <summary>Append the exception to %AppData%\ScreenPaste\crash.log (best effort).</summary>
+    private static void LogCrash(object exception)
+    {
+        try
+        {
+            Directory.CreateDirectory(AppSettings.ConfigDirectory);
+            File.AppendAllText(Path.Combine(AppSettings.ConfigDirectory, "crash.log"),
+                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {exception}{Environment.NewLine}{Environment.NewLine}");
+        }
+        catch { /* never fail while reporting a failure */ }
     }
 
     private void OpenSaveFolder()

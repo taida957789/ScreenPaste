@@ -165,7 +165,8 @@ public sealed class ColorPickerWindow : Window
     private void UpdatePreview()
     {
         var a = (byte)Math.Round(SelectedOpacity * 255);
-        _preview.Background = new SolidColorBrush(Color.FromArgb(a, SelectedColor.R, SelectedColor.G, SelectedColor.B));
+        // Checkerboard-backed so a translucent colour previews its real blend.
+        _preview.Background = Theme.SwatchBrush(Color.FromArgb(a, SelectedColor.R, SelectedColor.G, SelectedColor.B));
     }
 
     /// <summary>Place below the toolbar, or above it if there isn't room below.</summary>

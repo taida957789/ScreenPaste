@@ -88,6 +88,9 @@ public partial class CaptureOverlayWindow : Window
 
     // Toolbar controls we need to read/update
     private Slider _widthSlider = null!, _opacitySlider = null!, _blurSlider = null!, _textSizeSlider = null!, _shapeWidthSlider = null!, _lineWidthSlider = null!;
+    private readonly List<Color> _customColors = new();   // picker-added swatches (persisted)
+    private readonly List<Button> _customSwatchButtons = new();   // their buttons, across all panels
+    private const int MaxCustomColors = 8;
     private StackPanel _blurOptionsPanel = null!, _penOptionsPanel = null!, _textOptionsPanel = null!, _shapeOptionsPanel = null!, _lineOptionsPanel = null!, _stickerOptionsPanel = null!;
     private Button _arrowStartButton = null!, _arrowEndButton = null!;
     private ComboBox _fontCombo = null!;
@@ -127,6 +130,13 @@ public partial class CaptureOverlayWindow : Window
         _lineWidth = settings.LineWidth;
         _lineArrowStart = settings.LineArrowStart;
         _lineArrowEnd = settings.LineArrowEnd;
+
+        foreach (var hex in settings.CustomColors)
+        {
+            try { _customColors.Add((Color)ColorConverter.ConvertFromString(hex)); }
+            catch { /* skip invalid entries */ }
+            if (_customColors.Count >= MaxCustomColors) break;
+        }
 
         _undoGesture = HotkeyGesture.Parse(settings.UndoHotkey);
         _redoGesture = HotkeyGesture.Parse(settings.RedoHotkey);
@@ -371,6 +381,7 @@ public partial class CaptureOverlayWindow : Window
     {
         ToolbarStack.Children.Clear();
         _toolButtons.Clear();
+        _customSwatchButtons.Clear();
         _blurKindButtons.Clear();
         _shapeKindButtons.Clear();
         _shapeStyleButtons.Clear();
@@ -404,13 +415,14 @@ public partial class CaptureOverlayWindow : Window
         _widthSlider = new Slider { Minimum = 1, Maximum = 40, Width = 90, VerticalAlignment = VerticalAlignment.Center };
         _widthSlider.ValueChanged += (_, _) => OnWidthChanged();
         _penOptionsPanel.Children.Add(_widthSlider);
+        _penOptionsPanel.Children.Add(ValueReadout(_widthSlider, v => v.ToString("0")));
         _penOptionsPanel.Children.Add(Label(Loc.T("lbl.opacity")));
         _opacitySlider = new Slider { Minimum = 0.1, Maximum = 1.0, Width = 80, VerticalAlignment = VerticalAlignment.Center };
         _opacitySlider.ValueChanged += (_, _) => OnOpacityChanged();
         _penOptionsPanel.Children.Add(_opacitySlider);
+        _penOptionsPanel.Children.Add(ValueReadout(_opacitySlider, v => (v * 100).ToString("0") + "%"));
         _penOptionsPanel.Children.Add(Label(Loc.T("lbl.color")));
-        foreach (var c in Palette) _penOptionsPanel.Children.Add(MakeSwatch(c));
-        _penOptionsPanel.Children.Add(MakeMoreColorsButton());
+        AddColorSwatches(_penOptionsPanel);
         ToolbarStack.Children.Add(_penOptionsPanel);
 
         // ---- Blur options (type selector + strength) ----
@@ -422,6 +434,7 @@ public partial class CaptureOverlayWindow : Window
         _blurSlider = new Slider { Minimum = 2, Maximum = 40, Width = 130, VerticalAlignment = VerticalAlignment.Center, Value = _blurStrength };
         _blurSlider.ValueChanged += (_, e) => _blurStrength = e.NewValue;
         _blurOptionsPanel.Children.Add(_blurSlider);
+        _blurOptionsPanel.Children.Add(ValueReadout(_blurSlider, v => v.ToString("0")));
         ToolbarStack.Children.Add(_blurOptionsPanel);
 
         // ---- Text options (font / size / style / colour) ----
@@ -443,6 +456,7 @@ public partial class CaptureOverlayWindow : Window
         _textSizeSlider = new Slider { Minimum = 10, Maximum = 96, Width = 90, VerticalAlignment = VerticalAlignment.Center, Value = _textSize };
         _textSizeSlider.ValueChanged += (_, e) => { _textSize = e.NewValue; ApplyTextStyle(); };
         _textOptionsPanel.Children.Add(_textSizeSlider);
+        _textOptionsPanel.Children.Add(ValueReadout(_textSizeSlider, v => v.ToString("0")));
 
         _textOptionsPanel.Children.Add(Label(Loc.T("lbl.style")));
         _boldButton = MakeStyleToggle("B", () => { _textBold = !_textBold; RefreshStyleToggles(); ApplyTextStyle(); RefocusText(); });
@@ -453,8 +467,7 @@ public partial class CaptureOverlayWindow : Window
         _textOptionsPanel.Children.Add(_strikeButton);
 
         _textOptionsPanel.Children.Add(Label(Loc.T("lbl.color")));
-        foreach (var c in Palette) _textOptionsPanel.Children.Add(MakeSwatch(c));
-        _textOptionsPanel.Children.Add(MakeMoreColorsButton());
+        AddColorSwatches(_textOptionsPanel);
         RefreshStyleToggles();
         ToolbarStack.Children.Add(_textOptionsPanel);
 
@@ -471,9 +484,9 @@ public partial class CaptureOverlayWindow : Window
         _shapeWidthSlider = new Slider { Minimum = 1, Maximum = 20, Width = 90, VerticalAlignment = VerticalAlignment.Center, Value = _shapeWidth };
         _shapeWidthSlider.ValueChanged += (_, e) => _shapeWidth = e.NewValue;
         _shapeOptionsPanel.Children.Add(_shapeWidthSlider);
+        _shapeOptionsPanel.Children.Add(ValueReadout(_shapeWidthSlider, v => v.ToString("0")));
         _shapeOptionsPanel.Children.Add(Label(Loc.T("lbl.color")));
-        foreach (var c in Palette) _shapeOptionsPanel.Children.Add(MakeSwatch(c));
-        _shapeOptionsPanel.Children.Add(MakeMoreColorsButton());
+        AddColorSwatches(_shapeOptionsPanel);
         ToolbarStack.Children.Add(_shapeOptionsPanel);
 
         // ---- Line options (width / arrowheads / colour) ----
@@ -482,6 +495,7 @@ public partial class CaptureOverlayWindow : Window
         _lineWidthSlider = new Slider { Minimum = 1, Maximum = 20, Width = 90, VerticalAlignment = VerticalAlignment.Center, Value = _lineWidth };
         _lineWidthSlider.ValueChanged += (_, e) => _lineWidth = e.NewValue;
         _lineOptionsPanel.Children.Add(_lineWidthSlider);
+        _lineOptionsPanel.Children.Add(ValueReadout(_lineWidthSlider, v => v.ToString("0")));
         _arrowStartButton = MakeSmallToggle(Loc.T("line.arrowStart"));
         _arrowStartButton.Click += (_, _) => { _lineArrowStart = !_lineArrowStart; RefreshArrowToggles(); };
         _arrowEndButton = MakeSmallToggle(Loc.T("line.arrowEnd"));
@@ -489,8 +503,7 @@ public partial class CaptureOverlayWindow : Window
         _lineOptionsPanel.Children.Add(_arrowStartButton);
         _lineOptionsPanel.Children.Add(_arrowEndButton);
         _lineOptionsPanel.Children.Add(Label(Loc.T("lbl.color")));
-        foreach (var c in Palette) _lineOptionsPanel.Children.Add(MakeSwatch(c));
-        _lineOptionsPanel.Children.Add(MakeMoreColorsButton());
+        AddColorSwatches(_lineOptionsPanel);
         RefreshArrowToggles();
         ToolbarStack.Children.Add(_lineOptionsPanel);
 
@@ -762,6 +775,8 @@ public partial class CaptureOverlayWindow : Window
         Colors.LimeGreen, Color.FromRgb(0x3D, 0xA9, 0xFC), Colors.Black, Colors.White,
     };
 
+    private static readonly SolidColorBrush SwatchBorder = new(Color.FromArgb(0x88, 0xFF, 0xFF, 0xFF));
+
     private Button MakeSwatch(Color c)
     {
         var b = new Button
@@ -769,12 +784,94 @@ public partial class CaptureOverlayWindow : Window
             Width = 16,
             Height = 16,
             Margin = new Thickness(2, 0, 2, 0),
-            Background = new SolidColorBrush(c),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x88, 0xFF, 0xFF, 0xFF)),
+            Background = Theme.SwatchBrush(c),   // checkerboard-backed for translucent colours
+            BorderBrush = SwatchBorder,
             BorderThickness = new Thickness(1),
+            Tag = c,   // lets RefreshSwatchSelection find and mark the active colour
         };
         b.Click += (_, _) => OnColorPicked(c);
         return b;
+    }
+
+    /// <summary>Standard palette + persisted custom colours + the "+" picker button.</summary>
+    private void AddColorSwatches(StackPanel panel)
+    {
+        foreach (var c in Palette) panel.Children.Add(MakeSwatch(c));
+        foreach (var c in _customColors) panel.Children.Add(MakeCustomSwatch(c));
+        panel.Children.Add(MakeMoreColorsButton());
+    }
+
+    /// <summary>Remember a picker-chosen colour: swatch in every palette, persisted in settings.</summary>
+    private void AddCustomColor(Color c)
+    {
+        if (Palette.Contains(c) || _customColors.Contains(c)) return;
+        _customColors.Add(c);
+        if (_customColors.Count > MaxCustomColors) _customColors.RemoveAt(0);
+        foreach (var panel in new[] { _penOptionsPanel, _textOptionsPanel, _shapeOptionsPanel, _lineOptionsPanel })
+            panel.Children.Insert(panel.Children.Count - 1, MakeCustomSwatch(c));   // before the "+"
+    }
+
+    /// <summary>A palette swatch that can also be removed with a right-click.</summary>
+    private Button MakeCustomSwatch(Color c)
+    {
+        var b = MakeSwatch(c);
+        b.ToolTip = Loc.T("color.removeHint");
+        b.MouseRightButtonUp += (_, e) => { RemoveCustomColor(c); e.Handled = true; };
+        _customSwatchButtons.Add(b);
+        return b;
+    }
+
+    private void RemoveCustomColor(Color c)
+    {
+        _customColors.Remove(c);
+        foreach (var b in _customSwatchButtons.Where(b => b.Tag is Color tc && tc == c).ToList())
+        {
+            if (b.Parent is StackPanel panel) panel.Children.Remove(b);
+            _customSwatchButtons.Remove(b);
+        }
+    }
+
+    /// <summary>The colour the given tool would draw with right now.</summary>
+    private Color ToolColor(ToolKind kind) => kind switch
+    {
+        ToolKind.Highlighter => _hlColor,
+        ToolKind.Text => _textColor,
+        ToolKind.Shape => _shapeColor,
+        ToolKind.Line => _lineColor,
+        _ => _penColor,
+    };
+
+    /// <summary>Outline the swatch matching the active tool's colour with the accent.</summary>
+    private void RefreshSwatchSelection()
+    {
+        var cur = ToolColor(_tool);
+        foreach (var panel in new[] { _penOptionsPanel, _textOptionsPanel, _shapeOptionsPanel, _lineOptionsPanel })
+        {
+            foreach (var child in panel.Children)
+            {
+                if (child is not Button b || b.Tag is not Color c) continue;
+                bool selected = c.R == cur.R && c.G == cur.G && c.B == cur.B;
+                b.BorderBrush = selected ? new SolidColorBrush(Theme.Accent) : SwatchBorder;
+                b.BorderThickness = new Thickness(selected ? 2 : 1);
+            }
+        }
+    }
+
+    /// <summary>Small numeric readout that tracks a slider's value.</summary>
+    private static TextBlock ValueReadout(Slider s, Func<double, string> format)
+    {
+        var tb = new TextBlock
+        {
+            Text = format(s.Value),
+            Foreground = Theme.ForegroundBrush,
+            FontSize = 11,
+            MinWidth = 26,
+            TextAlignment = TextAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 0, 0, 0),
+        };
+        s.ValueChanged += (_, e) => tb.Text = format(e.NewValue);
+        return tb;
     }
 
     /// <summary>The "+" swatch that opens the full colour picker (more colours / hex input).</summary>
@@ -816,15 +913,9 @@ public partial class CaptureOverlayWindow : Window
 
         ApplyPickedColor(dlg.SelectedColor, dlg.SelectedOpacity);
 
-        // Add the picked colour as a reusable swatch, just before the "+" button.
-        var panel = _tool switch
-        {
-            ToolKind.Text => _textOptionsPanel,
-            ToolKind.Shape => _shapeOptionsPanel,
-            ToolKind.Line => _lineOptionsPanel,
-            _ => _penOptionsPanel,
-        };
-        panel.Children.Insert(panel.Children.Count - 1, MakeSwatch(dlg.SelectedColor));
+        // Reusable swatch in every palette, remembered across sessions.
+        AddCustomColor(dlg.SelectedColor);
+        RefreshSwatchSelection();
     }
 
     private void ApplyPickedColor(Color rgb, double opacity)
@@ -903,6 +994,7 @@ public partial class CaptureOverlayWindow : Window
         if (isShape) { SelectShapeKind(_shapeKind); SelectShapeStyle(_shapeFilled); }
         if (isLine) RefreshArrowToggles();
         if (isSticker && StickerHost.Children.Count == 0) AddSticker();
+        RefreshSwatchSelection();
     }
 
     private void SelectBlurKind(BlurKind kind)
@@ -958,12 +1050,16 @@ public partial class CaptureOverlayWindow : Window
 
     private void OnColorPicked(Color c)
     {
-        if (_tool == ToolKind.Text) { _textColor = Color.FromArgb(_textColor.A, c.R, c.G, c.B); ApplyTextStyle(); RefocusText(); return; }
-        if (_tool == ToolKind.Shape) { _shapeColor = Color.FromArgb(_shapeColor.A, c.R, c.G, c.B); return; }
-        if (_tool == ToolKind.Line) { _lineColor = Color.FromArgb(_lineColor.A, c.R, c.G, c.B); return; }
-        if (_tool == ToolKind.Highlighter) _hlColor = c;
-        else _penColor = c;
-        ApplyDrawingAttributes();
+        if (_tool == ToolKind.Text) { _textColor = Color.FromArgb(_textColor.A, c.R, c.G, c.B); ApplyTextStyle(); RefocusText(); }
+        else if (_tool == ToolKind.Shape) { _shapeColor = Color.FromArgb(_shapeColor.A, c.R, c.G, c.B); }
+        else if (_tool == ToolKind.Line) { _lineColor = Color.FromArgb(_lineColor.A, c.R, c.G, c.B); }
+        else
+        {
+            if (_tool == ToolKind.Highlighter) _hlColor = c;
+            else _penColor = c;
+            ApplyDrawingAttributes();
+        }
+        RefreshSwatchSelection();
     }
 
     // ------------------------------------------------------ ink undo/redo ---
@@ -1639,6 +1735,7 @@ public partial class CaptureOverlayWindow : Window
         _settings.LineColor = ToHex(_lineColor);
         _settings.LineArrowStart = _lineArrowStart;
         _settings.LineArrowEnd = _lineArrowEnd;
+        _settings.CustomColors = _customColors.Select(ToHex).ToList();
         _settings.Save();
     }
 

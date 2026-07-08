@@ -116,4 +116,38 @@ public static class Theme
     public static SolidColorBrush ControlBorderBrush => new(ControlBorder);
 
     private static Color C(byte a, byte r, byte g, byte b) => Color.FromArgb(a, r, g, b);
+
+    /// <summary>
+    /// Colour-swatch fill: the colour painted over an alpha checkerboard, so a
+    /// translucent colour previews the way it will actually blend. Opaque colours
+    /// get a plain brush (the checkerboard would be fully covered anyway).
+    /// </summary>
+    public static Brush SwatchBrush(Color c)
+    {
+        if (c.A == 0xFF)
+        {
+            var solid = new SolidColorBrush(c);
+            solid.Freeze();
+            return solid;
+        }
+
+        var tile = new DrawingGroup();
+        tile.Children.Add(new GeometryDrawing(Brushes.White, null,
+            new RectangleGeometry(new Rect(0, 0, 8, 8))));
+        var squares = new GeometryGroup();
+        squares.Children.Add(new RectangleGeometry(new Rect(0, 0, 4, 4)));
+        squares.Children.Add(new RectangleGeometry(new Rect(4, 4, 4, 4)));
+        tile.Children.Add(new GeometryDrawing(new SolidColorBrush(C(0xFF, 0xC8, 0xC8, 0xC8)), null, squares));
+        tile.Children.Add(new GeometryDrawing(new SolidColorBrush(c), null,
+            new RectangleGeometry(new Rect(0, 0, 8, 8))));
+
+        var brush = new DrawingBrush(tile)
+        {
+            TileMode = TileMode.Tile,
+            Viewport = new Rect(0, 0, 8, 8),
+            ViewportUnits = BrushMappingMode.Absolute,
+        };
+        brush.Freeze();
+        return brush;
+    }
 }

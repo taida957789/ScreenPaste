@@ -185,6 +185,7 @@ public static class Loc
         Add("sticker.choose","Choose image…",        "選擇圖片…",      "画像を選択…",         "이미지 선택…",     "Choisir une image…","Bild wählen…",      "Elegir imagen…");
         Add("sticker.hint",  "  drag to move, wheel to resize", "  可拖曳移動、滾輪縮放", "  ドラッグで移動・ホイールで拡大縮小", "  드래그 이동, 휠 크기 조절", "  glisser/molette", "  ziehen/scrollen", "  arrastrar/rueda");
         Add("color.more",    "More colors / enter Hex","更多顏色 / 輸入 Hex", "他の色 / Hex 入力", "더 많은 색 / Hex 입력", "Plus de couleurs / Hex", "Mehr Farben / Hex", "Más colores / Hex");
+        Add("color.removeHint","Custom color — right-click to remove", "自訂顏色 — 右鍵點擊移除", "カスタム色 — 右クリックで削除", "사용자 지정 색 — 우클릭으로 삭제", "Couleur personnalisée — clic droit pour supprimer", "Eigene Farbe — Rechtsklick zum Entfernen", "Color personalizado — clic derecho para eliminar");
 
         // Color picker
         Add("cp.title",      "Choose color",         "選擇顏色",       "色の選択",           "색 선택",         "Choisir une couleur","Farbe wählen",     "Elegir color");

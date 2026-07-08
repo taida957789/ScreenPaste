@@ -47,6 +47,9 @@ public sealed class AppSettings
     public string ShapeColor { get; set; } = "#FFFF3B30"; // red
     public double ShapeWidth { get; set; } = 3;
 
+    // ---- Custom colour swatches added via the colour picker (hex, oldest first) ----
+    public List<string> CustomColors { get; set; } = new();
+
     // ---- Line defaults (each end can be an arrowhead) ----
     public double LineWidth { get; set; } = 3;
     public string LineColor { get; set; } = "#FFFF3B30"; // red
