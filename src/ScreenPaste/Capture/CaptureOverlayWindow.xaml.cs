@@ -85,7 +85,7 @@ public partial class CaptureOverlayWindow : Window
     private Button _arrowStartButton = null!, _arrowEndButton = null!;
     private ComboBox _fontCombo = null!;
     private Button _boldButton = null!, _italicButton = null!, _strikeButton = null!;
-    private Button _redoButton = null!;
+    private Button _undoButton = null!, _redoButton = null!;
     private readonly List<Button> _toolButtons = new();
     private readonly List<Button> _blurKindButtons = new();
     private readonly List<Button> _shapeKindButtons = new();
@@ -345,6 +345,7 @@ public partial class CaptureOverlayWindow : Window
     private static readonly string GlyphLine = Glyph(0xE72A);        // Forward (arrow) — line/arrow tool
     private static readonly string GlyphSticker = Glyph(0xE8B9);     // Pictures (paste image)
     private static readonly string GlyphBlur = Glyph(0xE80A);        // GridView (mosaic look)
+    private static readonly string GlyphUndo = Glyph(0xE7A7);        // Undo
     private static readonly string GlyphRedo = Glyph(0xE7A6);        // Redo
     private static readonly string GlyphCopy = Glyph(0xE8C8);        // Copy
     private static readonly string GlyphSave = Glyph(0xE74E);        // Save
@@ -371,8 +372,9 @@ public partial class CaptureOverlayWindow : Window
         toolsRow.Children.Add(MakeToolButton(GlyphSticker, Loc.T("tool.sticker"), ToolKind.Sticker));
         toolsRow.Children.Add(MakeToolButton(GlyphBlur, Loc.T("tool.blur"), ToolKind.Blur));
         toolsRow.Children.Add(MakeSeparator());
-        // 復原改由設定中的熱鍵觸發（預設 Ctrl+Z），不再放工具列按鈕。
+        _undoButton = MakeActionButton(GlyphUndo, Loc.T("action.undo") + " (" + _settings.UndoHotkey + ")", () => _history.Undo());
         _redoButton = MakeActionButton(GlyphRedo, Loc.T("action.redo") + " (" + _settings.RedoHotkey + ")", () => _history.Redo());
+        toolsRow.Children.Add(_undoButton);
         toolsRow.Children.Add(_redoButton);
         toolsRow.Children.Add(MakeSeparator());
         toolsRow.Children.Add(MakeActionButton(GlyphCopy, Loc.T("action.copy") + " (" + _settings.CopyHotkey + ")", DoCopy));
@@ -1469,6 +1471,7 @@ public partial class CaptureOverlayWindow : Window
 
     private void UpdateHistoryButtons()
     {
+        if (_undoButton != null) _undoButton.IsEnabled = _history.CanUndo;
         if (_redoButton != null) _redoButton.IsEnabled = _history.CanRedo;
     }
 
