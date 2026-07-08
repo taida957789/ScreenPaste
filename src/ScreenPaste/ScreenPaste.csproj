@@ -31,11 +31,14 @@
     <PackageReference Include="SkiaSharp" Version="2.88.8" />
   </ItemGroup>
 
-  <!-- Bundle ffmpeg for region recording (GIF now; MP4/WebP later). Place the
-       binary at ffmpeg\ffmpeg.exe; the wildcard is a no-op until it exists so
-       the project still builds without it. FFmpegLocator also falls back to PATH. -->
+  <!-- Bundle ffmpeg for region recording. Place the binary at ffmpeg\ffmpeg.exe
+       (scripts/fetch-ffmpeg.ps1); the wildcard is a no-op until it exists so the
+       project still builds without it. ExcludeFromSingleFile keeps it a loose file
+       next to the exe on publish — the installer and portable zip package it from
+       there, and FFmpegLocator finds it via AppContext.BaseDirectory. -->
   <ItemGroup>
-    <None Include="ffmpeg\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="ffmpeg\" />
+    <None Include="ffmpeg\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="ffmpeg\"
+          ExcludeFromSingleFile="true" />
   </ItemGroup>
 
   <!-- Keep WinForms/Drawing OUT of the implicit global usings so WPF types
