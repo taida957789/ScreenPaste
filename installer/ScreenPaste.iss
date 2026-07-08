@@ -43,6 +43,8 @@ Name: "startup"; Description: "開機時自動啟動 ScreenPaste"; GroupDescript
 
 [Files]
 Source: "..\publish\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+; Bundled ffmpeg for region recording (GIF/MP4/WebP).
+Source: "..\publish\ffmpeg\ffmpeg.exe"; DestDir: "{app}\ffmpeg"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

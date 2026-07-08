@@ -123,6 +123,28 @@ public static class Loc
         Add("msg.hotkeyFail","Capture hotkey \"{0}\" could not be registered (invalid or in use). You can still capture from the tray.", "截圖熱鍵「{0}」註冊失敗（無效或被占用）。仍可由系統匣截圖。", "キャプチャのホットキー「{0}」を登録できません（無効か使用中）。トレイからは可能です。", "캡처 단축키 \"{0}\" 등록 실패(잘못되었거나 사용 중). 트레이에서 캡처 가능합니다.", "Le raccourci de capture « {0} » n'a pas pu être enregistré (invalide ou occupé). Utilisez la barre d'état.", "Aufnahme-Hotkey „{0}“ konnte nicht registriert werden (ungültig/belegt). Nutzung über Infobereich möglich.", "No se pudo registrar el atajo « {0} » (inválido u ocupado). Puedes capturar desde la bandeja.");
         Add("msg.captureFail","Capture failed: {0}", "截圖失敗：{0}", "キャプチャに失敗しました：{0}", "캡처 실패: {0}", "Échec de la capture : {0}", "Aufnahme fehlgeschlagen: {0}", "Error de captura: {0}");
 
+        // Recording
+        Add("tray.record",   "Record region",        "區域錄影",       "範囲を録画",         "영역 녹화",        "Enregistrer une zone","Bereich aufnehmen","Grabar región");
+        Add("tray.recordStop","Stop recording",      "停止錄影",       "録画を停止",         "녹화 중지",        "Arrêter l'enregistrement","Aufnahme stoppen","Detener grabación");
+        Add("rec.stop",      "Stop",                 "停止",          "停止",              "중지",            "Arrêter",           "Stopp",             "Detener");
+        Add("rec.selectHint","Drag to select the recording area · Esc to cancel", "拖曳選取錄影範圍 · Esc 取消", "ドラッグで録画範囲を選択 · Esc でキャンセル", "드래그하여 녹화 영역 선택 · Esc 취소", "Glissez pour choisir la zone · Échap pour annuler", "Ziehen, um den Aufnahmebereich zu wählen · Esc zum Abbrechen", "Arrastra para elegir el área · Esc para cancelar");
+        Add("rec.encoding",  "Encoding recording…",  "錄影編碼中…",    "録画をエンコード中…", "녹화 인코딩 중…",  "Encodage en cours…","Aufnahme wird codiert…","Codificando grabación…");
+        Add("rec.saved",     "Recording saved: {0}", "錄影已儲存：{0}", "録画を保存しました：{0}", "녹화 저장됨: {0}", "Enregistrement enregistré : {0}", "Aufnahme gespeichert: {0}", "Grabación guardada: {0}");
+        Add("rec.failed",    "Recording failed: {0}","錄影失敗：{0}",   "録画に失敗しました：{0}", "녹화 실패: {0}", "Échec de l'enregistrement : {0}", "Aufnahme fehlgeschlagen: {0}", "Error de grabación: {0}");
+        Add("rec.noFfmpeg",  "ffmpeg was not found. Region recording needs the bundled ffmpeg.exe.", "找不到 ffmpeg，區域錄影需要隨附的 ffmpeg.exe。", "ffmpeg が見つかりません。範囲録画には同梱の ffmpeg.exe が必要です。", "ffmpeg을 찾을 수 없습니다. 영역 녹화에는 포함된 ffmpeg.exe가 필요합니다.", "ffmpeg introuvable. L'enregistrement nécessite le ffmpeg.exe fourni.", "ffmpeg nicht gefunden. Die Bereichsaufnahme benötigt die mitgelieferte ffmpeg.exe.", "No se encontró ffmpeg. La grabación requiere el ffmpeg.exe incluido.");
+        Add("set.recording", "Recording",            "錄影",          "録画",              "녹화",            "Enregistrement",    "Aufnahme",          "Grabación");
+        Add("set.record",    "Record region",        "區域錄影",       "範囲録画",           "영역 녹화",        "Enregistrer une zone","Bereich aufnehmen","Grabar región");
+        Add("set.recordFormat","Format",             "格式",          "形式",              "형식",            "Format",            "Format",            "Formato");
+        Add("set.recordFps", "Frame rate",           "影格率",         "フレームレート",      "프레임 속도",      "Fréquence d'images","Bildrate",          "Fotogramas/s");
+        Add("set.recordCursor","Capture cursor",     "錄製滑鼠游標",   "カーソルを含める",    "커서 포함",        "Inclure le curseur","Cursor aufnehmen",  "Incluir cursor");
+        Add("set.skipEditor", "Save immediately after recording (skip editor)", "錄完直接儲存（跳過編輯器）", "録画後すぐ保存（エディターをスキップ）", "녹화 후 바로 저장(편집기 건너뛰기)", "Enregistrer immédiatement (sans éditeur)", "Nach Aufnahme sofort speichern (Editor überspringen)", "Guardar al terminar (omitir editor)");
+
+        // Recording editor
+        Add("edit.title",    "Edit recording",       "編輯錄影",       "録画を編集",         "녹화 편집",        "Modifier l'enregistrement","Aufnahme bearbeiten","Editar grabación");
+        Add("edit.hint",     "Space: play/pause · ←/→: frame step · I/O: set trim in/out", "Space 播放/暫停 · ←→ 逐格 · I/O 設定起點/終點", "Space 再生/一時停止 · ←→ コマ送り · I/O で開始/終了を設定", "Space 재생/일시정지 · ←→ 프레임 이동 · I/O 시작/끝 설정", "Espace : lecture/pause · ←/→ : image par image · I/O : début/fin", "Leertaste: Wiedergabe/Pause · ←/→: Einzelbild · I/O: Start/Ende setzen", "Espacio: reproducir/pausa · ←/→: fotograma · I/O: fijar inicio/fin");
+        Add("edit.exporting","Exporting… {0}%",      "匯出中… {0}%",   "エクスポート中… {0}%", "내보내는 중… {0}%", "Exportation… {0} %","Exportieren… {0} %","Exportando… {0}%");
+        Add("edit.discard",  "Discard this recording?","要捨棄這段錄影嗎？","この録画を破棄しますか？","이 녹화를 삭제할까요?","Abandonner cet enregistrement ?","Diese Aufnahme verwerfen?","¿Descartar esta grabación?");
+
         // Tools
         Add("tool.marker",   "Marker",               "麥克筆",        "マーカー",           "마커",            "Marqueur",          "Marker",            "Marcador");
         Add("tool.highlighter","Highlighter",        "螢光筆",        "蛍光ペン",           "형광펜",          "Surligneur",        "Textmarker",        "Resaltador");

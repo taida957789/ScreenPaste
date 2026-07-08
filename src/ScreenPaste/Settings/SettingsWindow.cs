@@ -17,9 +17,13 @@ public sealed class SettingsWindow : Window
     private readonly Action _onApplied;
     private readonly Action _onCheckUpdates;
 
-    private TextBox _capture = null!, _undo = null!, _redo = null!, _copy = null!, _save = null!, _quickSave = null!;
+    private TextBox _capture = null!, _record = null!, _undo = null!, _redo = null!, _copy = null!, _save = null!, _quickSave = null!;
     private ComboBox _language = null!;
     private ComboBox _theme = null!;
+    private ComboBox _recordFormat = null!;
+    private ComboBox _recordFps = null!;
+    private CheckBox _recordCursor = null!;
+    private CheckBox _recordSkipEditor = null!;
     private CheckBox _startup = null!;
     private CheckBox _checkUpdate = null!;
     private TextBox _saveDir = null!;
@@ -75,11 +79,31 @@ public sealed class SettingsWindow : Window
             TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6),
         });
         _capture = HotkeyBox(_s.CaptureHotkey); body.Children.Add(Row(Loc.T("set.capture"), _capture));
+        _record = HotkeyBox(_s.RecordHotkey); body.Children.Add(Row(Loc.T("set.record"), _record));
         _undo = HotkeyBox(_s.UndoHotkey); body.Children.Add(Row(Loc.T("action.undo"), _undo));
         _redo = HotkeyBox(_s.RedoHotkey); body.Children.Add(Row(Loc.T("action.redo"), _redo));
         _copy = HotkeyBox(_s.CopyHotkey); body.Children.Add(Row(Loc.T("action.copy"), _copy));
         _save = HotkeyBox(_s.SaveHotkey); body.Children.Add(Row(Loc.T("action.save"), _save));
         _quickSave = HotkeyBox(_s.QuickSaveHotkey); body.Children.Add(Row(Loc.T("set.quickSave"), _quickSave));
+
+        body.Children.Add(Header(Loc.T("set.recording")));
+        _recordFormat = ValueCombo(new()
+        {
+            ("gif", "GIF", null),
+            ("mp4", "MP4", null),
+            ("webp", "WebP", null),
+        }, _s.RecordFormat);
+        body.Children.Add(Row(Loc.T("set.recordFormat"), _recordFormat));
+        _recordFps = ValueCombo(new()
+        {
+            ("10", "10", null), ("15", "15", null), ("20", "20", null),
+            ("24", "24", null), ("30", "30", null),
+        }, _s.RecordFps.ToString());
+        body.Children.Add(Row(Loc.T("set.recordFps"), _recordFps));
+        _recordCursor = new CheckBox { IsChecked = _s.RecordCaptureCursor, Content = Loc.T("set.recordCursor"), Foreground = Theme.ForegroundBrush, VerticalAlignment = VerticalAlignment.Center };
+        body.Children.Add(Row("", _recordCursor));
+        _recordSkipEditor = new CheckBox { IsChecked = _s.RecordSkipEditor, Content = Loc.T("set.skipEditor"), Foreground = Theme.ForegroundBrush, VerticalAlignment = VerticalAlignment.Center };
+        body.Children.Add(Row("", _recordSkipEditor));
 
         body.Children.Add(Header(Loc.T("set.saveSection")));
         _saveDir = Themed(new TextBox { Text = _s.SaveDirectory, VerticalAlignment = VerticalAlignment.Center });
@@ -95,7 +119,12 @@ public sealed class SettingsWindow : Window
         buttons.Children.Add(TextButton(Loc.T("common.cancel"), Close));
         body.Children.Add(buttons);
 
-        Content = body;
+        Content = new ScrollViewer
+        {
+            Content = body,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        };
     }
 
     private void Save()
@@ -107,11 +136,17 @@ public sealed class SettingsWindow : Window
         _s.SaveDirectory = _saveDir.Text.Trim();
 
         _s.CaptureHotkey = _capture.Text.Trim();
+        _s.RecordHotkey = _record.Text.Trim();
         _s.UndoHotkey = _undo.Text.Trim();
         _s.RedoHotkey = _redo.Text.Trim();
         _s.CopyHotkey = _copy.Text.Trim();
         _s.SaveHotkey = _save.Text.Trim();
         _s.QuickSaveHotkey = _quickSave.Text.Trim();
+
+        _s.RecordFormat = ComboValue(_recordFormat);
+        _s.RecordCaptureCursor = _recordCursor.IsChecked == true;
+        _s.RecordSkipEditor = _recordSkipEditor.IsChecked == true;
+        if (int.TryParse(ComboValue(_recordFps), out var fps)) _s.RecordFps = fps;
 
         _s.Save();
         _onApplied();

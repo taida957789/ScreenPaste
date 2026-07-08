@@ -31,6 +31,13 @@
     <PackageReference Include="SkiaSharp" Version="2.88.8" />
   </ItemGroup>
 
+  <!-- Bundle ffmpeg for region recording (GIF now; MP4/WebP later). Place the
+       binary at ffmpeg\ffmpeg.exe; the wildcard is a no-op until it exists so
+       the project still builds without it. FFmpegLocator also falls back to PATH. -->
+  <ItemGroup>
+    <None Include="ffmpeg\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="ffmpeg\" />
+  </ItemGroup>
+
   <!-- Keep WinForms/Drawing OUT of the implicit global usings so WPF types
        (Color, Point, Button, MouseEventArgs, …) resolve unambiguously.
        The two files that need GDI+ import System.Drawing explicitly. -->

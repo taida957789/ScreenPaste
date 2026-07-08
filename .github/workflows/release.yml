@@ -30,6 +30,10 @@ jobs:
           "VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "Resolved version: $ver"
 
+      - name: Fetch bundled ffmpeg
+        shell: pwsh
+        run: pwsh scripts/fetch-ffmpeg.ps1
+
       - name: Publish (self-contained single file, win-x64)
         shell: pwsh
         run: |
@@ -54,7 +58,7 @@ jobs:
         shell: pwsh
         run: |
           $zip = "dist\ScreenPaste-$env:VERSION-win-x64-portable.zip"
-          Compress-Archive -Path publish/ScreenPaste.exe -DestinationPath $zip -Force
+          Compress-Archive -Path publish/ScreenPaste.exe, publish/ffmpeg -DestinationPath $zip -Force
           "ASSET_ZIP=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Create release and upload assets

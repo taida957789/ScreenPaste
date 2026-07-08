@@ -1,5 +1,8 @@
 using Microsoft.Win32;
+using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Media;
+using ScreenPaste.Native;
 
 namespace ScreenPaste.Settings;
 
@@ -16,13 +19,57 @@ public static class Theme
 
     public static void Apply(string? mode) => Apply(Parse(mode));
 
-    public static void Apply(ThemeMode mode) =>
+    public static void Apply(ThemeMode mode)
+    {
         IsDark = mode switch
         {
             ThemeMode.Light => false,
             ThemeMode.Dark => true,
             _ => SystemUsesDark(),
         };
+        PushResources();
+    }
+
+    /// <summary>
+    /// Publish the palette as application-level DynamicResource brushes ("Th.*") that the
+    /// implicit control styles in Themes/ModernStyles.xaml consume. Live windows restyle
+    /// automatically when the theme changes.
+    /// </summary>
+    private static void PushResources()
+    {
+        if (Application.Current is not { } app) return;
+        var r = app.Resources;
+        r["Th.WindowBg"] = Frozen(WindowBg);
+        r["Th.PanelBg"] = Frozen(PanelBg);
+        r["Th.Fg"] = Frozen(Foreground);
+        r["Th.BtnBg"] = Frozen(ButtonBg);
+        r["Th.BtnBorder"] = Frozen(ButtonBorder);
+        r["Th.CtrlBg"] = Frozen(ControlBg);
+        r["Th.CtrlBorder"] = Frozen(ControlBorder);
+        r["Th.Accent"] = Frozen(Accent);
+        r["Th.Active"] = Frozen(ActiveBg);
+        r["Th.Sep"] = Frozen(Separator);
+        r["Th.Hover"] = Frozen(IsDark ? C(0x1A, 0xFF, 0xFF, 0xFF) : C(0x14, 0x00, 0x00, 0x00));
+        r["Th.Press"] = Frozen(IsDark ? C(0x30, 0xFF, 0xFF, 0xFF) : C(0x22, 0x00, 0x00, 0x00));
+        r["Th.Track"] = Frozen(IsDark ? C(0x30, 0xFF, 0xFF, 0xFF) : C(0x26, 0x00, 0x00, 0x00));
+    }
+
+    private static SolidColorBrush Frozen(Color c)
+    {
+        var b = new SolidColorBrush(c);
+        b.Freeze();
+        return b;
+    }
+
+    /// <summary>Match the Win10/11 title bar to the theme (immersive dark mode).</summary>
+    public static void StyleTitleBar(Window w)
+    {
+        var hwnd = new WindowInteropHelper(w).Handle;
+        if (hwnd == IntPtr.Zero) return;
+        int dark = IsDark ? 1 : 0;
+        _ = NativeMethods.DwmSetWindowAttribute(hwnd,
+            NativeMethods.DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, sizeof(int));
+    }
 
     public static ThemeMode Parse(string? s) => s?.Trim().ToLowerInvariant() switch
     {

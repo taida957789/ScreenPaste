@@ -12,6 +12,9 @@ dist/
 ScreenPaste-*-win-x64.exe
 ScreenPaste-*-win-x64.zip
 
+# Bundled ffmpeg (fetched at build time by scripts/fetch-ffmpeg.ps1)
+src/ScreenPaste/ffmpeg/
+
 # Rider / VS
 .vs/
 .idea/

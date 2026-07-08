@@ -10,6 +10,8 @@ public sealed class AppSettings
     // ---- Hotkeys (human-friendly gesture strings, e.g. "F1", "Ctrl+Shift+A", "Ctrl+Z") ----
     // 全域截圖熱鍵（系統層級）
     public string CaptureHotkey { get; set; } = "F1";
+    // 全域區域錄影熱鍵（再按一次停止）
+    public string RecordHotkey { get; set; } = "F2";
     // 編輯器內快捷鍵（皆可自訂）
     public string UndoHotkey { get; set; } = "Ctrl+Z";
     public string RedoHotkey { get; set; } = "Ctrl+Y";
@@ -51,6 +53,13 @@ public sealed class AppSettings
 
     // ---- Startup ----
     public bool RunAtStartup { get; set; }
+
+    // ---- Recording ----
+    public string RecordFormat { get; set; } = "gif";   // gif | mp4 | webp
+    public int RecordFps { get; set; } = 15;
+    public bool RecordCaptureCursor { get; set; } = true;
+    // true = 錄完直接輸出檔案（跳過修剪/匯出編輯器）
+    public bool RecordSkipEditor { get; set; }
 
     // ---- Updates ----
     public bool CheckUpdateOnStartup { get; set; } = true;
