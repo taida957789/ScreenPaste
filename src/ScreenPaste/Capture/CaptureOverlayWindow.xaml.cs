@@ -28,6 +28,10 @@ public partial class CaptureOverlayWindow : Window
 
     // Selection-phase state
     private List<DetectedWindow> _windows = new();
+    private ElementDetector? _elements;           // UIA element rects, scanned in background
+    private int _detectLevel;                     // 0 = deepest element … N = whole window
+    private int _detectCandidates = 1;            // chain length at the current hover point
+    private IntPtr _hoverWindow;
     private Point _dragStart;
     private bool _dragging;
     private Rect? _detectRect;
@@ -154,7 +158,9 @@ public partial class CaptureOverlayWindow : Window
         RootCanvas.MouseLeftButtonDown += RootCanvas_MouseDown;
         RootCanvas.MouseMove += RootCanvas_MouseMove;
         RootCanvas.MouseLeftButtonUp += RootCanvas_MouseUp;
+        MouseWheel += OnDetectLevelWheel;
         KeyDown += OnKeyDown;
+        Closed += (_, _) => _elements?.Cancel();
 
         // Tunneling handlers run before InkCanvas / InteractionLayer see the click:
         // direct-manipulation grab of annotations with ANY tool, and commit-on-click-
@@ -203,8 +209,11 @@ public partial class CaptureOverlayWindow : Window
             _vs.X, _vs.Y, _vs.Width, _vs.Height,
             NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
 
-        // Snapshot windows for auto-detect (exclude our own overlay).
+        // Snapshot windows for auto-detect (exclude our own overlay), then walk their
+        // UIA trees in the background so hovering can snap to individual UI elements.
         _windows = WindowEnumerator.Enumerate(hwnd);
+        _elements = new ElementDetector();
+        _elements.StartScan(_windows);
     }
 
     // ------------------------------------------------------- selection phase ---
@@ -236,25 +245,73 @@ public partial class CaptureOverlayWindow : Window
         }
         else
         {
-            // Hover: auto-detect the window under the cursor.
-            int sx = _vs.X + (int)Math.Round(p.X);
-            int sy = _vs.Y + (int)Math.Round(p.Y);
-            _detectRect = WindowEnumerator.HitTest(_windows, _vs, sx, sy);
-            if (_detectRect is { } dr)
+            UpdateDetect(p);
+        }
+    }
+
+    /// <summary>
+    /// Hover auto-detect: snap to the deepest cached UI element under the cursor
+    /// (Snipaste-style), falling back to the whole window until its UIA scan lands.
+    /// <see cref="_detectLevel"/> (mouse wheel) walks outward toward the window.
+    /// </summary>
+    private void UpdateDetect(Point p)
+    {
+        int sx = _vs.X + (int)Math.Round(p.X);
+        int sy = _vs.Y + (int)Math.Round(p.Y);
+
+        var win = WindowEnumerator.HitTestWindow(_windows, sx, sy);
+        if (win is { } w)
+        {
+            if (w.Handle != _hoverWindow)
             {
-                Canvas.SetLeft(DetectBorder, dr.X);
-                Canvas.SetTop(DetectBorder, dr.Y);
-                DetectBorder.Width = dr.Width;
-                DetectBorder.Height = dr.Height;
-                DetectBorder.Visibility = Visibility.Visible;
-                ShowSizeReadout(dr);
+                _hoverWindow = w.Handle;
+                _detectLevel = 0;   // new window: restart at the deepest element
+            }
+
+            Rect chosen;
+            if (_elements != null)
+            {
+                var chain = _elements.CandidatesAt(w, sx, sy);
+                _detectCandidates = chain.Count;
+                chosen = chain[Math.Clamp(_detectLevel, 0, chain.Count - 1)];
             }
             else
             {
-                DetectBorder.Visibility = Visibility.Collapsed;
-                SizeReadout.Visibility = Visibility.Collapsed;
+                _detectCandidates = 1;
+                chosen = new Rect(w.Bounds.Left, w.Bounds.Top, w.Bounds.Width, w.Bounds.Height);
             }
+            _detectRect = new Rect(chosen.X - _vs.X, chosen.Y - _vs.Y, chosen.Width, chosen.Height);
         }
+        else
+        {
+            _hoverWindow = IntPtr.Zero;
+            _detectCandidates = 1;
+            _detectRect = null;
+        }
+
+        if (_detectRect is { } dr)
+        {
+            Canvas.SetLeft(DetectBorder, dr.X);
+            Canvas.SetTop(DetectBorder, dr.Y);
+            DetectBorder.Width = dr.Width;
+            DetectBorder.Height = dr.Height;
+            DetectBorder.Visibility = Visibility.Visible;
+            ShowSizeReadout(dr);
+        }
+        else
+        {
+            DetectBorder.Visibility = Visibility.Collapsed;
+            SizeReadout.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>Mouse wheel while framing: cycle the detection level (element ⇄ window).</summary>
+    private void OnDetectLevelWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (_phase != Phase.Selecting || _dragging || _detectRect == null) return;
+        _detectLevel = Math.Clamp(_detectLevel + (e.Delta > 0 ? 1 : -1), 0, Math.Max(0, _detectCandidates - 1));
+        UpdateDetect(Mouse.GetPosition(RootCanvas));
+        e.Handled = true;
     }
 
     private void RootCanvas_MouseUp(object sender, MouseButtonEventArgs e)
