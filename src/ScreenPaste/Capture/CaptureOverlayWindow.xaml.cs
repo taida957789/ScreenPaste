@@ -79,6 +79,13 @@ public partial class CaptureOverlayWindow : Window
     private Image? _stickerDrag;
     private Point _stickerGrab;
 
+    // Select-tool state (click annotations to move them, Delete to remove)
+    private FrameworkElement? _selected;
+    private Rectangle? _selectionBox;
+    private bool _moveDragging;
+    private Point _moveGrab;                  // pointer position at drag start
+    private double _moveOrigX, _moveOrigY;    // element translate at drag start
+
     // Toolbar controls we need to read/update
     private Slider _widthSlider = null!, _opacitySlider = null!, _blurSlider = null!, _textSizeSlider = null!, _shapeWidthSlider = null!, _lineWidthSlider = null!;
     private StackPanel _blurOptionsPanel = null!, _penOptionsPanel = null!, _textOptionsPanel = null!, _shapeOptionsPanel = null!, _lineOptionsPanel = null!, _stickerOptionsPanel = null!;
@@ -138,6 +145,14 @@ public partial class CaptureOverlayWindow : Window
         RootCanvas.MouseMove += RootCanvas_MouseMove;
         RootCanvas.MouseLeftButtonUp += RootCanvas_MouseUp;
         KeyDown += OnKeyDown;
+
+        // Tunneling handlers run before InkCanvas / InteractionLayer see the click:
+        // direct-manipulation grab of annotations with ANY tool, and commit-on-click-
+        // outside for the text box.
+        PreviewMouseLeftButtonDown += Window_PreviewMouseDown;
+        EditLayer.PreviewMouseLeftButtonDown += EditLayer_PreviewMouseDown;
+        EditLayer.PreviewMouseMove += EditLayer_PreviewMouseMove;
+        EditLayer.PreviewMouseLeftButtonUp += EditLayer_PreviewMouseUp;
 
         Ink.StrokeCollected += Ink_StrokeCollected;
         InteractionLayer.MouseLeftButtonDown += Blur_MouseDown;
@@ -866,6 +881,7 @@ public partial class CaptureOverlayWindow : Window
         bool isShape = kind is ToolKind.Shape;
         bool isLine = kind is ToolKind.Line;
         bool isSticker = kind is ToolKind.Sticker;
+        // Selection survives tool switches — grabbing works with every tool.
 
         _penOptionsPanel.Visibility = isPen ? Visibility.Visible : Visibility.Collapsed;
         _blurOptionsPanel.Visibility = isBlur ? Visibility.Visible : Visibility.Collapsed;
@@ -877,8 +893,10 @@ public partial class CaptureOverlayWindow : Window
         Ink.EditingMode = isPen ? InkCanvasEditingMode.Ink : InkCanvasEditingMode.None;
         Ink.IsHitTestVisible = isPen;
         // Region tools capture via InteractionLayer; sticker mode lets clicks reach the
-        // sticker images below so they can be dragged/resized.
+        // sticker images below so they can be dragged/resized. (Annotation grabbing is
+        // handled earlier by the tunneling EditLayer handlers, for every tool.)
         InteractionLayer.IsHitTestVisible = isBlur || isText || isShape || isLine;
+        InteractionLayer.Cursor = Cursors.Arrow;
 
         if (isPen) LoadPenControls();
         if (isBlur) SelectBlurKind(_blurKind);
@@ -1081,6 +1099,185 @@ public partial class CaptureOverlayWindow : Window
         _history.Push(
             undo: () => ShapeHost.Children.Remove(shape),
             redo: () => { if (!ShapeHost.Children.Contains(shape)) ShapeHost.Children.Add(shape); });
+    }
+
+    // -------------------------------------------- direct manipulation ---
+    // Hover any annotation (shape / line / text / sticker) with ANY tool: the cursor
+    // becomes a move cursor and dragging grabs it; Delete removes the selection. The
+    // handlers tunnel (Preview*) on EditLayer, so they run before InkCanvas or the
+    // InteractionLayer — drawing only starts on empty space. Hit testing is bounding-
+    // box based and moves use a TranslateTransform. Ink strokes and blur regions stay
+    // undo-only (moving a blur would silently change which pixels it samples).
+
+    /// <summary>Clicking outside the active text box (and outside the toolbar, so style
+    /// tweaks don't dismiss it) commits the text — same as pressing Enter.</summary>
+    private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_editingText is not { } box) return;
+        if (e.OriginalSource is DependencyObject src &&
+            (IsWithin(src, box) || IsWithin(src, Toolbar))) return;
+        CommitActiveText(discardIfEmpty: true);
+        // Not handled: the same click may then grab an annotation or start a drawing.
+    }
+
+    private static bool IsWithin(DependencyObject? node, DependencyObject container)
+    {
+        while (node != null)
+        {
+            if (node == container) return true;
+            node = node is Visual or System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(node)
+                : LogicalTreeHelper.GetParent(node);
+        }
+        return false;
+    }
+
+    private void EditLayer_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_phase != Phase.Editing || _editingText != null) return;
+        var p = e.GetPosition(EditLayer);
+        var hit = HitAnnotation(p);
+        if (hit == null)
+        {
+            Deselect();   // empty space: clear the selection, then draw as usual
+            return;
+        }
+
+        _selected = hit;
+        UpdateSelectionBox();
+        var tt = EnsureTranslate(hit);
+        _moveDragging = true;
+        _moveGrab = p;
+        _moveOrigX = tt.X;
+        _moveOrigY = tt.Y;
+        EditLayer.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void EditLayer_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_phase != Phase.Editing) return;
+        var p = e.GetPosition(EditLayer);
+
+        if (_moveDragging && _selected != null)
+        {
+            var tt = EnsureTranslate(_selected);
+            tt.X = _moveOrigX + (p.X - _moveGrab.X);
+            tt.Y = _moveOrigY + (p.Y - _moveGrab.Y);
+            UpdateSelectionBox();
+            e.Handled = true;
+            return;
+        }
+
+        // Hover feedback (idle pointer only — never during a drawing drag).
+        if (_editingText == null && e.LeftButton == MouseButtonState.Released)
+            EditLayer.Cursor = HitAnnotation(p) != null ? Cursors.SizeAll : null;
+    }
+
+    private void EditLayer_PreviewMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_moveDragging) return;
+        _moveDragging = false;
+        EditLayer.ReleaseMouseCapture();
+        e.Handled = true;
+        if (_selected is not { } el) return;
+
+        var tt = EnsureTranslate(el);
+        double ox = _moveOrigX, oy = _moveOrigY, nx = tt.X, ny = tt.Y;
+        if (Math.Abs(nx - ox) < 0.5 && Math.Abs(ny - oy) < 0.5) return;   // click, not a move
+
+        _history.Push(
+            undo: () => { var t = EnsureTranslate(el); t.X = ox; t.Y = oy; },
+            redo: () => { var t = EnsureTranslate(el); t.X = nx; t.Y = ny; });
+    }
+
+    private void DeleteSelected()
+    {
+        if (_selected is not { } el || el.Parent is not Canvas host) return;
+        Deselect();
+        host.Children.Remove(el);
+        _history.Push(
+            undo: () => { if (!host.Children.Contains(el)) host.Children.Add(el); },
+            redo: () => host.Children.Remove(el));
+    }
+
+    /// <summary>Topmost annotation whose bounds contain <paramref name="p"/> (host z-order:
+    /// text above stickers above shapes/lines, matching the composite).</summary>
+    private FrameworkElement? HitAnnotation(Point p)
+    {
+        foreach (var host in new[] { TextHost, StickerHost, ShapeHost })
+            for (int i = host.Children.Count - 1; i >= 0; i--)
+                if (host.Children[i] is FrameworkElement el && AnnotationBounds(el).Contains(p))
+                    return el;
+        return null;
+    }
+
+    /// <summary>Element bounds in host coordinates, including any move translation.</summary>
+    private static Rect AnnotationBounds(FrameworkElement el)
+    {
+        Rect r;
+        if (el is Path { Data: { } g } path)
+        {
+            r = g.Bounds;   // lines are geometry-positioned, not Canvas-positioned
+            r.Inflate(path.StrokeThickness / 2 + 2, path.StrokeThickness / 2 + 2);
+        }
+        else
+        {
+            double x = Canvas.GetLeft(el), y = Canvas.GetTop(el);
+            r = new Rect(double.IsNaN(x) ? 0 : x, double.IsNaN(y) ? 0 : y,
+                el.ActualWidth, el.ActualHeight);
+        }
+        if (el.RenderTransform is TranslateTransform tt)
+        {
+            r.X += tt.X;
+            r.Y += tt.Y;
+        }
+        return r;
+    }
+
+    private static TranslateTransform EnsureTranslate(FrameworkElement el)
+    {
+        if (el.RenderTransform is TranslateTransform tt) return tt;
+        var t = new TranslateTransform();
+        el.RenderTransform = t;
+        return t;
+    }
+
+    /// <summary>Show/refresh the dashed box around the selection; hides (and clears the
+    /// selection) when the element was removed, e.g. by an undo.</summary>
+    private void UpdateSelectionBox()
+    {
+        if (_selected == null || _selected.Parent == null)
+        {
+            Deselect();
+            return;
+        }
+
+        if (_selectionBox == null)
+        {
+            _selectionBox = new Rectangle
+            {
+                Stroke = new SolidColorBrush(Theme.Accent),
+                StrokeThickness = 1,
+                StrokeDashArray = new DoubleCollection { 4, 3 },
+                IsHitTestVisible = false,
+            };
+            EditLayer.Children.Add(_selectionBox);   // above the hosts; hit-test transparent
+        }
+
+        var b = AnnotationBounds(_selected);
+        b.Inflate(3, 3);
+        Canvas.SetLeft(_selectionBox, b.X);
+        Canvas.SetTop(_selectionBox, b.Y);
+        _selectionBox.Width = Math.Max(0, b.Width);
+        _selectionBox.Height = Math.Max(0, b.Height);
+        _selectionBox.Visibility = Visibility.Visible;
+    }
+
+    private void Deselect()
+    {
+        _selected = null;
+        if (_selectionBox != null) _selectionBox.Visibility = Visibility.Collapsed;
     }
 
     // -------------------------------------------------------- line tool ---
@@ -1392,6 +1589,7 @@ public partial class CaptureOverlayWindow : Window
     private void ResetToSelection()
     {
         CommitActiveText(discardIfEmpty: true);
+        Deselect();
 
         _phase = Phase.Selecting;
         Cursor = Cursors.Cross;
@@ -1450,14 +1648,22 @@ public partial class CaptureOverlayWindow : Window
     {
         if (e.Key == Key.Escape)
         {
-            // Editing → back to the selection step; selecting → cancel the whole capture.
-            if (_phase == Phase.Editing) ResetToSelection();
+            // Selection cleared first; then editing → back to framing; framing → cancel.
+            if (_phase == Phase.Editing && _selected != null) Deselect();
+            else if (_phase == Phase.Editing) ResetToSelection();
             else Cancel();
             e.Handled = true;
             return;
         }
 
         if (_phase != Phase.Editing) return;
+
+        if (e.Key == Key.Delete && _selected != null && _editingText == null)
+        {
+            DeleteSelected();
+            e.Handled = true;
+            return;
+        }
 
         // Shortcuts are user-configurable in settings.json (parsed into KeyGestures).
         if (Matches(_quickSaveGesture, e)) { DoQuickSave(); e.Handled = true; }
@@ -1473,6 +1679,8 @@ public partial class CaptureOverlayWindow : Window
     {
         if (_undoButton != null) _undoButton.IsEnabled = _history.CanUndo;
         if (_redoButton != null) _redoButton.IsEnabled = _history.CanRedo;
+        // Undo/redo may have removed, re-added, or repositioned the selected element.
+        if (_selected != null) UpdateSelectionBox();
     }
 
     // ----------------------------------------------------------- helpers ---
