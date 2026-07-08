@@ -48,13 +48,19 @@ internal static class WindowEnumerator
     /// <summary>Hit-test a physical-px point; returns the topmost window's local rect.</summary>
     public static Rect? HitTest(IReadOnlyList<DetectedWindow> windows, VirtualScreen vs, int screenX, int screenY)
     {
+        return HitTestWindow(windows, screenX, screenY) is { } w
+            ? new Rect(w.Bounds.Left - vs.X, w.Bounds.Top - vs.Y, w.Bounds.Width, w.Bounds.Height)
+            : null;
+    }
+
+    /// <summary>Hit-test a physical-px point; returns the topmost window itself.</summary>
+    public static DetectedWindow? HitTestWindow(IReadOnlyList<DetectedWindow> windows, int screenX, int screenY)
+    {
         foreach (var w in windows)
         {
             var b = w.Bounds;
             if (screenX >= b.Left && screenX < b.Right && screenY >= b.Top && screenY < b.Bottom)
-            {
-                return new Rect(b.Left - vs.X, b.Top - vs.Y, b.Width, b.Height);
-            }
+                return w;
         }
         return null;
     }
