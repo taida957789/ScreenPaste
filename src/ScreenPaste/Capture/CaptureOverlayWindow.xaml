@@ -50,6 +50,9 @@
                 <TextBlock x:Name="SizeText" Foreground="White" FontSize="12" FontFamily="Consolas"/>
             </Border>
 
+            <!-- Selection resize handles (editing phase): 4 corners + 4 edge midpoints. -->
+            <Canvas x:Name="HandleLayer" Visibility="Collapsed"/>
+
             <!-- Floating toolbar (built/positioned in code). NOTE: no DropShadowEffect
                  here — a WPF Effect rasterizes the whole subtree into an intermediate
                  bitmap, which kills ClearType and blurs every label. -->

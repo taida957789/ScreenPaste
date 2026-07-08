@@ -14,6 +14,7 @@ A lightweight Windows screenshot, annotation and screen-recording tool: capture 
 - The whole screen (multi-monitor support)
 - **Automatic window & UI-element detection**: hover over a window or an interface element (buttons, panels, web-page blocks) to outline it, then click to capture; scroll the **mouse wheel** to switch the detection level (element ⇄ window)
 - Drag to select a custom region, with a size readout and a magnifier for pixel-perfect edges
+- **Adjustable after selecting**: drag the corner and edge-midpoint handles to resize; with no tool active, drag inside the region to move it — existing annotations stay pinned to the content
 
 ### Annotate
 After capturing, an **icon toolbar** pops up next to the cursor (draggable, and it steers clear of screen edges):

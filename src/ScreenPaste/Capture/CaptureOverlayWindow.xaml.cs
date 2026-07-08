@@ -83,6 +83,16 @@ public partial class CaptureOverlayWindow : Window
     private Image? _stickerDrag;
     private Point _stickerGrab;
 
+    // Selection-adjust state (editing phase): 8 resize handles + drag-to-move.
+    // Handle indices: 0=NW 1=N 2=NE 3=W 4=E 5=SW 6=S 7=SE.
+    private const double HandleSize = 12;
+    private const int MinRegionSize = 20;
+    private readonly List<Rectangle> _handles = new();
+    private int _resizeHandle = -1;
+    private bool _regionMoving;
+    private Point _regionGrab;                // pointer at drag start (canvas px)
+    private Int32Rect _regionStart;           // selection at drag start
+
     // Select-tool state (click annotations to move them, Delete to remove)
     private FrameworkElement? _selected;
     private Rectangle? _selectionBox;
@@ -334,7 +344,7 @@ public partial class CaptureOverlayWindow : Window
         }
 
         if (finalRect.Width < 4 || finalRect.Height < 4) return;
-        EnterEditing(finalRect, e.GetPosition(RootCanvas));
+        EnterEditing(finalRect);
     }
 
     private void ShowSelectionRect(Rect r)
@@ -380,7 +390,7 @@ public partial class CaptureOverlayWindow : Window
 
     // ---------------------------------------------------------- edit phase ---
 
-    private void EnterEditing(Rect r, Point cursor)
+    private void EnterEditing(Rect r)
     {
         _phase = Phase.Editing;
         Cursor = Cursors.Arrow;
@@ -399,6 +409,24 @@ public partial class CaptureOverlayWindow : Window
         ShowSelectionRect(sel);
         DetectBorder.Visibility = Visibility.Collapsed;
 
+        LayoutEditLayer(sel);
+        EditLayer.Visibility = Visibility.Visible;
+
+        EnsureHandles();
+        LayoutHandles();
+        HandleLayer.Visibility = Visibility.Visible;
+
+        BuildToolbar();
+        // Snipaste-style: no tool preselected — dragging inside the region moves it,
+        // resizing works via the handles; picking a tool starts annotating.
+        SelectTool(ToolKind.None);
+        Toolbar.Visibility = Visibility.Visible;   // must be visible before measuring
+        PositionToolbar();
+        UpdateHistoryButtons();
+    }
+
+    private void LayoutEditLayer(Rect sel)
+    {
         Canvas.SetLeft(EditLayer, sel.X);
         Canvas.SetTop(EditLayer, sel.Y);
         EditLayer.Width = sel.Width;
@@ -407,13 +435,6 @@ public partial class CaptureOverlayWindow : Window
         Ink.Height = sel.Height;
         InteractionLayer.Width = sel.Width;
         InteractionLayer.Height = sel.Height;
-        EditLayer.Visibility = Visibility.Visible;
-
-        BuildToolbar();
-        SelectTool(ToolKind.MarkerPen);
-        Toolbar.Visibility = Visibility.Visible;   // must be visible before measuring
-        PositionToolbar(cursor);
-        UpdateHistoryButtons();
     }
 
     // -------------------------------------------------------------- toolbar ---
@@ -686,20 +707,21 @@ public partial class CaptureOverlayWindow : Window
         _arrowEndButton.Background = _lineArrowEnd ? Theme.ActiveBrush : Theme.ButtonBgBrush;
     }
 
-    private void PositionToolbar(Point cursor)
+    /// <summary>Snipaste-style placement: the toolbar's right edge aligns with the
+    /// selection's right edge, sitting below it; flips above when there is no room,
+    /// and tucks inside the selection as a last resort.</summary>
+    private void PositionToolbar()
     {
         // Force a full layout pass so ActualWidth/Height are valid (the toolbar was just shown).
         Toolbar.UpdateLayout();
         double tw = ToolbarWidth();
         double th = ToolbarHeight();
-        const double gap = 14;
+        const double gap = 8;
 
-        // Place next to the cursor (below-right); flip to the other side if off-screen.
-        double x = cursor.X + gap;
-        if (x + tw > _vs.Width) x = cursor.X - gap - tw;
-
-        double y = cursor.Y + gap;
-        if (y + th > _vs.Height) y = cursor.Y - gap - th;
+        double x = _selection.X + _selection.Width - tw;
+        double y = _selection.Y + _selection.Height + gap;
+        if (y + th > _vs.Height) y = _selection.Y - th - gap;                      // above
+        if (y < 4) y = Math.Max(4, _selection.Y + _selection.Height - th - gap);   // inside, bottom
 
         ClampToolbar(ref x, ref y);
         Canvas.SetLeft(Toolbar, x);
@@ -1023,6 +1045,7 @@ public partial class CaptureOverlayWindow : Window
             b.Background = active ? Theme.ActiveBrush : Theme.ButtonBgBrush;
         }
 
+        bool isNone = kind is ToolKind.None;
         bool isPen = kind is ToolKind.MarkerPen or ToolKind.Highlighter;
         bool isBlur = kind is ToolKind.Blur;
         bool isText = kind is ToolKind.Text;
@@ -1040,11 +1063,12 @@ public partial class CaptureOverlayWindow : Window
 
         Ink.EditingMode = isPen ? InkCanvasEditingMode.Ink : InkCanvasEditingMode.None;
         Ink.IsHitTestVisible = isPen;
-        // Region tools capture via InteractionLayer; sticker mode lets clicks reach the
-        // sticker images below so they can be dragged/resized. (Annotation grabbing is
-        // handled earlier by the tunneling EditLayer handlers, for every tool.)
-        InteractionLayer.IsHitTestVisible = isBlur || isText || isShape || isLine;
-        InteractionLayer.Cursor = Cursors.Arrow;
+        // Region tools capture via InteractionLayer; with no tool it catches drags that
+        // move the whole selection; sticker mode lets clicks reach the sticker images
+        // below so they can be dragged/resized. (Annotation grabbing is handled earlier
+        // by the tunneling EditLayer handlers, for every tool.)
+        InteractionLayer.IsHitTestVisible = isBlur || isText || isShape || isLine || isNone;
+        InteractionLayer.Cursor = isNone ? Cursors.SizeAll : Cursors.Arrow;
 
         if (isPen) LoadPenControls();
         if (isBlur) SelectBlurKind(_blurKind);
@@ -1134,6 +1158,7 @@ public partial class CaptureOverlayWindow : Window
 
     private void Blur_MouseDown(object sender, MouseButtonEventArgs e)
     {
+        if (_tool == ToolKind.None) { Region_MoveStart(e.GetPosition(RootCanvas)); return; }
         if (_tool == ToolKind.Text) { PlaceText(e.GetPosition(InteractionLayer)); return; }
         if (_tool == ToolKind.Shape) { Shape_MouseDown(e.GetPosition(InteractionLayer)); return; }
         if (_tool == ToolKind.Line) { Line_MouseDown(e.GetPosition(InteractionLayer)); return; }
@@ -1156,6 +1181,7 @@ public partial class CaptureOverlayWindow : Window
 
     private void Blur_MouseMove(object sender, MouseEventArgs e)
     {
+        if (_regionMoving) { Region_MoveTo(e.GetPosition(RootCanvas)); return; }
         if (_shapeDragging) { Shape_MouseMove(e.GetPosition(InteractionLayer)); return; }
         if (_lineDragging) { Line_MouseMove(e.GetPosition(InteractionLayer)); return; }
         if (!_blurDragging || _blurPreview == null) return;
@@ -1169,6 +1195,7 @@ public partial class CaptureOverlayWindow : Window
 
     private void Blur_MouseUp(object sender, MouseButtonEventArgs e)
     {
+        if (_regionMoving) { Region_MoveEnd(); return; }
         if (_shapeDragging) { Shape_MouseUp(e.GetPosition(InteractionLayer)); return; }
         if (_lineDragging) { Line_MouseUp(e.GetPosition(InteractionLayer)); return; }
         if (!_blurDragging) return;
@@ -1252,6 +1279,159 @@ public partial class CaptureOverlayWindow : Window
         _history.Push(
             undo: () => ShapeHost.Children.Remove(shape),
             redo: () => { if (!ShapeHost.Children.Contains(shape)) ShapeHost.Children.Add(shape); });
+    }
+
+    // ---------------------------------------------------- region adjust ---
+    // Editing-phase selection tweaks: 8 handles resize, dragging the interior (with no
+    // tool active) moves the whole region. Annotations stay glued to the SCREENSHOT
+    // content: when the region origin shifts by (dx,dy), every annotation element gets
+    // a compensating translate and the ink strokes are transformed by the inverse.
+
+    private void EnsureHandles()
+    {
+        if (_handles.Count > 0) return;
+        Cursor[] cursors =
+        {
+            Cursors.SizeNWSE, Cursors.SizeNS, Cursors.SizeNESW,
+            Cursors.SizeWE,                   Cursors.SizeWE,
+            Cursors.SizeNESW, Cursors.SizeNS, Cursors.SizeNWSE,
+        };
+        for (int i = 0; i < 8; i++)
+        {
+            var h = new Rectangle
+            {
+                Width = HandleSize,
+                Height = HandleSize,
+                Fill = new SolidColorBrush(Theme.Accent),
+                Stroke = Brushes.White,
+                StrokeThickness = 1,
+                Cursor = cursors[i],
+                Tag = i,
+            };
+            h.MouseLeftButtonDown += Handle_MouseDown;
+            h.MouseMove += Handle_MouseMove;
+            h.MouseLeftButtonUp += Handle_MouseUp;
+            _handles.Add(h);
+            HandleLayer.Children.Add(h);
+        }
+    }
+
+    private void LayoutHandles()
+    {
+        double x = _selection.X, y = _selection.Y, w = _selection.Width, h = _selection.Height;
+        double half = HandleSize / 2.0;
+        Point[] anchors =
+        {
+            new(x, y),         new(x + w / 2, y),     new(x + w, y),
+            new(x, y + h / 2),                        new(x + w, y + h / 2),
+            new(x, y + h),     new(x + w / 2, y + h), new(x + w, y + h),
+        };
+        for (int i = 0; i < 8; i++)
+        {
+            Canvas.SetLeft(_handles[i], anchors[i].X - half);
+            Canvas.SetTop(_handles[i], anchors[i].Y - half);
+        }
+    }
+
+    private void Handle_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not Rectangle h || _phase != Phase.Editing) return;
+        _resizeHandle = (int)h.Tag!;
+        _regionGrab = e.GetPosition(RootCanvas);
+        _regionStart = _selection;
+        h.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void Handle_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (_resizeHandle < 0) return;
+        var p = e.GetPosition(RootCanvas);
+        double dx = p.X - _regionGrab.X;
+        double dy = p.Y - _regionGrab.Y;
+
+        double left = _regionStart.X, top = _regionStart.Y;
+        double right = left + _regionStart.Width, bottom = top + _regionStart.Height;
+
+        bool west = _resizeHandle is 0 or 3 or 5;
+        bool east = _resizeHandle is 2 or 4 or 7;
+        bool north = _resizeHandle is 0 or 1 or 2;
+        bool south = _resizeHandle is 5 or 6 or 7;
+
+        if (west) left = Math.Clamp(left + dx, 0, right - MinRegionSize);
+        if (east) right = Math.Clamp(right + dx, left + MinRegionSize, _screenshot.PixelWidth);
+        if (north) top = Math.Clamp(top + dy, 0, bottom - MinRegionSize);
+        if (south) bottom = Math.Clamp(bottom + dy, top + MinRegionSize, _screenshot.PixelHeight);
+
+        ApplyRegion(new Int32Rect(
+            (int)Math.Round(left), (int)Math.Round(top),
+            (int)Math.Round(right - left), (int)Math.Round(bottom - top)));
+    }
+
+    private void Handle_MouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_resizeHandle < 0) return;
+        _resizeHandle = -1;
+        (sender as Rectangle)?.ReleaseMouseCapture();
+        e.Handled = true;
+    }
+
+    private void Region_MoveStart(Point p)
+    {
+        _regionMoving = true;
+        _regionGrab = p;
+        _regionStart = _selection;
+        InteractionLayer.CaptureMouse();
+    }
+
+    private void Region_MoveTo(Point p)
+    {
+        int dx = (int)Math.Round(p.X - _regionGrab.X);
+        int dy = (int)Math.Round(p.Y - _regionGrab.Y);
+        int x = Math.Clamp(_regionStart.X + dx, 0, _screenshot.PixelWidth - _regionStart.Width);
+        int y = Math.Clamp(_regionStart.Y + dy, 0, _screenshot.PixelHeight - _regionStart.Height);
+        ApplyRegion(new Int32Rect(x, y, _regionStart.Width, _regionStart.Height));
+    }
+
+    private void Region_MoveEnd()
+    {
+        _regionMoving = false;
+        InteractionLayer.ReleaseMouseCapture();
+    }
+
+    /// <summary>Apply a new selection rect and re-layout everything that depends on it.</summary>
+    private void ApplyRegion(Int32Rect r)
+    {
+        if (r == _selection) return;
+
+        int dx = r.X - _selection.X;
+        int dy = r.Y - _selection.Y;
+        if (dx != 0 || dy != 0) ShiftAnnotations(-dx, -dy);
+
+        _selection = r;
+        var sel = new Rect(r.X, r.Y, r.Width, r.Height);
+        ShowSelectionRect(sel);
+        LayoutEditLayer(sel);
+        LayoutHandles();
+        PositionToolbar();
+        if (_selected != null) UpdateSelectionBox();
+    }
+
+    /// <summary>Keep annotations pinned to the screenshot content while the region moves.</summary>
+    private void ShiftAnnotations(int dx, int dy)
+    {
+        foreach (var host in new[] { BlurHost, ShapeHost, StickerHost, TextHost })
+        {
+            foreach (var child in host.Children)
+            {
+                if (child is not FrameworkElement el) continue;
+                var tt = EnsureTranslate(el);
+                tt.X += dx;
+                tt.Y += dy;
+            }
+        }
+        if (Ink.Strokes.Count > 0)
+            Ink.Strokes.Transform(new Matrix(1, 0, 0, 1, dx, dy), false);
     }
 
     // -------------------------------------------- direct manipulation ---

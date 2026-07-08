@@ -14,6 +14,7 @@ Un outil Windows léger de capture d'écran, d'annotation et d'enregistrement : 
 - L'écran entier (multi-écrans pris en charge)
 - **Détection automatique des fenêtres et des éléments d'interface** : survolez une fenêtre ou un élément (bouton, panneau, bloc de page web) pour l'encadrer automatiquement, puis cliquez pour capturer ; la **molette** change le niveau de détection (élément ⇄ fenêtre)
 - Glissez pour sélectionner une zone personnalisée, avec affichage des dimensions et loupe pour des bords au pixel près
+- **Ajustable après la sélection** : faites glisser les poignées des coins et des milieux de côtés pour redimensionner ; sans outil actif, glissez l'intérieur de la zone pour la déplacer — les annotations existantes restent fixées au contenu
 
 ### Annotation
 Après la capture, une **barre d'outils** apparaît près du curseur (déplaçable, elle évite les bords de l'écran) :

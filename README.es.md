@@ -14,6 +14,7 @@ Una herramienta ligera de Windows para capturas de pantalla, anotaciones y graba
 - Toda la pantalla (compatible con varios monitores)
 - **Detección automática de ventanas y elementos de la interfaz**: pasa el ratón sobre una ventana o un elemento (botones, paneles, bloques de páginas web) para delinearlo automáticamente y haz clic para capturar; la **rueda del ratón** cambia el nivel de detección (elemento ⇄ ventana)
 - Arrastra para seleccionar una zona personalizada, con indicador de tamaño y lupa para bordes al píxel
+- **Ajustable tras seleccionar**: arrastra los tiradores de las esquinas y los puntos medios de los lados para redimensionar; sin herramienta activa, arrastra el interior de la zona para moverla — las anotaciones existentes permanecen fijadas al contenido
 
 ### Anotación
 Tras capturar, aparece una **barra de herramientas** junto al cursor (arrastrable y que evita los bordes de la pantalla):

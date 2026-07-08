@@ -14,6 +14,7 @@ Ein leichtgewichtiges Windows-Tool für Screenshots, Anmerkungen und Bildschirma
 - Der gesamte Bildschirm (Multi-Monitor-Unterstützung)
 - **Automatische Fenster- und UI-Element-Erkennung**: Fahren Sie über ein Fenster oder ein Interface-Element (Schaltflächen, Panels, Webseiten-Blöcke), um es automatisch zu umranden, und klicken Sie zum Aufnehmen; das **Mausrad** wechselt die Erkennungsebene (Element ⇄ Fenster)
 - Ziehen zum Auswählen eines eigenen Bereichs, mit Größenanzeige und Lupe für pixelgenaue Kanten
+- **Nach der Auswahl anpassbar**: Ziehen Sie die Griffe an Ecken und Kantenmitten zum Ändern der Größe; ohne aktives Werkzeug verschiebt Ziehen im Inneren den Bereich — vorhandene Anmerkungen bleiben am Inhalt verankert
 
 ### Anmerkungen
 Nach der Aufnahme erscheint neben dem Cursor eine **Symbol-Werkzeugleiste** (verschiebbar, weicht Bildschirmrändern automatisch aus):
