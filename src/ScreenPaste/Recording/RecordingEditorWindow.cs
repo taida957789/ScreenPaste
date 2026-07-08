@@ -93,6 +93,15 @@ public sealed class RecordingEditorWindow : Window
     private readonly List<Button> _customSwatchButtons = new();
     private const int MaxCustomColors = 8;
 
+    // Direct manipulation (hover-grab any annotation, Delete removes)
+    private readonly Canvas _selectionLayer = new();   // dashed selection box overlay
+    private Grid _pixelStack = null!;
+    private FrameworkElement? _selected;
+    private Rectangle? _selectionBox;
+    private bool _moveDragging;
+    private Point _moveGrab;
+    private double _moveOrigX, _moveOrigY;
+
     // Tool options UI (one row per tool below the transport row)
     private StackPanel _textOptions = null!, _shapeOptions = null!, _lineOptions = null!,
         _blurOptions = null!, _stickerOptions = null!;
@@ -181,18 +190,29 @@ public sealed class RecordingEditorWindow : Window
         _interact.MouseMove += Interact_MouseMove;
         _interact.MouseLeftButtonUp += Interact_MouseUp;
 
-        var pixelStack = new Grid { Width = _videoW, Height = _videoH };
-        pixelStack.Children.Add(_player);
-        pixelStack.Children.Add(_blurHost);
-        pixelStack.Children.Add(_annoHost);
-        pixelStack.Children.Add(_interact);
+        _selectionLayer.Width = _videoW;
+        _selectionLayer.Height = _videoH;
+        _selectionLayer.IsHitTestVisible = false;
+
+        _pixelStack = new Grid { Width = _videoW, Height = _videoH };
+        _pixelStack.Children.Add(_player);
+        _pixelStack.Children.Add(_blurHost);
+        _pixelStack.Children.Add(_annoHost);
+        _pixelStack.Children.Add(_selectionLayer);
+        _pixelStack.Children.Add(_interact);
         // Clicking the video outside the active text box commits it, like Enter
         // (tool/option clicks elsewhere in the window keep the box editable).
-        pixelStack.PreviewMouseLeftButtonDown += (_, pe) =>
+        _pixelStack.PreviewMouseLeftButtonDown += (_, pe) =>
         {
             if (_editingText is { } box && pe.OriginalSource is DependencyObject src && !IsWithin(src, box))
                 CommitActiveText();
         };
+        // Direct manipulation: tunneling handlers grab annotations before the
+        // interaction layer sees the click — drawing only starts on empty space.
+        _pixelStack.PreviewMouseLeftButtonDown += Stack_PreviewMouseDown;
+        _pixelStack.PreviewMouseMove += Stack_PreviewMouseMove;
+        _pixelStack.PreviewMouseLeftButtonUp += Stack_PreviewMouseUp;
+        var pixelStack = _pixelStack;
 
         _videoBorder = new Border
         {
@@ -258,6 +278,8 @@ public sealed class RecordingEditorWindow : Window
         {
             _undoButton.IsEnabled = _history.CanUndo;
             _redoButton.IsEnabled = _history.CanRedo;
+            // Undo/redo may have removed, re-added, or repositioned the selection.
+            if (_selected != null) UpdateSelectionBox();
         };
 
         Grid.SetRow(transport, 1);
@@ -937,6 +959,151 @@ public sealed class RecordingEditorWindow : Window
         };
     }
 
+    // -------------------------------------------- direct manipulation ---
+    // Hover any annotation (shape / line / text / sticker) with ANY tool: dragging
+    // grabs and moves it, Delete removes it, both undoable. Bounding-box hit testing
+    // over _annoHost; moves use a TranslateTransform. Blur regions stay undo-only.
+
+    private void Stack_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_exporting || _editingText != null) return;
+        var p = e.GetPosition(_annoHost);
+        var hit = HitAnnotation(p);
+        if (hit == null)
+        {
+            Deselect();   // empty space: clear the selection, then draw as usual
+            return;
+        }
+
+        _selected = hit;
+        UpdateSelectionBox();
+        var tt = EnsureTranslate(hit);
+        _moveDragging = true;
+        _moveGrab = p;
+        _moveOrigX = tt.X;
+        _moveOrigY = tt.Y;
+        _pixelStack.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void Stack_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        var p = e.GetPosition(_annoHost);
+
+        if (_moveDragging && _selected != null)
+        {
+            var tt = EnsureTranslate(_selected);
+            tt.X = _moveOrigX + (p.X - _moveGrab.X);
+            tt.Y = _moveOrigY + (p.Y - _moveGrab.Y);
+            UpdateSelectionBox();
+            e.Handled = true;
+            return;
+        }
+
+        if (_editingText == null && !_exporting && e.LeftButton == MouseButtonState.Released)
+            _pixelStack.Cursor = HitAnnotation(p) != null ? Cursors.SizeAll : null;
+    }
+
+    private void Stack_PreviewMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_moveDragging) return;
+        _moveDragging = false;
+        _pixelStack.ReleaseMouseCapture();
+        e.Handled = true;
+        if (_selected is not { } el) return;
+
+        var tt = EnsureTranslate(el);
+        double ox = _moveOrigX, oy = _moveOrigY, nx = tt.X, ny = tt.Y;
+        if (Math.Abs(nx - ox) < 0.5 && Math.Abs(ny - oy) < 0.5) return;   // click, not a move
+
+        _history.Push(
+            undo: () => { var t = EnsureTranslate(el); t.X = ox; t.Y = oy; },
+            redo: () => { var t = EnsureTranslate(el); t.X = nx; t.Y = ny; });
+    }
+
+    private void DeleteSelected()
+    {
+        if (_selected is not { } el || el.Parent is not Canvas host) return;
+        Deselect();
+        host.Children.Remove(el);
+        _history.Push(
+            undo: () => { if (!host.Children.Contains(el)) host.Children.Add(el); },
+            redo: () => host.Children.Remove(el));
+    }
+
+    private FrameworkElement? HitAnnotation(Point p)
+    {
+        for (int i = _annoHost.Children.Count - 1; i >= 0; i--)
+            if (_annoHost.Children[i] is FrameworkElement el && AnnotationBounds(el).Contains(p))
+                return el;
+        return null;
+    }
+
+    private static Rect AnnotationBounds(FrameworkElement el)
+    {
+        Rect r;
+        if (el is ShapesPath { Data: { } g } path)
+        {
+            r = g.Bounds;   // lines are geometry-positioned, not Canvas-positioned
+            r.Inflate(path.StrokeThickness / 2 + 2, path.StrokeThickness / 2 + 2);
+        }
+        else
+        {
+            double x = Canvas.GetLeft(el), y = Canvas.GetTop(el);
+            r = new Rect(double.IsNaN(x) ? 0 : x, double.IsNaN(y) ? 0 : y,
+                el.ActualWidth, el.ActualHeight);
+        }
+        if (el.RenderTransform is TranslateTransform tt)
+        {
+            r.X += tt.X;
+            r.Y += tt.Y;
+        }
+        return r;
+    }
+
+    private static TranslateTransform EnsureTranslate(FrameworkElement el)
+    {
+        if (el.RenderTransform is TranslateTransform tt) return tt;
+        var t = new TranslateTransform();
+        el.RenderTransform = t;
+        return t;
+    }
+
+    private void UpdateSelectionBox()
+    {
+        if (_selected == null || _selected.Parent == null)
+        {
+            Deselect();
+            return;
+        }
+
+        if (_selectionBox == null)
+        {
+            _selectionBox = new Rectangle
+            {
+                Stroke = new SolidColorBrush(Theme.Accent),
+                StrokeThickness = 1,
+                StrokeDashArray = new DoubleCollection { 4, 3 },
+                IsHitTestVisible = false,
+            };
+            _selectionLayer.Children.Add(_selectionBox);
+        }
+
+        var b = AnnotationBounds(_selected);
+        b.Inflate(3, 3);
+        Canvas.SetLeft(_selectionBox, b.X);
+        Canvas.SetTop(_selectionBox, b.Y);
+        _selectionBox.Width = Math.Max(0, b.Width);
+        _selectionBox.Height = Math.Max(0, b.Height);
+        _selectionBox.Visibility = Visibility.Visible;
+    }
+
+    private void Deselect()
+    {
+        _selected = null;
+        if (_selectionBox != null) _selectionBox.Visibility = Visibility.Collapsed;
+    }
+
     private static Rect MakeRect(Point a, Point b) =>
         new(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y), Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
 
@@ -1346,14 +1513,22 @@ public sealed class RecordingEditorWindow : Window
         if (Matches(_undoGesture, e)) { _history.Undo(); e.Handled = true; return; }
         if (Matches(_redoGesture, e)) { _history.Redo(); e.Handled = true; return; }
 
+        if (e.Key == Key.Delete && _selected != null)
+        {
+            DeleteSelected();
+            e.Handled = true;
+            return;
+        }
+
         double frame = 1.0 / _fps;
         double pos = _player.Position.TotalSeconds;
         switch (e.Key)
         {
             case Key.Space: TogglePlay(); e.Handled = true; break;
             case Key.Escape:
-                // A first Esc drops the active tool; a second closes the editor.
-                if (_tool != Tool.None) SelectTool(_tool);
+                // Esc walks outward: deselect annotation → drop the tool → close.
+                if (_selected != null) Deselect();
+                else if (_tool != Tool.None) SelectTool(_tool);
                 else Close();
                 e.Handled = true;
                 break;
