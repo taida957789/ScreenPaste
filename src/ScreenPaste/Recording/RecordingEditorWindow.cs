@@ -15,6 +15,7 @@ using ScreenPaste.Native;
 using ScreenPaste.Settings;
 using Forms = System.Windows.Forms;
 using Path = System.IO.Path;
+using ShapesPath = System.Windows.Shapes.Path;
 
 namespace ScreenPaste.Recording;
 
@@ -58,10 +59,10 @@ public sealed class RecordingEditorWindow : Window
     private DragTarget _drag;
 
     // ---- annotations (authored in video-pixel space; static across the clip) ----
-    private enum Tool { None, Text, Shape, Blur, Mosaic, Sticker }
+    private enum Tool { None, Text, Shape, Line, Blur, Mosaic, Sticker }
     private Tool _tool = Tool.None;
     private readonly Canvas _blurHost = new();   // blur previews (exported via ffmpeg filters)
-    private readonly Canvas _annoHost = new();   // text/shapes/stickers (exported as a PNG overlay)
+    private readonly Canvas _annoHost = new();   // text/shapes/lines/stickers (exported as a PNG overlay)
     private readonly Canvas _interact = new();   // captures clicks/drags for the active tool
     private readonly EditHistory _history = new();
     private readonly List<Button> _toolButtons = new();
@@ -70,15 +71,38 @@ public sealed class RecordingEditorWindow : Window
     private Button _undoButton = null!, _redoButton = null!;
     private KeyGesture? _undoGesture, _redoGesture;
     private TextBox? _editingText;
-    private Color _textColor, _shapeColor;
-    private ShapeKind _shapeKind;
-    private bool _shapeFilled;
-    private double _shapeWidth;
     private Point _toolDragStart;
     private Shape? _shapePreview;
     private Rectangle? _regionPreview;
+    private ShapesPath? _linePreview;
     private Image? _stickerDrag;
     private Point _stickerGrab;
+
+    // Per-tool settings (loaded from AppSettings, persisted back on export)
+    private Color _textColor, _shapeColor, _lineColor;
+    private string _textFont = "Segoe UI";
+    private double _textSize = 24;
+    private bool _textBold, _textItalic, _textStrike;
+    private ShapeKind _shapeKind;
+    private bool _shapeFilled;
+    private double _shapeWidth;
+    private double _lineWidth = 3;
+    private bool _lineArrowStart, _lineArrowEnd;
+    private double _gaussStrength = 12, _mosaicStrength = 12;
+    private readonly List<Color> _customColors = new();
+    private readonly List<Button> _customSwatchButtons = new();
+    private const int MaxCustomColors = 8;
+
+    // Tool options UI (one row per tool below the transport row)
+    private StackPanel _textOptions = null!, _shapeOptions = null!, _lineOptions = null!,
+        _blurOptions = null!, _stickerOptions = null!;
+    private ComboBox _fontCombo = null!;
+    private Slider _textSizeSlider = null!, _shapeWidthSlider = null!, _lineWidthSlider = null!, _blurSlider = null!;
+    private Button _boldButton = null!, _italicButton = null!, _strikeButton = null!;
+    private Button _arrowStartButton = null!, _arrowEndButton = null!;
+    private readonly List<Button> _shapeKindButtons = new();
+    private readonly List<Button> _shapeStyleButtons = new();
+    private bool _blurSliderSync;   // true while SelectTool loads the slider value
 
     public RecordingEditorWindow(string sourcePath, int videoWidth, int videoHeight, int fps,
                                  AppSettings settings, Action<string>? onSaved)
@@ -90,14 +114,31 @@ public sealed class RecordingEditorWindow : Window
         _settings = settings;
         _onSaved = onSaved;
 
-        // Annotation defaults follow the capture editor's persisted tool settings.
+        // Annotation defaults are shared with the capture editor's persisted settings.
         _textColor = ParseColor(settings.TextColor, Colors.Red);
+        _textFont = settings.TextFont;
+        _textSize = settings.TextSize;
+        _textBold = settings.TextBold;
+        _textItalic = settings.TextItalic;
+        _textStrike = settings.TextStrikethrough;
         _shapeColor = ParseColor(settings.ShapeColor, Colors.Red);
         _shapeKind = Enum.TryParse<ShapeKind>(settings.ShapeKind, out var sk) ? sk : ShapeKind.Rectangle;
         _shapeFilled = settings.ShapeFilled;
         _shapeWidth = settings.ShapeWidth;
+        _lineColor = ParseColor(settings.LineColor, Colors.Red);
+        _lineWidth = settings.LineWidth;
+        _lineArrowStart = settings.LineArrowStart;
+        _lineArrowEnd = settings.LineArrowEnd;
+        _gaussStrength = settings.GaussianStrength;
+        _mosaicStrength = settings.MosaicStrength;
         _undoGesture = HotkeyGesture.Parse(settings.UndoHotkey);
         _redoGesture = HotkeyGesture.Parse(settings.RedoHotkey);
+        foreach (var hex in settings.CustomColors)
+        {
+            try { _customColors.Add((Color)ColorConverter.ConvertFromString(hex)); }
+            catch { /* skip invalid entries */ }
+            if (_customColors.Count >= MaxCustomColors) break;
+        }
 
         Title = Loc.T("edit.title");
         Background = Theme.WindowBrush;
@@ -111,7 +152,8 @@ public sealed class RecordingEditorWindow : Window
 
         var root = new Grid { Margin = new Thickness(14) };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });   // video
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });   // transport
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });   // transport + tools
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });   // tool options
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });   // timeline
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });   // hint
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });   // actions / progress
@@ -144,6 +186,13 @@ public sealed class RecordingEditorWindow : Window
         pixelStack.Children.Add(_blurHost);
         pixelStack.Children.Add(_annoHost);
         pixelStack.Children.Add(_interact);
+        // Clicking the video outside the active text box commits it, like Enter
+        // (tool/option clicks elsewhere in the window keep the box editable).
+        pixelStack.PreviewMouseLeftButtonDown += (_, pe) =>
+        {
+            if (_editingText is { } box && pe.OriginalSource is DependencyObject src && !IsWithin(src, box))
+                CommitActiveText();
+        };
 
         _videoBorder = new Border
         {
@@ -194,6 +243,7 @@ public sealed class RecordingEditorWindow : Window
         _toolsPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(16, 0, 0, 0) };
         _toolsPanel.Children.Add(MakeToolButton(GlyphText, Loc.T("tool.text"), Tool.Text));
         _toolsPanel.Children.Add(MakeToolButton(GlyphShape, Loc.T("tool.shape"), Tool.Shape));
+        _toolsPanel.Children.Add(MakeToolButton(GlyphLine, Loc.T("tool.line"), Tool.Line));
         _toolsPanel.Children.Add(MakeToolButton(GlyphSticker, Loc.T("tool.sticker"), Tool.Sticker));
         _toolsPanel.Children.Add(MakeToolTextButton(Loc.T("lbl.gaussian"), Tool.Blur));
         _toolsPanel.Children.Add(MakeToolTextButton(Loc.T("lbl.mosaic"), Tool.Mosaic));
@@ -212,6 +262,12 @@ public sealed class RecordingEditorWindow : Window
 
         Grid.SetRow(transport, 1);
         root.Children.Add(transport);
+
+        // ---- tool options (one row per tool, mirroring the capture toolbar) ----
+        var optionsHost = new StackPanel();
+        BuildOptionPanels(optionsHost);
+        Grid.SetRow(optionsHost, 2);
+        root.Children.Add(optionsHost);
 
         // ---- timeline (track + trim range + handles + playhead) ----
         _timeline.Height = TimelineH;
@@ -242,7 +298,7 @@ public sealed class RecordingEditorWindow : Window
         _timeline.MouseMove += Timeline_MouseMove;
         _timeline.MouseLeftButtonUp += Timeline_MouseUp;
         _timeline.SizeChanged += (_, _) => LayoutTimeline();
-        Grid.SetRow(_timeline, 2);
+        Grid.SetRow(_timeline, 3);
         root.Children.Add(_timeline);
 
         var hint = new TextBlock
@@ -253,7 +309,7 @@ public sealed class RecordingEditorWindow : Window
             FontSize = 11,
             Margin = new Thickness(0, 4, 0, 0),
         };
-        Grid.SetRow(hint, 3);
+        Grid.SetRow(hint, 4);
         root.Children.Add(hint);
 
         // ---- bottom: format + actions, swapped for a progress row while exporting ----
@@ -316,7 +372,7 @@ public sealed class RecordingEditorWindow : Window
         Grid.SetColumn(_progressRow, 1);
         bottom.Children.Add(_progressRow);
 
-        Grid.SetRow(bottom, 4);
+        Grid.SetRow(bottom, 5);
         root.Children.Add(bottom);
 
         Content = root;
@@ -334,6 +390,7 @@ public sealed class RecordingEditorWindow : Window
     private static readonly string GlyphPause = char.ConvertFromUtf32(0xE769);
     private static readonly string GlyphText = char.ConvertFromUtf32(0xE8D2);     // Font (A)
     private static readonly string GlyphShape = char.ConvertFromUtf32(0xE71A);    // Stop (square)
+    private static readonly string GlyphLine = char.ConvertFromUtf32(0xE72A);     // Forward (arrow)
     private static readonly string GlyphSticker = char.ConvertFromUtf32(0xE8B9);  // Pictures
     private static readonly string GlyphUndo = char.ConvertFromUtf32(0xE7A7);
     private static readonly string GlyphRedo = char.ConvertFromUtf32(0xE7A6);
@@ -544,10 +601,28 @@ public sealed class RecordingEditorWindow : Window
         foreach (var b in _toolButtons)
             b.Background = (Tool)b.Tag! == _tool && _tool != Tool.None ? Theme.ActiveBrush : Theme.ButtonBgBrush;
         _interact.IsHitTestVisible = ToolNeedsInteract(_tool);
-        if (_tool == Tool.Sticker) AddSticker();
+
+        _textOptions.Visibility = _tool == Tool.Text ? Visibility.Visible : Visibility.Collapsed;
+        _shapeOptions.Visibility = _tool == Tool.Shape ? Visibility.Visible : Visibility.Collapsed;
+        _lineOptions.Visibility = _tool == Tool.Line ? Visibility.Visible : Visibility.Collapsed;
+        _blurOptions.Visibility = _tool is Tool.Blur or Tool.Mosaic ? Visibility.Visible : Visibility.Collapsed;
+        _stickerOptions.Visibility = _tool == Tool.Sticker ? Visibility.Visible : Visibility.Collapsed;
+
+        if (_tool is Tool.Blur or Tool.Mosaic)
+        {
+            _blurSliderSync = true;
+            _blurSlider.Value = _tool == Tool.Blur ? _gaussStrength : _mosaicStrength;
+            _blurSliderSync = false;
+        }
+        if (_tool == Tool.Shape) { RefreshShapeKindButtons(); RefreshShapeStyleButtons(); }
+        if (_tool == Tool.Line) RefreshArrowToggles();
+        RefreshSwatchSelection();
+
+        if (_tool == Tool.Sticker && _annoHost.Children.OfType<Image>().Any() == false) AddSticker();
     }
 
-    private static bool ToolNeedsInteract(Tool t) => t is Tool.Text or Tool.Shape or Tool.Blur or Tool.Mosaic;
+    private static bool ToolNeedsInteract(Tool t) =>
+        t is Tool.Text or Tool.Shape or Tool.Line or Tool.Blur or Tool.Mosaic;
 
     private void Interact_MouseDown(object sender, MouseButtonEventArgs e)
     {
@@ -562,6 +637,9 @@ public sealed class RecordingEditorWindow : Window
             case Tool.Shape:
                 BeginShape(p);
                 break;
+            case Tool.Line:
+                BeginLine(p);
+                break;
             case Tool.Blur or Tool.Mosaic:
                 BeginRegion(p);
                 break;
@@ -575,7 +653,12 @@ public sealed class RecordingEditorWindow : Window
     private void Interact_MouseMove(object sender, MouseEventArgs e)
     {
         var p = e.GetPosition(_interact);
-        if (_shapePreview != null)
+        if (_linePreview != null)
+        {
+            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) p = ArrowGeometry.SnapTo45(_toolDragStart, p);
+            _linePreview.Data = ArrowGeometry.Build(_toolDragStart, p, _lineWidth, _lineArrowStart, _lineArrowEnd);
+        }
+        else if (_shapePreview != null)
         {
             var r = MakeRect(_toolDragStart, p);
             Canvas.SetLeft(_shapePreview, r.X);
@@ -603,6 +686,18 @@ public sealed class RecordingEditorWindow : Window
     {
         var p = e.GetPosition(_interact);
         _interact.ReleaseMouseCapture();
+
+        if (_linePreview is { } line)
+        {
+            _linePreview = null;
+            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) p = ArrowGeometry.SnapTo45(_toolDragStart, p);
+            if ((p - _toolDragStart).Length < 8) { _annoHost.Children.Remove(line); return; }
+            line.Data = ArrowGeometry.Build(_toolDragStart, p, _lineWidth, _lineArrowStart, _lineArrowEnd);
+            _history.Push(
+                undo: () => _annoHost.Children.Remove(line),
+                redo: () => { if (!_annoHost.Children.Contains(line)) _annoHost.Children.Add(line); });
+            return;
+        }
 
         if (_shapePreview is { } shape)
         {
@@ -641,6 +736,22 @@ public sealed class RecordingEditorWindow : Window
         _shapePreview = s;
     }
 
+    private void BeginLine(Point start)
+    {
+        _toolDragStart = start;
+        var brush = new SolidColorBrush(_lineColor);
+        _linePreview = new ShapesPath
+        {
+            Stroke = brush,
+            Fill = brush,                    // fills the arrowhead triangles
+            StrokeThickness = _lineWidth,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+        };
+        _annoHost.Children.Add(_linePreview);
+    }
+
     private void BeginRegion(Point start)
     {
         _toolDragStart = start;
@@ -662,7 +773,7 @@ public sealed class RecordingEditorWindow : Window
     /// </summary>
     private void AddBlur(Int32Rect r, bool mosaic)
     {
-        double strength = mosaic ? _settings.MosaicStrength : _settings.GaussianStrength;
+        double strength = mosaic ? _mosaicStrength : _gaussStrength;
         var visual = new Rectangle
         {
             Width = r.Width,
@@ -704,17 +815,12 @@ public sealed class RecordingEditorWindow : Window
             BorderBrush = new SolidColorBrush(Theme.Accent),
             BorderThickness = new Thickness(1),
             Padding = new Thickness(2, 0, 2, 0),
-            Foreground = new SolidColorBrush(_textColor),
-            FontSize = _settings.TextSize,
-            FontWeight = _settings.TextBold ? FontWeights.Bold : FontWeights.Normal,
-            FontStyle = _settings.TextItalic ? FontStyles.Italic : FontStyles.Normal,
-            TextDecorations = _settings.TextStrikethrough ? TextDecorations.Strikethrough : null,
         };
-        try { box.FontFamily = new FontFamily(_settings.TextFont); } catch { /* keep default */ }
         Canvas.SetLeft(box, p.X);
         Canvas.SetTop(box, p.Y);
         _annoHost.Children.Add(box);
         _editingText = box;
+        ApplyTextStyle();
         _interact.IsHitTestVisible = false;   // let the box receive clicks/typing
 
         box.PreviewKeyDown += (_, ke) =>
@@ -840,6 +946,390 @@ public sealed class RecordingEditorWindow : Window
         catch { return fallback; }
     }
 
+    private static string ToHex(Color c) => $"#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}";
+
+    private static bool IsWithin(DependencyObject? node, DependencyObject container)
+    {
+        while (node != null)
+        {
+            if (node == container) return true;
+            node = node is Visual or System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(node)
+                : LogicalTreeHelper.GetParent(node);
+        }
+        return false;
+    }
+
+    // ------------------------------------------------------- tool options UI ---
+    // Ported from the capture toolbar: per-tool option rows with sliders (live numeric
+    // readouts), style toggles, and the shared colour palette (persisted custom colours,
+    // selected-swatch outline, right-click removal, "+" opens the full picker).
+
+    private static readonly Color[] Palette =
+    {
+        Colors.Red, Colors.Orange, Color.FromRgb(0xFF, 0xEB, 0x3B),
+        Colors.LimeGreen, Color.FromRgb(0x3D, 0xA9, 0xFC), Colors.Black, Colors.White,
+    };
+    private static readonly SolidColorBrush SwatchBorder = new(Color.FromArgb(0x88, 0xFF, 0xFF, 0xFF));
+
+    private void BuildOptionPanels(StackPanel host)
+    {
+        // ---- Text: font / size / style / colour ----
+        _textOptions = NewOptionsRow();
+        _textOptions.Children.Add(OptLabel(Loc.T("lbl.font")));
+        _fontCombo = new ComboBox { Width = 150, VerticalAlignment = VerticalAlignment.Center };
+        foreach (var fam in Fonts.SystemFontFamilies
+                     .Select(f => f.Source).OrderBy(s => s, StringComparer.OrdinalIgnoreCase))
+            _fontCombo.Items.Add(fam);
+        _fontCombo.SelectedItem = _textFont;
+        if (_fontCombo.SelectedItem == null) _fontCombo.Text = _textFont;
+        _fontCombo.SelectionChanged += (_, _) =>
+        {
+            if (_fontCombo.SelectedItem is string s) { _textFont = s; ApplyTextStyle(); RefocusText(); }
+        };
+        _textOptions.Children.Add(_fontCombo);
+        _textOptions.Children.Add(OptLabel(Loc.T("lbl.size")));
+        _textSizeSlider = new Slider { Minimum = 10, Maximum = 96, Width = 90, VerticalAlignment = VerticalAlignment.Center, Value = _textSize };
+        _textSizeSlider.ValueChanged += (_, se) => { _textSize = se.NewValue; ApplyTextStyle(); };
+        _textOptions.Children.Add(_textSizeSlider);
+        _textOptions.Children.Add(ValueReadout(_textSizeSlider, v => v.ToString("0")));
+        _textOptions.Children.Add(OptLabel(Loc.T("lbl.style")));
+        _boldButton = MakeStyleToggle("B", () => { _textBold = !_textBold; RefreshStyleToggles(); ApplyTextStyle(); RefocusText(); });
+        _italicButton = MakeStyleToggle("I", () => { _textItalic = !_textItalic; RefreshStyleToggles(); ApplyTextStyle(); RefocusText(); });
+        _strikeButton = MakeStyleToggle("S", () => { _textStrike = !_textStrike; RefreshStyleToggles(); ApplyTextStyle(); RefocusText(); });
+        _textOptions.Children.Add(_boldButton);
+        _textOptions.Children.Add(_italicButton);
+        _textOptions.Children.Add(_strikeButton);
+        _textOptions.Children.Add(OptLabel(Loc.T("lbl.color")));
+        AddColorSwatches(_textOptions);
+        RefreshStyleToggles();
+        host.Children.Add(_textOptions);
+
+        // ---- Shape: kind / style / thickness / colour ----
+        _shapeOptions = NewOptionsRow();
+        _shapeOptions.Children.Add(OptLabel(Loc.T("lbl.shape")));
+        _shapeOptions.Children.Add(MakeShapeKindButton(Loc.T("shape.rect"), ShapeKind.Rectangle));
+        _shapeOptions.Children.Add(MakeShapeKindButton(Loc.T("shape.rounded"), ShapeKind.RoundedRectangle));
+        _shapeOptions.Children.Add(MakeShapeKindButton(Loc.T("shape.ellipse"), ShapeKind.Ellipse));
+        _shapeOptions.Children.Add(OptLabel(Loc.T("lbl.style")));
+        _shapeOptions.Children.Add(MakeShapeStyleButton(Loc.T("style.outline"), filled: false));
+        _shapeOptions.Children.Add(MakeShapeStyleButton(Loc.T("style.fill"), filled: true));
+        _shapeOptions.Children.Add(OptLabel(Loc.T("lbl.lineWidth")));
+        _shapeWidthSlider = new Slider { Minimum = 1, Maximum = 20, Width = 90, VerticalAlignment = VerticalAlignment.Center, Value = _shapeWidth };
+        _shapeWidthSlider.ValueChanged += (_, se) => _shapeWidth = se.NewValue;
+        _shapeOptions.Children.Add(_shapeWidthSlider);
+        _shapeOptions.Children.Add(ValueReadout(_shapeWidthSlider, v => v.ToString("0")));
+        _shapeOptions.Children.Add(OptLabel(Loc.T("lbl.color")));
+        AddColorSwatches(_shapeOptions);
+        host.Children.Add(_shapeOptions);
+
+        // ---- Line: thickness / arrowheads / colour ----
+        _lineOptions = NewOptionsRow();
+        _lineOptions.Children.Add(OptLabel(Loc.T("lbl.lineWidth")));
+        _lineWidthSlider = new Slider { Minimum = 1, Maximum = 20, Width = 90, VerticalAlignment = VerticalAlignment.Center, Value = _lineWidth };
+        _lineWidthSlider.ValueChanged += (_, se) => _lineWidth = se.NewValue;
+        _lineOptions.Children.Add(_lineWidthSlider);
+        _lineOptions.Children.Add(ValueReadout(_lineWidthSlider, v => v.ToString("0")));
+        _arrowStartButton = MakeSmallToggle(Loc.T("line.arrowStart"));
+        _arrowStartButton.Click += (_, _) => { _lineArrowStart = !_lineArrowStart; RefreshArrowToggles(); };
+        _arrowEndButton = MakeSmallToggle(Loc.T("line.arrowEnd"));
+        _arrowEndButton.Click += (_, _) => { _lineArrowEnd = !_lineArrowEnd; RefreshArrowToggles(); };
+        _lineOptions.Children.Add(_arrowStartButton);
+        _lineOptions.Children.Add(_arrowEndButton);
+        _lineOptions.Children.Add(OptLabel(Loc.T("lbl.color")));
+        AddColorSwatches(_lineOptions);
+        RefreshArrowToggles();
+        host.Children.Add(_lineOptions);
+
+        // ---- Blur / mosaic: strength (edits the active kind's value) ----
+        _blurOptions = NewOptionsRow();
+        _blurOptions.Children.Add(OptLabel(Loc.T("lbl.blurStrength")));
+        _blurSlider = new Slider { Minimum = 2, Maximum = 40, Width = 130, VerticalAlignment = VerticalAlignment.Center, Value = _gaussStrength };
+        _blurSlider.ValueChanged += (_, se) =>
+        {
+            if (_blurSliderSync) return;
+            if (_tool == Tool.Mosaic) _mosaicStrength = se.NewValue;
+            else _gaussStrength = se.NewValue;
+        };
+        _blurOptions.Children.Add(_blurSlider);
+        _blurOptions.Children.Add(ValueReadout(_blurSlider, v => v.ToString("0")));
+        host.Children.Add(_blurOptions);
+
+        // ---- Sticker: add image + hint ----
+        _stickerOptions = NewOptionsRow();
+        var addImage = new Button
+        {
+            Content = Loc.T("sticker.choose"),
+            Padding = new Thickness(10, 3, 10, 3),
+            Foreground = Theme.ForegroundBrush,
+            Background = Theme.ButtonBgBrush,
+            BorderBrush = Theme.ButtonBorderBrush,
+            FontSize = 12,
+            Cursor = Cursors.Hand,
+        };
+        addImage.Click += (_, _) => AddSticker();
+        _stickerOptions.Children.Add(addImage);
+        _stickerOptions.Children.Add(new TextBlock
+        {
+            Text = Loc.T("sticker.hint"),
+            Foreground = Theme.ForegroundBrush,
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        host.Children.Add(_stickerOptions);
+    }
+
+    private static StackPanel NewOptionsRow() => new()
+    {
+        Orientation = Orientation.Horizontal,
+        Margin = new Thickness(0, 6, 0, 0),
+        Visibility = Visibility.Collapsed,
+    };
+
+    private static TextBlock OptLabel(string t) => new()
+    {
+        Text = t,
+        Foreground = Theme.ForegroundBrush,
+        FontSize = 12,
+        Margin = new Thickness(8, 0, 4, 0),
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
+    /// <summary>Small numeric readout that tracks a slider's value.</summary>
+    private static TextBlock ValueReadout(Slider s, Func<double, string> format)
+    {
+        var tb = new TextBlock
+        {
+            Text = format(s.Value),
+            Foreground = Theme.ForegroundBrush,
+            FontSize = 11,
+            MinWidth = 26,
+            TextAlignment = TextAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 0, 0, 0),
+        };
+        s.ValueChanged += (_, e) => tb.Text = format(e.NewValue);
+        return tb;
+    }
+
+    private static Button MakeSmallToggle(string text) => new()
+    {
+        Content = text,
+        Margin = new Thickness(2, 0, 2, 0),
+        Padding = new Thickness(8, 2, 8, 2),
+        Foreground = Theme.ForegroundBrush,
+        Background = Theme.ButtonBgBrush,
+        BorderBrush = Theme.ButtonBorderBrush,
+        BorderThickness = new Thickness(1),
+        FontSize = 12,
+        Cursor = Cursors.Hand,
+    };
+
+    private Button MakeStyleToggle(string label, Action onClick)
+    {
+        var b = MakeSmallToggle(label);
+        b.Width = 24;
+        b.Height = 24;
+        b.Padding = new Thickness(0);
+        b.FontWeight = label == "B" ? FontWeights.Bold : FontWeights.Normal;
+        b.FontStyle = label == "I" ? FontStyles.Italic : FontStyles.Normal;
+        if (label == "S") b.Content = new TextBlock { Text = "S", TextDecorations = TextDecorations.Strikethrough };
+        b.Click += (_, _) => onClick();
+        return b;
+    }
+
+    private Button MakeShapeKindButton(string text, ShapeKind kind)
+    {
+        var b = MakeSmallToggle(text);
+        b.Tag = kind;
+        b.Click += (_, _) => { _shapeKind = kind; RefreshShapeKindButtons(); };
+        _shapeKindButtons.Add(b);
+        return b;
+    }
+
+    private Button MakeShapeStyleButton(string text, bool filled)
+    {
+        var b = MakeSmallToggle(text);
+        b.Tag = filled;
+        b.Click += (_, _) => { _shapeFilled = filled; RefreshShapeStyleButtons(); };
+        _shapeStyleButtons.Add(b);
+        return b;
+    }
+
+    private void RefreshShapeKindButtons()
+    {
+        foreach (var b in _shapeKindButtons)
+            b.Background = (ShapeKind)b.Tag! == _shapeKind ? Theme.ActiveBrush : Theme.ButtonBgBrush;
+    }
+
+    private void RefreshShapeStyleButtons()
+    {
+        foreach (var b in _shapeStyleButtons)
+            b.Background = (bool)b.Tag! == _shapeFilled ? Theme.ActiveBrush : Theme.ButtonBgBrush;
+    }
+
+    private void RefreshStyleToggles()
+    {
+        _boldButton.Background = _textBold ? Theme.ActiveBrush : Theme.ButtonBgBrush;
+        _italicButton.Background = _textItalic ? Theme.ActiveBrush : Theme.ButtonBgBrush;
+        _strikeButton.Background = _textStrike ? Theme.ActiveBrush : Theme.ButtonBgBrush;
+    }
+
+    private void RefreshArrowToggles()
+    {
+        _arrowStartButton.Background = _lineArrowStart ? Theme.ActiveBrush : Theme.ButtonBgBrush;
+        _arrowEndButton.Background = _lineArrowEnd ? Theme.ActiveBrush : Theme.ButtonBgBrush;
+    }
+
+    private void ApplyTextStyle()
+    {
+        if (_editingText == null) return;
+        try { _editingText.FontFamily = new FontFamily(_textFont); } catch { /* keep current */ }
+        _editingText.FontSize = _textSize;
+        _editingText.Foreground = new SolidColorBrush(_textColor);
+        _editingText.FontWeight = _textBold ? FontWeights.Bold : FontWeights.Normal;
+        _editingText.FontStyle = _textItalic ? FontStyles.Italic : FontStyles.Normal;
+        _editingText.TextDecorations = _textStrike ? TextDecorations.Strikethrough : null;
+    }
+
+    /// <summary>Return keyboard focus to the text box being edited so typing continues.</summary>
+    private void RefocusText()
+    {
+        if (_editingText is not { } box) return;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            box.Focus();
+            Keyboard.Focus(box);
+            box.CaretIndex = box.Text.Length;
+        }), DispatcherPriority.Input);
+    }
+
+    // ---------------------------------------------------------- colour swatches ---
+
+    private void AddColorSwatches(StackPanel panel)
+    {
+        foreach (var c in Palette) panel.Children.Add(MakeSwatch(c));
+        foreach (var c in _customColors) panel.Children.Add(MakeCustomSwatch(c));
+        panel.Children.Add(MakeMoreColorsButton());
+    }
+
+    private Button MakeSwatch(Color c)
+    {
+        var b = new Button
+        {
+            Width = 16,
+            Height = 16,
+            Margin = new Thickness(2, 0, 2, 0),
+            Background = Theme.SwatchBrush(c),
+            BorderBrush = SwatchBorder,
+            BorderThickness = new Thickness(1),
+            Tag = c,
+        };
+        b.Click += (_, _) => OnColorPicked(c);
+        return b;
+    }
+
+    private Button MakeCustomSwatch(Color c)
+    {
+        var b = MakeSwatch(c);
+        b.ToolTip = Loc.T("color.removeHint");
+        b.MouseRightButtonUp += (_, e) => { RemoveCustomColor(c); e.Handled = true; };
+        _customSwatchButtons.Add(b);
+        return b;
+    }
+
+    private void AddCustomColor(Color c)
+    {
+        if (Palette.Contains(c) || _customColors.Contains(c)) return;
+        _customColors.Add(c);
+        if (_customColors.Count > MaxCustomColors) _customColors.RemoveAt(0);
+        foreach (var panel in new[] { _textOptions, _shapeOptions, _lineOptions })
+            panel.Children.Insert(panel.Children.Count - 1, MakeCustomSwatch(c));   // before the "+"
+    }
+
+    private void RemoveCustomColor(Color c)
+    {
+        _customColors.Remove(c);
+        foreach (var b in _customSwatchButtons.Where(b => b.Tag is Color tc && tc == c).ToList())
+        {
+            if (b.Parent is StackPanel panel) panel.Children.Remove(b);
+            _customSwatchButtons.Remove(b);
+        }
+    }
+
+    private Button MakeMoreColorsButton()
+    {
+        var b = new Button
+        {
+            Content = "＋",
+            Width = 18,
+            Height = 16,
+            Padding = new Thickness(0),
+            Margin = new Thickness(4, 0, 2, 0),
+            Foreground = Theme.ForegroundBrush,
+            Background = Theme.ButtonBgBrush,
+            BorderBrush = Theme.ButtonBorderBrush,
+            BorderThickness = new Thickness(1),
+            FontSize = 11,
+            ToolTip = Loc.T("color.more"),
+        };
+        b.Click += (_, _) => OpenColorPicker();
+        return b;
+    }
+
+    private Color ToolColor(Tool t) => t switch
+    {
+        Tool.Text => _textColor,
+        Tool.Line => _lineColor,
+        _ => _shapeColor,
+    };
+
+    private void RefreshSwatchSelection()
+    {
+        var cur = ToolColor(_tool);
+        foreach (var panel in new[] { _textOptions, _shapeOptions, _lineOptions })
+        {
+            foreach (var child in panel.Children)
+            {
+                if (child is not Button b || b.Tag is not Color c) continue;
+                bool selected = c.R == cur.R && c.G == cur.G && c.B == cur.B;
+                b.BorderBrush = selected ? new SolidColorBrush(Theme.Accent) : SwatchBorder;
+                b.BorderThickness = new Thickness(selected ? 2 : 1);
+            }
+        }
+    }
+
+    private void OnColorPicked(Color c)
+    {
+        if (_tool == Tool.Text) { _textColor = Color.FromArgb(_textColor.A, c.R, c.G, c.B); ApplyTextStyle(); RefocusText(); }
+        else if (_tool == Tool.Line) { _lineColor = Color.FromArgb(_lineColor.A, c.R, c.G, c.B); }
+        else { _shapeColor = Color.FromArgb(_shapeColor.A, c.R, c.G, c.B); }
+        RefreshSwatchSelection();
+    }
+
+    private void OpenColorPicker()
+    {
+        var current = ToolColor(_tool);
+        double opacity = current.A / 255.0;
+
+        // Anchor the picker to this window's rectangle (physical px).
+        var hwnd = new WindowInteropHelper(this).Handle;
+        NativeMethods.GetWindowRect(hwnd, out var wr);
+        var anchor = new Rect(wr.Left, wr.Top, wr.Width, wr.Height);
+
+        var dlg = new ColorPickerWindow(current, opacity, anchor) { Owner = this };
+        if (dlg.ShowDialog() != true) return;
+
+        var a = (byte)Math.Round(dlg.SelectedOpacity * 255);
+        var picked = Color.FromArgb(a, dlg.SelectedColor.R, dlg.SelectedColor.G, dlg.SelectedColor.B);
+        if (_tool == Tool.Text) { _textColor = picked; ApplyTextStyle(); RefocusText(); }
+        else if (_tool == Tool.Line) { _lineColor = picked; }
+        else { _shapeColor = picked; }
+
+        AddCustomColor(dlg.SelectedColor);
+        RefreshSwatchSelection();
+    }
+
     // ------------------------------------------------------------- keyboard ---
 
     private void OnKeyDown(object sender, KeyEventArgs e)
@@ -941,7 +1431,7 @@ public sealed class RecordingEditorWindow : Window
         {
             _saved = true;
             _settings.RecordFormat = format.Token();
-            _settings.Save();
+            PersistToolSettings();
             _onSaved?.Invoke(path);
             Close();
             return;
@@ -1001,17 +1491,45 @@ public sealed class RecordingEditorWindow : Window
         return dlg.ShowDialog(this) == true ? dlg.FileName : null;
     }
 
+    /// <summary>Shared tool defaults flow back to settings, same as the capture editor.</summary>
+    private void PersistToolSettings()
+    {
+        _settings.TextFont = _textFont;
+        _settings.TextSize = _textSize;
+        _settings.TextColor = ToHex(_textColor);
+        _settings.TextBold = _textBold;
+        _settings.TextItalic = _textItalic;
+        _settings.TextStrikethrough = _textStrike;
+        _settings.ShapeKind = _shapeKind.ToString();
+        _settings.ShapeFilled = _shapeFilled;
+        _settings.ShapeColor = ToHex(_shapeColor);
+        _settings.ShapeWidth = _shapeWidth;
+        _settings.LineWidth = _lineWidth;
+        _settings.LineColor = ToHex(_lineColor);
+        _settings.LineArrowStart = _lineArrowStart;
+        _settings.LineArrowEnd = _lineArrowEnd;
+        _settings.GaussianStrength = _gaussStrength;
+        _settings.MosaicStrength = _mosaicStrength;
+        _settings.CustomColors = _customColors.Select(ToHex).ToList();
+        _settings.Save();
+    }
+
     // -------------------------------------------------------------- closing ---
 
     protected override void OnClosing(CancelEventArgs e)
     {
         if (_exporting) { _exportCts?.Cancel(); base.OnClosing(e); return; }
 
-        if (!_saved && _duration > 0)
+        if (!_saved && _duration > 0 && _settings.ConfirmDiscardEdits)
         {
-            var r = MessageBox.Show(this, Loc.T("edit.discard"), "ScreenPaste",
-                MessageBoxButton.YesNo, MessageBoxImage.Question);
-            if (r != MessageBoxResult.Yes) { e.Cancel = true; return; }
+            var dlg = new ConfirmDiscardDialog(Loc.T("edit.title"), Loc.T("edit.discard")) { Owner = this };
+            bool? discard = dlg.ShowDialog();
+            if (dlg.DontAskAgain)
+            {
+                _settings.ConfirmDiscardEdits = false;
+                _settings.Save();
+            }
+            if (discard != true) { e.Cancel = true; return; }
         }
         base.OnClosing(e);
     }

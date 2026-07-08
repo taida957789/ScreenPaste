@@ -16,9 +16,11 @@ public sealed class ConfirmDiscardDialog : Window
     /// <summary>True when the user ticked "don't ask again" (persist regardless of choice).</summary>
     public bool DontAskAgain => _dontAsk.IsChecked == true;
 
-    public ConfirmDiscardDialog()
+    /// <param name="title">Optional title override (defaults to the capture wording).</param>
+    /// <param name="message">Optional message override.</param>
+    public ConfirmDiscardDialog(string? title = null, string? message = null)
     {
-        Title = Loc.T("dlg.discardTitle");
+        Title = title ?? Loc.T("dlg.discardTitle");
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         SizeToContent = SizeToContent.WidthAndHeight;
         ResizeMode = ResizeMode.NoResize;
@@ -30,7 +32,7 @@ public sealed class ConfirmDiscardDialog : Window
         var body = new StackPanel { Margin = new Thickness(20, 16, 20, 16), MaxWidth = 400 };
         body.Children.Add(new TextBlock
         {
-            Text = Loc.T("dlg.discardMsg"),
+            Text = message ?? Loc.T("dlg.discardMsg"),
             TextWrapping = TextWrapping.Wrap,
             Foreground = Theme.ForegroundBrush,
             FontSize = 13,

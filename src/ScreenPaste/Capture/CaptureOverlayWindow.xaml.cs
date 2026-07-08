@@ -1764,8 +1764,8 @@ public partial class CaptureOverlayWindow : Window
     private void Line_MouseMove(Point p)
     {
         if (_linePreview == null) return;
-        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) p = SnapTo45(_lineStart, p);
-        _linePreview.Data = BuildLineGeometry(_lineStart, p, _lineWidth, _lineArrowStart, _lineArrowEnd);
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) p = ArrowGeometry.SnapTo45(_lineStart, p);
+        _linePreview.Data = ArrowGeometry.Build(_lineStart, p, _lineWidth, _lineArrowStart, _lineArrowEnd);
     }
 
     private void Line_MouseUp(Point p)
@@ -1777,62 +1777,13 @@ public partial class CaptureOverlayWindow : Window
         _linePreview = null;
         if (path == null) return;
 
-        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) p = SnapTo45(_lineStart, p);
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) p = ArrowGeometry.SnapTo45(_lineStart, p);
         if ((p - _lineStart).Length < 8) { ShapeHost.Children.Remove(path); return; }
-        path.Data = BuildLineGeometry(_lineStart, p, _lineWidth, _lineArrowStart, _lineArrowEnd);
+        path.Data = ArrowGeometry.Build(_lineStart, p, _lineWidth, _lineArrowStart, _lineArrowEnd);
 
         _history.Push(
             undo: () => ShapeHost.Children.Remove(path),
             redo: () => { if (!ShapeHost.Children.Contains(path)) ShapeHost.Children.Add(path); });
-    }
-
-    /// <summary>Line with optional filled arrowheads; the stroked segment is shortened
-    /// under each head so the round line cap never pokes past the tip.</summary>
-    private static Geometry BuildLineGeometry(Point a, Point b, double width, bool arrowStart, bool arrowEnd)
-    {
-        var group = new GeometryGroup { FillRule = FillRule.Nonzero };
-        Vector d = b - a;
-        double len = d.Length;
-        if (len < 0.01)
-        {
-            group.Children.Add(new LineGeometry(a, b));
-            return group;
-        }
-        d /= len;
-        var perp = new Vector(-d.Y, d.X);
-        // Desired head ≈ max(10, 3.5·width), but never longer than ~half the line —
-        // computed with Min(Max(...)) because the two bounds can cross on short drags.
-        double head = Math.Min(Math.Max(10, width * 3.5), len * 0.45);
-        double halfW = head * 0.45;
-
-        Point lineA = arrowStart ? a + d * (head * 0.8) : a;
-        Point lineB = arrowEnd ? b - d * (head * 0.8) : b;
-        group.Children.Add(new LineGeometry(lineA, lineB));
-
-        if (arrowStart) group.Children.Add(Arrowhead(a, d, head, halfW, perp));
-        if (arrowEnd) group.Children.Add(Arrowhead(b, -d, head, halfW, perp));
-        return group;
-    }
-
-    /// <summary>Closed triangle with its apex at <paramref name="tip"/>, opening along
-    /// <paramref name="inward"/> (unit vector pointing back along the line).</summary>
-    private static Geometry Arrowhead(Point tip, Vector inward, double length, double halfWidth, Vector perp)
-    {
-        Point b1 = tip + inward * length + perp * halfWidth;
-        Point b2 = tip + inward * length - perp * halfWidth;
-        var figure = new PathFigure(tip,
-            new PathSegment[] { new LineSegment(b1, true), new LineSegment(b2, true) },
-            closed: true);
-        return new PathGeometry(new[] { figure });
-    }
-
-    /// <summary>Snap the drag endpoint to the nearest 45° step around the start (Shift).</summary>
-    private static Point SnapTo45(Point origin, Point p)
-    {
-        Vector v = p - origin;
-        if (v.Length < 0.01) return p;
-        double snapped = Math.Round(Math.Atan2(v.Y, v.X) / (Math.PI / 4)) * (Math.PI / 4);
-        return origin + new Vector(Math.Cos(snapped), Math.Sin(snapped)) * v.Length;
     }
 
     // ----------------------------------------------------- sticker tool ---
