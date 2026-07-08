@@ -39,6 +39,8 @@ Tras capturar, aparece una **barra de herramientas** junto al cursor (arrastrabl
 - Un atajo global dedicado (**F2** por defecto): arrastra para elegir la zona a grabar, pulsa de nuevo (o haz clic en Detener) para terminar
 - Un marco rojo marca la zona durante la grabación, con una pequeña barra con el cronómetro y un botón de detener
 - Al terminar se abre un **editor**: vista previa en bucle, tiradores de recorte en la línea de tiempo (`Espacio` reproducir, `←`/`→` fotograma a fotograma, `I`/`O` para fijar inicio/fin), exportación con barra de progreso
+- **Arrastra el borde del marco rojo para mover la zona durante la grabación** — el interior sigue siendo totalmente interactivo
+- El editor tiene las mismas **herramientas de anotación** que las capturas (texto / formas / línea-flecha / imágenes / desenfoque gaussiano / mosaico, con sus opciones; las anotaciones se arrastran directamente, `Supr` las elimina); `Ctrl+C` exporta rápido y pone el archivo en el portapapeles
 - Exporta como **GIF / MP4 / WebP**, cambiable en el propio editor; un ajuste permite saltarse el editor y guardar inmediatamente
 - Captura opcional del cursor, tasa de fotogramas de 10–30 fps
 - Codificación con el `ffmpeg` incluido — sin instalaciones adicionales
@@ -67,7 +69,7 @@ Ambos son autocontenidos — **no se necesita .NET Runtime aparte**, y `ffmpeg` 
 1. Una vez iniciado permanece en la bandeja del sistema; pulsa **F1** (o doble clic en el icono) para capturar.
 2. Pasa el ratón sobre una ventana o elemento de la interfaz para delinearlo y haz clic, o arrastra para seleccionar una zona.
 3. Elige una herramienta de la barra emergente, ajusta sus parámetros y anota sobre la selección.
-4. Pulsa **Copiar / Guardar / Fijar** para la salida; `Esc` sale de la captura (pregunta primero si hay anotaciones, con opción de no volver a preguntar).
+4. Pulsa **Copiar / Guardar / Fijar** para la salida; `Esc` sale de la captura (pregunta primero, con opción de no volver a preguntar).
 
 Grabación: pulsa **F2** y arrastra para elegir la zona; pulsa **F2** de nuevo (o Detener) para terminar, y luego previsualiza, recorta y exporta como GIF/MP4/WebP en el editor (un ajuste permite guardar inmediatamente en su lugar).
 
@@ -86,11 +88,12 @@ Grabación: pulsa **F2** y arrastra para elegir la zona; pulsa **F2** de nuevo (
 | Anotación | `Supr` | Eliminar la anotación seleccionada |
 | Anotación | `Mayús` + arrastrar (línea) | Ajustar a ángulos de 45° |
 | Anotación | `Intro` o clic fuera | Confirmar el texto (`Mayús+Intro` para salto de línea) |
-| Anotación | `Esc` | Deseleccionar → salir de la captura (pregunta si hay anotaciones) |
+| Anotación | `Esc` | Deseleccionar → salir de la captura (pregunta primero; desactivable) |
 | Editor de grabación | `Espacio` | Reproducir / pausar |
 | Editor de grabación | `←` / `→` | Fotograma a fotograma |
 | Editor de grabación | `Inicio` / `Fin` | Ir al inicio / fin del recorte |
 | Editor de grabación | `I` / `O` | Fijar inicio / fin del recorte en la posición actual |
+| Editor de grabación | `Ctrl+C` | Exportación rápida y copia del archivo al portapapeles |
 | Ventana fijada | `Ctrl+C` / `Esc` | Copiar / cerrar |
 
 Todos los ajustes (atajos, valores por defecto de las herramientas, tema, inicio automático, formato / tasa de grabación, etc.) se pueden cambiar desde el menú de la bandeja → «Ajustes…».

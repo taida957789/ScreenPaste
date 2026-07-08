@@ -1998,16 +1998,12 @@ public partial class CaptureOverlayWindow : Window
     }
 
     /// <summary>
-    /// Leave the capture from the editing phase. When annotations would be lost, ask
-    /// first — with a "don't ask again" option that persists to settings.
+    /// Leave the capture from the editing phase: always ask first (a selected region
+    /// counts as work too), with a "don't ask again" option persisted to settings.
     /// </summary>
     private void ConfirmCancel()
     {
-        bool hasEdits = _editingText != null || Ink.Strokes.Count > 0 ||
-            BlurHost.Children.Count > 0 || ShapeHost.Children.Count > 0 ||
-            StickerHost.Children.Count > 0 || TextHost.Children.Count > 0;
-
-        if (!hasEdits || !_settings.ConfirmDiscardEdits)
+        if (!_settings.ConfirmDiscardEdits)
         {
             Cancel();
             return;

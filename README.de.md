@@ -39,6 +39,8 @@ Nach der Aufnahme erscheint neben dem Cursor eine **Symbol-Werkzeugleiste** (ver
 - Ein eigener globaler Hotkey (standardmäßig **F2**): Bereich per Ziehen auswählen und aufnehmen, erneut drücken (oder Stopp klicken) zum Beenden
 - Während der Aufnahme markiert ein roter Rahmen den Bereich, dazu eine kleine Leiste mit Timer und Stopp-Schaltfläche
 - Nach der Aufnahme öffnet sich ein **Editor**: Schleifenvorschau, Trimm-Griffe auf der Zeitleiste (`Leertaste` Wiedergabe, `←`/`→` Einzelbild, `I`/`O` für Start-/Endpunkt), Export mit Fortschrittsbalken
+- **Ziehen Sie den Rand des roten Rahmens, um den Bereich während der Aufnahme zu verschieben** — das Innere bleibt voll bedienbar
+- Der Editor hat dieselben **Anmerkungswerkzeuge** wie Aufnahmen (Text / Formen / Linie-Pfeil / Bilder / Gauß-Weichzeichner / Mosaik, mit Optionszeilen; Anmerkungen lassen sich direkt ziehen, `Entf` löscht); `Strg+C` exportiert schnell und legt die Datei in die Zwischenablage
 - Export als **GIF / MP4 / WebP**, direkt im Editor umschaltbar; eine Einstellung überspringt den Editor und speichert sofort
 - Optionale Mauszeiger-Aufnahme, Bildrate 10–30 fps
 - Kodierung durch das mitgelieferte `ffmpeg` — keine separate Installation nötig
@@ -67,7 +69,7 @@ Beide sind eigenständig — **kein separates .NET Runtime erforderlich**, und `
 1. Nach dem Start bleibt das Tool im Infobereich; **F1** (oder Doppelklick auf das Symbol) startet eine Aufnahme.
 2. Über ein Fenster oder UI-Element fahren, um es zu umranden, und klicken — oder einen Bereich per Ziehen auswählen.
 3. Ein Werkzeug aus der Leiste wählen, Parameter anpassen und die Auswahl beschriften.
-4. **Kopieren / Speichern / Anheften** zur Ausgabe; `Esc` verlässt die Aufnahme (fragt nach, wenn Anmerkungen vorhanden sind — mit „Nicht mehr fragen“-Option).
+4. **Kopieren / Speichern / Anheften** zur Ausgabe; `Esc` verlässt die Aufnahme (fragt nach — mit „Nicht mehr fragen“-Option).
 
 Aufzeichnung: **F2** drücken und den Bereich per Ziehen wählen; erneut **F2** (oder Stopp) beendet, danach im Editor prüfen, trimmen und als GIF/MP4/WebP exportieren (per Einstellung auch Sofortspeichern).
 
@@ -86,11 +88,12 @@ Aufzeichnung: **F2** drücken und den Bereich per Ziehen wählen; erneut **F2** 
 | Anmerkung | `Entf` | Ausgewählte Anmerkung löschen |
 | Anmerkung | `Umschalt` + Ziehen (Linie) | An 45°-Winkeln einrasten |
 | Anmerkung | `Eingabe` oder Klick außerhalb | Text bestätigen (`Umschalt+Eingabe` für Zeilenumbruch) |
-| Anmerkung | `Esc` | Auswahl aufheben → Aufnahme verlassen (fragt bei Anmerkungen) |
+| Anmerkung | `Esc` | Auswahl aufheben → Aufnahme verlassen (mit Nachfrage, abschaltbar) |
 | Aufnahme-Editor | `Leertaste` | Wiedergabe / Pause |
 | Aufnahme-Editor | `←` / `→` | Einzelbild vor / zurück |
 | Aufnahme-Editor | `Pos1` / `Ende` | Zum Trimm-Anfang / -Ende springen |
 | Aufnahme-Editor | `I` / `O` | Trimm-Anfang / -Ende an der Wiedergabeposition setzen |
+| Aufnahme-Editor | `Strg+C` | Schnellexport und Datei in die Zwischenablage kopieren |
 | Angeheftetes Fenster | `Strg+C` / `Esc` | Kopieren / schließen |
 
 Alle Einstellungen (Hotkeys, Werkzeug-Standardwerte, Design, Autostart, Aufnahmeformat / Bildrate usw.) lassen sich über das Infobereich-Menü → „Einstellungen…“ anpassen.

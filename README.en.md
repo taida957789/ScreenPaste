@@ -39,6 +39,8 @@ After capturing, an **icon toolbar** pops up next to the cursor (draggable, and 
 - A dedicated global hotkey (**F2** by default): drag-select the region to record, press again (or click Stop) to finish
 - A red frame marks the region while recording, with a small pill bar showing the timer and a Stop button
 - After recording, an **editor** opens: looping preview, timeline trim handles (`Space` to play, `←`/`→` frame stepping, `I`/`O` to set trim in/out), and export with a progress bar
+- **Drag the red frame's border to move the recording region mid-recording** — the interior stays fully interactive
+- The editor has the same **annotation tools** as captures (text / shapes / line-arrow / stickers / gaussian blur / mosaic, with full option rows; annotations drag directly, `Delete` removes); `Ctrl+C` quick-exports and puts the file on the clipboard
 - Export as **GIF / MP4 / WebP**, switchable right in the editor; a setting can skip the editor and save immediately
 - Optional mouse-cursor capture, frame rate 10–30 fps
 - Encoded by the bundled `ffmpeg` — no separate install required
@@ -67,7 +69,7 @@ Both are self-contained — **no separate .NET Runtime is required**, and `ffmpe
 1. Once launched it stays in the system tray; press **F1** (or double-click the tray icon) to start a capture.
 2. Hover over a window or UI element to auto-outline it and click to capture, or drag to select a custom region.
 3. Pick a tool from the pop-up toolbar, adjust its parameters, and annotate on the selection.
-4. Press **Copy / Save / Pin** to output; `Esc` leaves the capture (asks first when annotations exist, with a don't-ask-again option).
+4. Press **Copy / Save / Pin** to output; `Esc` leaves the capture (asks first, with a don't-ask-again option).
 
 Recording: press **F2** and drag-select a region to start; press **F2** again (or click Stop) to finish, then preview, trim and export as GIF/MP4/WebP in the editor (a setting can save immediately instead).
 
@@ -86,11 +88,12 @@ Recording: press **F2** and drag-select a region to start; press **F2** again (o
 | Annotating | `Delete` | Delete the selected annotation |
 | Annotating | `Shift` + drag (line) | Snap to 45° angles |
 | Annotating | `Enter` or click outside | Commit the text box (`Shift+Enter` for a new line) |
-| Annotating | `Esc` | Deselect → leave the capture (asks when annotated) |
+| Annotating | `Esc` | Deselect → leave the capture (asks first; can be disabled) |
 | Recording editor | `Space` | Play / pause |
 | Recording editor | `←` / `→` | Frame step |
 | Recording editor | `Home` / `End` | Jump to trim start / end |
 | Recording editor | `I` / `O` | Set trim in / out at the playhead |
+| Recording editor | `Ctrl+C` | Quick-export and copy the file to the clipboard |
 | Pinned window | `Ctrl+C` / `Esc` | Copy / close |
 
 All settings (hotkeys, tool defaults, theme, run at startup, recording format / frame rate, and so on) can be adjusted from the tray menu → "Settings…" window.

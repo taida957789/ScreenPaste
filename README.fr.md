@@ -39,6 +39,8 @@ Après la capture, une **barre d'outils** apparaît près du curseur (déplaçab
 - Un raccourci global dédié (**F2** par défaut) : glissez pour choisir la zone à enregistrer, appuyez à nouveau (ou cliquez sur Stop) pour terminer
 - Un cadre rouge marque la zone pendant l'enregistrement, avec une petite barre affichant le chrono et un bouton Stop
 - Après l'enregistrement, un **éditeur** s'ouvre : aperçu en boucle, poignées de découpe sur la timeline (`Espace` lecture, `←`/`→` image par image, `I`/`O` pour définir début/fin), export avec barre de progression
+- **Faites glisser le bord du cadre rouge pour déplacer la zone en cours d'enregistrement** — l'intérieur reste entièrement interactif
+- L'éditeur offre les mêmes **outils d'annotation** que les captures (texte / formes / ligne-flèche / images / flou gaussien / mosaïque, avec leurs options ; les annotations se déplacent directement, `Suppr` les supprime) ; `Ctrl+C` exporte rapidement et place le fichier dans le presse-papiers
 - Export en **GIF / MP4 / WebP**, commutable dans l'éditeur ; une option permet de sauter l'éditeur et d'enregistrer immédiatement
 - Capture du curseur optionnelle, fréquence d'images 10–30 fps
 - Encodage par le `ffmpeg` fourni — aucune installation supplémentaire
@@ -67,7 +69,7 @@ Les deux sont autonomes — **aucun .NET Runtime séparé n'est requis**, et `ff
 1. Une fois lancé, il reste dans la barre d'état ; appuyez sur **F1** (ou double-cliquez l'icône) pour capturer.
 2. Survolez une fenêtre ou un élément d'interface pour l'encadrer et cliquez, ou glissez pour sélectionner une zone.
 3. Choisissez un outil dans la barre, ajustez ses paramètres et annotez la sélection.
-4. **Copier / Enregistrer / Épingler** pour la sortie ; `Échap` quitte la capture (confirmation si des annotations existent, avec option « ne plus demander »).
+4. **Copier / Enregistrer / Épingler** pour la sortie ; `Échap` quitte la capture (avec confirmation et option « ne plus demander »).
 
 Enregistrement : appuyez sur **F2** et glissez pour choisir la zone ; appuyez à nouveau sur **F2** (ou Stop) pour terminer, puis prévisualisez, découpez et exportez en GIF/MP4/WebP dans l'éditeur (une option enregistre immédiatement à la place).
 
@@ -86,11 +88,12 @@ Enregistrement : appuyez sur **F2** et glissez pour choisir la zone ; appuyez à
 | Annotation | `Suppr` | Supprimer l'annotation sélectionnée |
 | Annotation | `Maj` + glisser (ligne) | Aligner sur 45° |
 | Annotation | `Entrée` ou clic à l'extérieur | Valider le texte (`Maj+Entrée` pour un saut de ligne) |
-| Annotation | `Échap` | Désélectionner → quitter la capture (confirmation si annotée) |
+| Annotation | `Échap` | Désélectionner → quitter la capture (avec confirmation, désactivable) |
 | Éditeur d'enregistrement | `Espace` | Lecture / pause |
 | Éditeur d'enregistrement | `←` / `→` | Image par image |
 | Éditeur d'enregistrement | `Début` / `Fin` | Aller au début / à la fin de la découpe |
 | Éditeur d'enregistrement | `I` / `O` | Définir le début / la fin de la découpe à la position de lecture |
+| Éditeur d'enregistrement | `Ctrl+C` | Export rapide et copie du fichier dans le presse-papiers |
 | Fenêtre épinglée | `Ctrl+C` / `Échap` | Copier / fermer |
 
 Tous les paramètres (raccourcis, valeurs par défaut des outils, thème, lancement au démarrage, format / fréquence d'enregistrement, etc.) se règlent depuis le menu de la barre d'état → « Paramètres… ».
