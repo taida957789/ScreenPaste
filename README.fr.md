@@ -6,56 +6,90 @@
 
 # ScreenPaste
 
-Un outil léger de capture d'écran et d'annotation pour Windows : capturez d'une pression, annotez instantanément et épinglez à l'écran.
+Un outil Windows léger de capture d'écran, d'annotation et d'enregistrement : capturez d'une touche, annotez instantanément, épinglez à l'écran et enregistrez n'importe quelle zone en GIF / MP4 / WebP.
 
 ## Fonctionnalités
 
 ### Capture
-- L'écran entier (prise en charge multi-écran)
-- **Détection automatique des fenêtres** : survolez une fenêtre pour en tracer automatiquement le contour, puis cliquez pour capturer
-- Sélectionnez une zone personnalisée par glisser-déposer, avec l'affichage de la taille et une loupe pour des bords au pixel près
+- L'écran entier (multi-écrans pris en charge)
+- **Détection automatique des fenêtres et des éléments d'interface** : survolez une fenêtre ou un élément (bouton, panneau, bloc de page web) pour l'encadrer automatiquement, puis cliquez pour capturer ; la **molette** change le niveau de détection (élément ⇄ fenêtre)
+- Glissez pour sélectionner une zone personnalisée, avec affichage des dimensions et loupe pour des bords au pixel près
 
 ### Annotation
-Après la capture, une **barre d'outils à icônes** apparaît près du curseur (déplaçable par glissement, et elle évite automatiquement les bords de l'écran) :
+Après la capture, une **barre d'outils** apparaît près du curseur (déplaçable, elle évite les bords de l'écran) :
 
-- **Marqueur** — traits pleins, épaisseur / couleur / opacité réglables
-- **Surligneur** — couleur superposée semi-transparente, épaisseur / couleur / opacité réglables
-- **Texte** — choix de la police / taille / couleur / style (normal, gras, italique, barré)
-- **Formes** — rectangle / rectangle arrondi / ellipse, contour ou rempli, épaisseur et couleur du trait réglables
-- **Autocollants** — collez des images PNG / JPEG / WebP, déplacez par glissement, redimensionnez à la molette
+- **Marqueur** — traits pleins ; épaisseur / couleur / opacité réglables
+- **Surligneur** — couleur semi-transparente ; épaisseur / couleur / opacité réglables
+- **Texte** — police / taille / couleur / style (normal, gras, italique, barré) ; un clic hors de la zone valide le texte
+- **Formes** — rectangle / rectangle arrondi / ellipse, contour ou rempli, épaisseur et couleur réglables
+- **Ligne / flèche** — glissez pour tracer ; chaque extrémité peut devenir une pointe de flèche ; épaisseur et couleur réglables ; maintenez `Maj` pour aligner sur des angles de 45°
+- **Images collées** — collez des PNG / JPEG / WebP, glissez pour déplacer, molette pour redimensionner
 - **Flou** — flou gaussien / mosaïque, intensité réglable
-- **Sélecteur de couleur** — prend en charge la saisie Hex, le RVB et le réglage de l'opacité
-- **Annuler / Rétablir**
+- **Sélection / déplacement direct** — survolez n'importe quelle annotation posée et **déplacez-la directement** ; `Suppr` la supprime ; déplacements et suppressions sont annulables
+- **Sélecteur de couleurs** — saisie Hex, RGB et opacité (les couleurs translucides s'affichent sur un damier) ; les couleurs personnalisées sont mémorisées d'une session à l'autre, clic droit sur une pastille pour la retirer
+- **Annuler / Rétablir** — par boutons et raccourcis ; chaque curseur affiche sa valeur en temps réel
 
 ### Sortie
 - Copier dans le presse-papiers
 - Enregistrer en PNG / JPG (enregistrer sous, ou enregistrement rapide dans un dossier par défaut)
-- **Épingler à l'écran** : l'image flotte au premier plan ; déplacez-la, redimensionnez à la molette, menu par clic droit ; avec plusieurs épingles, Échap ferme d'abord celle qui a le focus, ou les ferme toutes si aucune n'a le focus
+- **Épingler à l'écran** : l'image flotte au premier plan ; glissez-la, molette pour zoomer, clic droit pour le menu ; avec plusieurs épingles, Échap ferme d'abord celle qui a le focus, ou toutes s'il n'y en a aucune
+
+### Enregistrement de zone
+- Un raccourci global dédié (**F2** par défaut) : glissez pour choisir la zone à enregistrer, appuyez à nouveau (ou cliquez sur Stop) pour terminer
+- Un cadre rouge marque la zone pendant l'enregistrement, avec une petite barre affichant le chrono et un bouton Stop
+- Après l'enregistrement, un **éditeur** s'ouvre : aperçu en boucle, poignées de découpe sur la timeline (`Espace` lecture, `←`/`→` image par image, `I`/`O` pour définir début/fin), export avec barre de progression
+- Export en **GIF / MP4 / WebP**, commutable dans l'éditeur ; une option permet de sauter l'éditeur et d'enregistrer immédiatement
+- Capture du curseur optionnelle, fréquence d'images 10–30 fps
+- Encodage par le `ffmpeg` fourni — aucune installation supplémentaire
 
 ### Divers
-- Raccourci global (**F1** par défaut) et lancement depuis l'icône de la **zone de notification**
-- **Multilingue** : chinois traditionnel / English / 日本語 / 한국어 / Français / Deutsch / Español (suit le système par défaut)
-- Thème **Clair / Sombre / Suivre le système**
-- Une **fenêtre de paramètres** centralisée : langue, raccourci, thème, lancement au démarrage, dossier d'enregistrement (le champ du raccourci se configure simplement en appuyant sur la combinaison de touches)
-- **Lancement automatique au démarrage** en option
-- **Mise à jour automatique** : recherche de nouvelles versions via GitHub Releases (activable dans les paramètres, ou vérification manuelle à la demande) ; en cas de mise à jour, elle vous le demande puis la télécharge et l'installe en un clic
+- Raccourcis globaux (**F1** capture, **F2** enregistrement, tous deux configurables) et lancement depuis la **barre d'état système**
+- **Multilingue** : 繁體中文 / English / 日本語 / 한국어 / Français / Deutsch / Español (suit le système par défaut)
+- Thème **clair / sombre / système**, interface moderne aux coins arrondis et barres de titre sombres
+- **Fenêtre de paramètres** centralisée : langue, raccourcis, thème, lancement au démarrage, dossier d'enregistrement, format / fréquence d'enregistrement (les champs de raccourci se règlent en appuyant simplement sur la combinaison)
+- **Lancement automatique au démarrage** (optionnel)
+- **Mise à jour automatique** : vérifie les nouvelles versions via GitHub Releases (activable dans les paramètres, ou vérification manuelle) ; téléchargement et installation en un clic
 
 ## Installation
 
-Téléchargez depuis les [Releases](https://github.com/taida957789/ScreenPaste/releases) :
+Téléchargez depuis [Releases](https://github.com/taida957789/ScreenPaste/releases) :
 
-- **`ScreenPaste-<version>-setup.exe`** — version avec installateur (aucun droit administrateur requis, s'installe dans `%APPDATA%\ScreenPaste`, avec un raccourci dans le menu Démarrer et un désinstalleur)
+- **`ScreenPaste-<version>-setup.exe`** — installateur (aucun droit administrateur requis, installe dans `%APPDATA%\ScreenPaste`, avec raccourci du menu Démarrer et désinstalleur)
 - **`ScreenPaste-<version>-win-x64-portable.zip`** — version portable, sans installation
 
-Les deux sont autonomes, donc **aucune installation séparée du .NET Runtime n'est nécessaire**.
+Les deux sont autonomes — **aucun .NET Runtime séparé n'est requis**, et `ffmpeg` (pour l'enregistrement) est inclus.
 
 ## Démarrage rapide
 
 ![Barre d'outils](screenshots/ui.png)
 
-1. Une fois lancé, il reste dans la zone de notification ; appuyez sur **F1** (ou double-cliquez sur l'icône) pour démarrer une capture.
-2. Survolez une fenêtre pour en tracer automatiquement le contour et cliquez pour capturer, ou glissez pour sélectionner une zone personnalisée.
-3. Choisissez un outil dans la barre d'outils qui apparaît, réglez ses paramètres et annotez sur la sélection.
-4. Appuyez sur **Copier / Enregistrer / Épingler** pour la sortie ; `Échap` revient à une nouvelle sélection ou annule.
+1. Une fois lancé, il reste dans la barre d'état ; appuyez sur **F1** (ou double-cliquez l'icône) pour capturer.
+2. Survolez une fenêtre ou un élément d'interface pour l'encadrer et cliquez, ou glissez pour sélectionner une zone.
+3. Choisissez un outil dans la barre, ajustez ses paramètres et annotez la sélection.
+4. **Copier / Enregistrer / Épingler** pour la sortie ; `Échap` revient à la sélection ou annule.
 
-Tous les paramètres (raccourci, valeurs par défaut des outils, thème, lancement au démarrage, etc.) se règlent depuis le menu de la zone de notification → fenêtre « Paramètres… ».
+Enregistrement : appuyez sur **F2** et glissez pour choisir la zone ; appuyez à nouveau sur **F2** (ou Stop) pour terminer, puis prévisualisez, découpez et exportez en GIF/MP4/WebP dans l'éditeur (une option enregistre immédiatement à la place).
+
+## Raccourcis
+
+| Contexte | Touches | Action |
+|---|---|---|
+| Global | `F1` | Démarrer une capture (configurable) |
+| Global | `F2` | Démarrer / arrêter l'enregistrement de zone (configurable) |
+| Sélection | Molette | Changer le niveau de détection (élément ⇄ fenêtre) |
+| Annotation | `Ctrl+Z` / `Ctrl+Y` | Annuler / rétablir (configurable) |
+| Annotation | `Ctrl+C` | Copier dans le presse-papiers (configurable) |
+| Annotation | `Ctrl+S` / `Ctrl+Maj+S` | Enregistrer sous / enregistrement rapide (configurable) |
+| Annotation | `Suppr` | Supprimer l'annotation sélectionnée |
+| Annotation | `Maj` + glisser (ligne) | Aligner sur 45° |
+| Annotation | `Entrée` ou clic à l'extérieur | Valider le texte (`Maj+Entrée` pour un saut de ligne) |
+| Annotation | `Échap` | Désélectionner → resélectionner la zone → fermer |
+| Éditeur d'enregistrement | `Espace` | Lecture / pause |
+| Éditeur d'enregistrement | `←` / `→` | Image par image |
+| Éditeur d'enregistrement | `Début` / `Fin` | Aller au début / à la fin de la découpe |
+| Éditeur d'enregistrement | `I` / `O` | Définir le début / la fin de la découpe à la position de lecture |
+| Fenêtre épinglée | `Ctrl+C` / `Échap` | Copier / fermer |
+
+Tous les paramètres (raccourcis, valeurs par défaut des outils, thème, lancement au démarrage, format / fréquence d'enregistrement, etc.) se règlent depuis le menu de la barre d'état → « Paramètres… ».
+
+> Compilation depuis les sources : exécutez une fois `scripts/fetch-ffmpeg.ps1` pour télécharger le `ffmpeg.exe` fourni (la CI le fait automatiquement à la publication).
