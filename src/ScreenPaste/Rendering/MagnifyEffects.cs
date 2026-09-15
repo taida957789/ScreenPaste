@@ -115,8 +115,13 @@ public static class MagnifyEffects
                 EdgePoint(view, spec.Shape, Center(src))));
         }
 
+        // Frozen: UpdateDecoration runs on every drag frame, and a frozen Geometry/Brush
+        // lets WPF cache the render data instead of re-validating it each time.
+        group.Freeze();
+        var stroke = new SolidColorBrush(spec.BorderColor);
+        stroke.Freeze();
         deco.Data = group;
-        deco.Stroke = new SolidColorBrush(spec.BorderColor);
+        deco.Stroke = stroke;
         deco.StrokeThickness = t;
     }
 
@@ -125,18 +130,19 @@ public static class MagnifyEffects
     public static void ShiftSource(FrameworkElement host, double dx, double dy)
     {
         if (host is not Canvas c || c.Tag is not MagnifySpec s) return;
-        SetSource(host, new Rect(s.Source.X + dx, s.Source.Y + dy, s.Source.Width, s.Source.Height));
+        MoveSourceTo(host, new Point(s.Source.X + dx, s.Source.Y + dy));
     }
 
     /// <summary>
-    /// Re-point the annotation at a different area, in region-local coords. The enlarged view
-    /// stays put and keeps its size (only <paramref name="source"/>'s position is used), so
-    /// the caller has to re-sample afterwards for the new content to show up.
+    /// Re-point the annotation at another area of the same size, in region-local coords. The
+    /// enlarged view stays put, so the caller re-samples afterwards for the new content to
+    /// show up. Takes a <see cref="Point"/> so that "the size is unchanged" is a fact of the
+    /// signature rather than a trap for the caller; use <see cref="ResizeSource"/> to resize.
     /// </summary>
-    public static void SetSource(FrameworkElement host, Rect source)
+    public static void MoveSourceTo(FrameworkElement host, Point topLeft)
     {
         if (host is not Canvas c || c.Tag is not MagnifySpec s) return;
-        c.Tag = s with { Source = new Rect(source.X, source.Y, s.Source.Width, s.Source.Height) };
+        c.Tag = s with { Source = new Rect(topLeft.X, topLeft.Y, s.Source.Width, s.Source.Height) };
         UpdateDecoration(host);
     }
 
@@ -148,18 +154,18 @@ public static class MagnifyEffects
         zoom = Math.Clamp(zoom, MinZoom, MaxZoom);
         if (Math.Abs(zoom - s.Zoom) < 0.001) return false;
 
-        Reframe(c, s with { Zoom = zoom });
+        Reframe(c, s, s with { Zoom = zoom });
         return true;
     }
 
     /// <summary>
-    /// Re-frame the annotation: unlike <see cref="SetSource"/> this takes the new size too, so
-    /// the enlarged view resizes with it (view = source × zoom). Re-sample afterwards.
+    /// Re-frame the annotation: unlike <see cref="MoveSourceTo"/> this takes the new size too,
+    /// so the enlarged view resizes with it (view = source × zoom). Re-sample afterwards.
     /// </summary>
     public static void ResizeSource(FrameworkElement host, Rect source)
     {
         if (host is not Canvas c || c.Tag is not MagnifySpec s) return;
-        Reframe(c, s with { Source = source });
+        Reframe(c, s, s with { Source = source });
     }
 
     /// <summary>Where the enlarged view currently sits, translation included.</summary>
@@ -206,19 +212,19 @@ public static class MagnifyEffects
     /// <summary>Apply a spec whose view size may differ, keeping the view centred where it is
     /// so it does not walk away from the spot the user put it in. Reversible: re-applying the
     /// old spec re-centres about the same point.</summary>
-    private static void Reframe(Canvas c, MagnifySpec spec)
+    private static void Reframe(Canvas c, MagnifySpec before, MagnifySpec after)
     {
-        var before = ViewSize((MagnifySpec)c.Tag!);
-        var after = ViewSize(spec);
+        var sizeBefore = ViewSize(before);
+        var sizeAfter = ViewSize(after);
 
         double x = Canvas.GetLeft(c), y = Canvas.GetTop(c);
-        Canvas.SetLeft(c, (double.IsNaN(x) ? 0 : x) - (after.Width - before.Width) / 2);
-        Canvas.SetTop(c, (double.IsNaN(y) ? 0 : y) - (after.Height - before.Height) / 2);
+        Canvas.SetLeft(c, (double.IsNaN(x) ? 0 : x) - (sizeAfter.Width - sizeBefore.Width) / 2);
+        Canvas.SetTop(c, (double.IsNaN(y) ? 0 : y) - (sizeAfter.Height - sizeBefore.Height) / 2);
 
-        ApplySpec(c, spec);
+        ApplySpec(c, after);
     }
 
-    public static Size ViewSize(MagnifySpec spec) => new(
+    internal static Size ViewSize(MagnifySpec spec) => new(
         Math.Max(8, Math.Round(spec.Source.Width * spec.Zoom)),
         Math.Max(8, Math.Round(spec.Source.Height * spec.Zoom)));
 
@@ -287,7 +293,7 @@ public static class MagnifyEffects
 
     /// <summary>First side of the framed source with room for the enlarged view inside the
     /// selection (right, below, left, above), else clamped next to it.</summary>
-    private static Point Place(MagnifySpec spec, Rect selection)
+    internal static Point Place(MagnifySpec spec, Rect selection)
     {
         var s = spec.Source;
         var size = ViewSize(spec);
@@ -338,7 +344,7 @@ public static class MagnifyEffects
 
     /// <summary>Where the segment from the centre of <paramref name="r"/> towards
     /// <paramref name="toward"/> leaves its outline.</summary>
-    private static Point EdgePoint(Rect r, ShapeKind shape, Point toward)
+    internal static Point EdgePoint(Rect r, ShapeKind shape, Point toward)
     {
         var c = Center(r);
         double dx = toward.X - c.X, dy = toward.Y - c.Y;

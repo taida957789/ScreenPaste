@@ -1427,14 +1427,19 @@ public partial class CaptureOverlayWindow : Window
         _magnifyBeneath = null;
         _regionCrop = null;
         RefreshBlurs();
+        // Re-sampling assigns new bitmaps to the blur images, which invalidates their layout.
+        // RenderTargetBitmap draws whatever was last *arranged*, so the pending pass has to be
+        // flushed before the magnifiers rasterise BlurHost — otherwise a magnifier caches a
+        // stale (or zero-sized) copy of a blur that was just created, until the next edit.
+        if (MagnifyHost.Children.Count > 0) EditLayer.UpdateLayout();
         RefreshMagnifiers();   // after the blurs: a magnifier can enlarge blurred pixels
     }
 
     private BitmapSource BlurBeneath() => _blurBeneath ??= Compositor.ComposeBeneathBlur(
         _screenshot, _selection, Ink.Strokes, ShapeHost, StickerHost, TextHost);
 
-    private BitmapSource MagnifyBeneath() => _magnifyBeneath ??= Compositor.ComposeBeneathMagnify(
-        _screenshot, _selection, Ink.Strokes, BlurHost, ShapeHost, StickerHost, TextHost);
+    private BitmapSource MagnifyBeneath() => _magnifyBeneath ??=
+        Compositor.ComposeBeneathMagnify(BlurBeneath(), _selection, BlurHost);
 
     /// <summary>The bare screenshot crop, for magnifiers told to ignore other annotations.</summary>
     private BitmapSource RegionCrop() => _regionCrop ??= Compositor.CropRegion(_screenshot, _selection);
@@ -1712,18 +1717,13 @@ public partial class CaptureOverlayWindow : Window
 
     private void LayoutHandles()
     {
-        double x = _selection.X, y = _selection.Y, w = _selection.Width, h = _selection.Height;
-        double half = HandleSize / 2.0;
-        Point[] anchors =
+        var at = HandleGeometry.Place(
+            new Rect(_selection.X, _selection.Y, _selection.Width, _selection.Height),
+            HandleSize, outside: false);
+        for (int i = 0; i < HandleGeometry.Count; i++)
         {
-            new(x, y),         new(x + w / 2, y),     new(x + w, y),
-            new(x, y + h / 2),                        new(x + w, y + h / 2),
-            new(x, y + h),     new(x + w / 2, y + h), new(x + w, y + h),
-        };
-        for (int i = 0; i < 8; i++)
-        {
-            Canvas.SetLeft(_handles[i], anchors[i].X - half);
-            Canvas.SetTop(_handles[i], anchors[i].Y - half);
+            Canvas.SetLeft(_handles[i], at[i].X);
+            Canvas.SetTop(_handles[i], at[i].Y);
         }
     }
 
@@ -1742,25 +1742,14 @@ public partial class CaptureOverlayWindow : Window
         if (_resizeHandle < 0) return;
         var p = e.GetPosition(RootCanvas);
         UpdateMagnifier(p);
-        double dx = p.X - _regionGrab.X;
-        double dy = p.Y - _regionGrab.Y;
-
-        double left = _regionStart.X, top = _regionStart.Y;
-        double right = left + _regionStart.Width, bottom = top + _regionStart.Height;
-
-        bool west = _resizeHandle is 0 or 3 or 5;
-        bool east = _resizeHandle is 2 or 4 or 7;
-        bool north = _resizeHandle is 0 or 1 or 2;
-        bool south = _resizeHandle is 5 or 6 or 7;
-
-        if (west) left = Math.Clamp(left + dx, 0, right - MinRegionSize);
-        if (east) right = Math.Clamp(right + dx, left + MinRegionSize, _screenshot.PixelWidth);
-        if (north) top = Math.Clamp(top + dy, 0, bottom - MinRegionSize);
-        if (south) bottom = Math.Clamp(bottom + dy, top + MinRegionSize, _screenshot.PixelHeight);
+        var r = HandleGeometry.DragEdges(
+            new Rect(_regionStart.X, _regionStart.Y, _regionStart.Width, _regionStart.Height),
+            _resizeHandle, p.X - _regionGrab.X, p.Y - _regionGrab.Y,
+            MinRegionSize, new Rect(0, 0, _screenshot.PixelWidth, _screenshot.PixelHeight));
 
         ApplyRegion(new Int32Rect(
-            (int)Math.Round(left), (int)Math.Round(top),
-            (int)Math.Round(right - left), (int)Math.Round(bottom - top)));
+            (int)Math.Round(r.X), (int)Math.Round(r.Y),
+            (int)Math.Round(r.Width), (int)Math.Round(r.Height)));
     }
 
     private void Handle_MouseUp(object sender, MouseButtonEventArgs e)
@@ -1819,29 +1808,18 @@ public partial class CaptureOverlayWindow : Window
         }
 
         EnsureMagnifySourceHandles();
-        double x = _selection.X + spec.Source.X, y = _selection.Y + spec.Source.Y;
-        double w = spec.Source.Width, h = spec.Source.Height;
-        double half = HandleSize / 2.0, edge = HandleSize;
 
-        // The handles ring the frame from OUTSIDE, touching its border rather than straddling
-        // it. Straddling looks tidier but eats the frame: a small framed area — the whole
-        // point of a magnifier — would be completely papered over by its own handles, leaving
-        // nothing to grab for moving it. Outside, the interior is always free.
-        Point[] corners =
+        // outside: true — the handles ring the frame rather than straddling it, because a
+        // small framed area (the whole point of a magnifier) would otherwise be papered over
+        // by its own handles, leaving nothing to grab for moving it.
+        var at = HandleGeometry.Place(
+            new Rect(_selection.X + spec.Source.X, _selection.Y + spec.Source.Y,
+                spec.Source.Width, spec.Source.Height),
+            HandleSize, outside: true);
+        for (int i = 0; i < HandleGeometry.Count; i++)
         {
-            new(x - edge,        y - edge),          // NW
-            new(x + w / 2 - half, y - edge),         // N
-            new(x + w,           y - edge),          // NE
-            new(x - edge,        y + h / 2 - half),  // W
-            new(x + w,           y + h / 2 - half),  // E
-            new(x - edge,        y + h),             // SW
-            new(x + w / 2 - half, y + h),            // S
-            new(x + w,           y + h),             // SE
-        };
-        for (int i = 0; i < 8; i++)
-        {
-            Canvas.SetLeft(_magnifySourceHandles[i], corners[i].X);
-            Canvas.SetTop(_magnifySourceHandles[i], corners[i].Y);
+            Canvas.SetLeft(_magnifySourceHandles[i], at[i].X);
+            Canvas.SetTop(_magnifySourceHandles[i], at[i].Y);
         }
         MagnifySourceHandleLayer.Visibility = Visibility.Visible;
     }
@@ -1875,27 +1853,10 @@ public partial class CaptureOverlayWindow : Window
         LayoutMagnifySourceHandles();
     }
 
-    /// <summary>
-    /// <paramref name="start"/> after dragging handle <paramref name="index"/> by
-    /// (<paramref name="dx"/>,<paramref name="dy"/>): only the edges that handle owns move,
-    /// held inside the selection and never thinner than <see cref="MinMagnifySourceSize"/>.
-    /// </summary>
-    private Rect DragMagnifySourceEdges(Rect start, int index, double dx, double dy)
-    {
-        double left = start.X, top = start.Y, right = start.Right, bottom = start.Bottom;
-
-        bool west = index is 0 or 3 or 5;
-        bool east = index is 2 or 4 or 7;
-        bool north = index is 0 or 1 or 2;
-        bool south = index is 5 or 6 or 7;
-
-        if (west) left = Math.Clamp(left + dx, 0, right - MinMagnifySourceSize);
-        if (east) right = Math.Clamp(right + dx, left + MinMagnifySourceSize, _selection.Width);
-        if (north) top = Math.Clamp(top + dy, 0, bottom - MinMagnifySourceSize);
-        if (south) bottom = Math.Clamp(bottom + dy, top + MinMagnifySourceSize, _selection.Height);
-
-        return new Rect(left, top, right - left, bottom - top);
-    }
+    /// <summary>The framed source after dragging one of its handles, held inside the
+    /// selection. Tolerates a source that already sits outside the region.</summary>
+    private Rect DragMagnifySourceEdges(Rect start, int index, double dx, double dy) =>
+        HandleGeometry.DragEdges(start, index, dx, dy, MinMagnifySourceSize, RegionBounds());
 
     private void MagnifySourceHandle_MouseUp(object sender, MouseButtonEventArgs e)
     {
@@ -1964,6 +1925,12 @@ public partial class CaptureOverlayWindow : Window
         if (dx != 0 || dy != 0) ShiftAnnotations(-dx, -dy);
 
         _selection = r;
+        // A region RESIZE (as opposed to a move) leaves annotations where they are, so a
+        // magnifier's framed source — stored in region-local coords — can end up outside the
+        // new, smaller region. Pull it back in, or every later interaction with it would be
+        // working from an out-of-bounds rect.
+        ClampMagnifySourcesIntoRegion();
+
         var sel = new Rect(r.X, r.Y, r.Width, r.Height);
         ShowSelectionRect(sel);
         LayoutEditLayer(sel);
@@ -1972,6 +1939,18 @@ public partial class CaptureOverlayWindow : Window
         InvalidateSampledLayers();   // the region now covers different screenshot pixels
         if (_selected != null) UpdateSelectionBox();
         else LayoutMagnifySourceHandles();
+    }
+
+    /// <summary>Pull every magnifier's framed source back inside the current region.</summary>
+    private void ClampMagnifySourcesIntoRegion()
+    {
+        var bounds = RegionBounds();
+        foreach (var child in MagnifyHost.Children)
+        {
+            if (child is not FrameworkElement el || MagnifyEffects.SpecOf(el) is not { } spec) continue;
+            var clamped = HandleGeometry.ClampInto(spec.Source, bounds, MinMagnifySourceSize);
+            if (clamped != spec.Source) MagnifyEffects.ResizeSource(el, clamped);
+        }
     }
 
     /// <summary>Keep annotations pinned to the screenshot content while the region moves.</summary>
@@ -2070,10 +2049,10 @@ public partial class CaptureOverlayWindow : Window
 
         if (_magnifySourceDrag is { } mag)
         {
-            MagnifyEffects.SetSource(mag, ClampSourceToRegion(new Rect(
+            MagnifyEffects.MoveSourceTo(mag, ClampSourceToRegion(new Rect(
                 _magnifySourceStart.X + (p.X - _magnifySourceGrab.X),
                 _magnifySourceStart.Y + (p.Y - _magnifySourceGrab.Y),
-                _magnifySourceStart.Width, _magnifySourceStart.Height)));
+                _magnifySourceStart.Width, _magnifySourceStart.Height)).TopLeft);
             ResampleMagnifier(mag);   // it now frames different pixels
             LayoutMagnifySourceHandles();
             e.Handled = true;
@@ -2122,8 +2101,8 @@ public partial class CaptureOverlayWindow : Window
 
             // The history's Changed hook re-samples, so the commands only move the frame.
             _history.Push(
-                undo: () => MagnifyEffects.SetSource(mag, before),
-                redo: () => MagnifyEffects.SetSource(mag, now));
+                undo: () => MagnifyEffects.MoveSourceTo(mag, before.TopLeft),
+                redo: () => MagnifyEffects.MoveSourceTo(mag, now.TopLeft));
             return;
         }
 
@@ -2162,6 +2141,34 @@ public partial class CaptureOverlayWindow : Window
                 if (host.Children[i] is FrameworkElement el && AnnotationBounds(el).Contains(p))
                     return el;
         return null;
+    }
+
+    /// <summary>Abort an in-flight framed-source move or resize, putting the frame back
+    /// where the drag started. Returns false when nothing was being dragged.</summary>
+    private bool CancelMagnifySourceDrag()
+    {
+        if (_magnifySourceResize is { } resizing)
+        {
+            _magnifySourceHandleIndex = -1;
+            _magnifySourceResize = null;
+            Mouse.Capture(null);   // capture is held by the handle, not by EditLayer
+            MagnifyEffects.SetFrame(resizing, _magnifySourceResizeStart, _magnifySourceResizeViewStart);
+            ResampleMagnifier(resizing);
+            AfterMagnifyReframe();
+            return true;
+        }
+
+        if (_magnifySourceDrag is { } moving)
+        {
+            _magnifySourceDrag = null;
+            EditLayer.ReleaseMouseCapture();
+            MagnifyEffects.MoveSourceTo(moving, _magnifySourceStart.TopLeft);
+            ResampleMagnifier(moving);
+            LayoutMagnifySourceHandles();
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>Topmost magnifier whose *framed source* contains <paramref name="p"/>
@@ -2584,6 +2591,10 @@ public partial class CaptureOverlayWindow : Window
     {
         if (e.Key == Key.Escape)
         {
+            // A framed-source drag owns the mouse and hides its handles on Deselect, so it
+            // has to be aborted explicitly or it would keep resizing invisibly.
+            if (_phase == Phase.Editing && CancelMagnifySourceDrag()) { e.Handled = true; return; }
+
             // Snipaste-style: Esc clears the selection first, then LEAVES the capture
             // (confirming when annotations would be lost) — no reselect step.
             if (_phase == Phase.Editing && _selected != null) Deselect();

@@ -40,23 +40,26 @@ public static class Compositor
     }
 
     /// <summary>
-    /// Everything that sits *under* the magnifier layer: the blur layer flattened onto the
-    /// content beneath it. A magnifier set to include annotations samples this, so it
-    /// enlarges blurred pixels as blurred.
+    /// Everything that sits *under* the magnifier layer: the blur layer flattened onto
+    /// <paramref name="beneathBlur"/>. A magnifier set to include annotations samples this,
+    /// so it enlarges blurred pixels as blurred.
     /// </summary>
-    public static BitmapSource ComposeBeneathMagnify(BitmapSource screenshot, Int32Rect regionPx,
-        StrokeCollection strokes, Visual blurLayer, Visual shapeLayer, Visual stickerLayer, Visual textLayer)
+    /// <param name="beneathBlur">
+    /// The result of <see cref="ComposeBeneathBlur"/>, passed in rather than recomputed: the
+    /// caller already caches it for the blur layer, and rebuilding it here would rasterise
+    /// the shape/sticker/ink/text stack a second time on every edit.
+    /// </param>
+    public static BitmapSource ComposeBeneathMagnify(BitmapSource beneathBlur, Int32Rect regionPx,
+        Visual blurLayer)
     {
         int w = Math.Max(1, regionPx.Width);
         int h = Math.Max(1, regionPx.Height);
         var full = new Rect(0, 0, w, h);
 
-        var beneath = ComposeBeneathBlur(screenshot, regionPx, strokes, shapeLayer, stickerLayer, textLayer);
-
         var dv = new DrawingVisual();
         using (var dc = dv.RenderOpen())
         {
-            dc.DrawImage(beneath, full);
+            dc.DrawImage(beneathBlur, full);
             dc.DrawImage(RenderLayer(blurLayer, w, h), full);
         }
 
@@ -84,7 +87,8 @@ public static class Compositor
         var full = new Rect(0, 0, w, h);
 
         var beneath = ComposeBeneathMagnify(
-            screenshot, regionPx, strokes, blurLayer, shapeLayer, stickerLayer, textLayer);
+            ComposeBeneathBlur(screenshot, regionPx, strokes, shapeLayer, stickerLayer, textLayer),
+            regionPx, blurLayer);
 
         var dv = new DrawingVisual();
         using (var dc = dv.RenderOpen())
