@@ -164,6 +164,7 @@ public partial class CaptureOverlayWindow : Window
         _hlWidth = settings.HighlighterWidth;
         _hlOpacity = settings.HighlighterOpacity;
         _hlColor = ParseColor(settings.HighlighterColor, Colors.Yellow);
+        _blurKind = Enum.TryParse<BlurKind>(settings.BlurKind, out var bk) ? bk : BlurKind.Gaussian;
         _blurStrength = settings.GaussianStrength;
         _textFont = settings.TextFont;
         _textSize = settings.TextSize;
@@ -2551,6 +2552,7 @@ public partial class CaptureOverlayWindow : Window
         _settings.HighlighterWidth = _hlWidth;
         _settings.HighlighterOpacity = _hlOpacity;
         _settings.HighlighterColor = ToHex(_hlColor);
+        _settings.BlurKind = _blurKind.ToString();
         _settings.GaussianStrength = _blurStrength;
         _settings.TextFont = _textFont;
         _settings.TextSize = _textSize;

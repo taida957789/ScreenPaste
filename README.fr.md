@@ -25,7 +25,7 @@ Après la capture, une **barre d'outils** apparaît près du curseur (déplaçab
 - **Formes** — rectangle / rectangle arrondi / ellipse, contour ou rempli, épaisseur et couleur réglables
 - **Ligne / flèche** — glissez pour tracer ; chaque extrémité peut devenir une pointe de flèche ; épaisseur et couleur réglables ; maintenez `Maj` pour aligner sur des angles de 45°
 - **Images collées** — collez des PNG / JPEG / WebP, glissez pour déplacer, molette pour redimensionner
-- **Flou** — flou gaussien / mosaïque, intensité réglable ; dessiné au-dessus de toutes les annotations, il masque donc les tracés et les formes en dessous, et se déplace par glisser (la zone ré-échantillonne ce qu'elle recouvre alors)
+- **Flou** — flou gaussien / mosaïque, intensité réglable ; dessiné au-dessus de toutes les annotations, il masque donc les tracés et les formes en dessous, et se déplace par glisser (la zone ré-échantillonne ce qu'elle recouvre alors) ; le type (gaussien / mosaïque) a une valeur par défaut réglable dans les paramètres, et le changer dans la barre d’outils est mémorisé pour la fois suivante
 - **Loupe** — glissez pour cadrer la zone à agrandir : une vue agrandie se place juste à côté ; rectangle / arrondi / cercle, zoom réglable (1,2–10×), épaisseur et couleur de bordure, trait de liaison, ombre, lissage (désactivé, la grille de pixels reste nette) et inclusion ou non des autres annotations dans l'agrandissement ; la vue **et le cadre de la zone source se déplacent tous deux à tout moment** — déplacer le cadre change ce qui est agrandi et le trait de liaison se réoriente ; sélectionner une loupe fait apparaître **8 poignées de redimensionnement sur le cadre** (la vue agrandie suit selon le zoom), et la molette change le zoom
 - **Sélection / déplacement direct** — survolez n'importe quelle annotation posée et **déplacez-la directement** ; `Suppr` la supprime ; déplacements et suppressions sont annulables
 - **Sélecteur de couleurs** — saisie Hex, RGB et opacité (les couleurs translucides s'affichent sur un damier) ; les couleurs personnalisées sont mémorisées d'une session à l'autre, clic droit sur une pastille pour la retirer
@@ -51,7 +51,7 @@ Après la capture, une **barre d'outils** apparaît près du curseur (déplaçab
 - Raccourcis globaux (**F1** capture, **F2** enregistrement, tous deux configurables) et lancement depuis la **barre d'état système**
 - **Multilingue** : 繁體中文 / English / 日本語 / 한국어 / Français / Deutsch / Español (suit le système par défaut)
 - Thème **clair / sombre / système**, interface moderne aux coins arrondis et barres de titre sombres
-- **Fenêtre de paramètres** centralisée : langue, raccourcis, thème, lancement au démarrage, dossier d'enregistrement, format / fréquence d'enregistrement (les champs de raccourci se règlent en appuyant simplement sur la combinaison)
+- **Fenêtre de paramètres** centralisée : langue, raccourcis, thème, lancement au démarrage, dossier d'enregistrement, valeurs par défaut des annotations (type de flou), format / fréquence d'enregistrement (les champs de raccourci se règlent en appuyant simplement sur la combinaison)
 - **Lancement automatique au démarrage** (optionnel)
 - **Mise à jour automatique** : vérifie les nouvelles versions via GitHub Releases (activable dans les paramètres, ou vérification manuelle) ; téléchargement et installation en un clic
 

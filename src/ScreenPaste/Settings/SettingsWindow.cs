@@ -21,6 +21,7 @@ public sealed class SettingsWindow : Window
     private TextBox _capture = null!, _record = null!, _undo = null!, _redo = null!, _copy = null!, _save = null!, _quickSave = null!;
     private ComboBox _language = null!;
     private ComboBox _theme = null!;
+    private ComboBox _blurKind = null!;
     private ComboBox _recordFormat = null!;
     private ComboBox _recordFps = null!;
     private ComboBox _recordAudio = null!;
@@ -67,6 +68,15 @@ public sealed class SettingsWindow : Window
         body.Children.Add(Row("", _startup));
         _confirmDiscard = new CheckBox { IsChecked = _s.ConfirmDiscardEdits, Content = Loc.T("set.confirmDiscard"), Foreground = Theme.ForegroundBrush, VerticalAlignment = VerticalAlignment.Center };
         body.Children.Add(Row("", _confirmDiscard));
+
+        body.Children.Add(Header(Loc.T("set.annotation")));
+        _blurKind = ValueCombo(new()
+        {
+            ("Gaussian", Loc.T("lbl.gaussian"), null),
+            ("Mosaic", Loc.T("lbl.mosaic"), null),
+        }, _s.BlurKind);
+        body.Children.Add(Row(Loc.T("set.blurKind"), _blurKind));
+        body.Children.Add(Hint(Loc.T("set.blurKindHint")));
 
         body.Children.Add(Header(Loc.T("set.updates")));
         _checkUpdate = new CheckBox { IsChecked = _s.CheckUpdateOnStartup, Content = Loc.T("set.checkStartup"), Foreground = Theme.ForegroundBrush, VerticalAlignment = VerticalAlignment.Center };
@@ -158,6 +168,7 @@ public sealed class SettingsWindow : Window
         _s.SaveHotkey = _save.Text.Trim();
         _s.QuickSaveHotkey = _quickSave.Text.Trim();
 
+        _s.BlurKind = ComboValue(_blurKind);
         _s.RecordFormat = ComboValue(_recordFormat);
         _s.RecordAudioSource = ComboValue(_recordAudio);
         _s.RecordCaptureCursor = _recordCursor.IsChecked == true;

@@ -30,6 +30,8 @@ public sealed class AppSettings
     public double HighlighterOpacity { get; set; } = 0.45;
 
     // ---- Blur defaults ----
+    // 模糊類型：可於設定指定預設值；在截圖工具列切換後也會回存，所以下次沿用最後一次的選擇
+    public string BlurKind { get; set; } = "Gaussian";   // Gaussian | Mosaic
     public double GaussianStrength { get; set; } = 12;   // BlurEffect.Radius
     public double MosaicStrength { get; set; } = 12;     // block size in px
 
