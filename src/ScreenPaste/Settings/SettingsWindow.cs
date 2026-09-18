@@ -266,7 +266,10 @@ public sealed class SettingsWindow : Window
             if (flag != null)
             {
                 var sp = new StackPanel { Orientation = Orientation.Horizontal };
-                sp.Children.Add(new Image { Source = FlagIcons.Get(flag), Width = 20, Height = 13, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
+                // A flag is decoration: if it could not be drawn, show the language name alone
+                // rather than letting a missing icon take the whole settings window down.
+                if (FlagIcons.Get(flag) is { } icon)
+                    sp.Children.Add(new Image { Source = icon, Width = 20, Height = 13, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
                 sp.Children.Add(new TextBlock { Text = display, VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.ForegroundBrush });
                 content = sp;
             }
