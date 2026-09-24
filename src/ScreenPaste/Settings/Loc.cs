@@ -237,6 +237,9 @@ public static class Loc
         Add("set.appearance","Appearance & startup", "外觀與啟動",     "外観と起動",         "모양 및 시작",     "Apparence & démarrage","Aussehen & Start", "Apariencia e inicio");
         Add("set.language",  "Language",             "語言",          "言語",              "언어",            "Langue",            "Sprache",           "Idioma");
         Add("set.theme",     "Theme",                "主題",          "テーマ",             "테마",            "Thème",             "Design",            "Tema");
+        Add("set.annotation","Annotation defaults",  "標註預設值",      "注釈の既定値",       "주석 기본값",   "Valeurs par défaut des annotations", "Anmerkungs-Standards", "Valores predeterminados de anotación");
+        Add("set.blurKind",  "Blur type",            "模糊類型",       "ぼかしの種類",       "흐림 종류",       "Type de flou",      "Weichzeichner-Typ", "Tipo de desenfoque");
+        Add("set.blurKindHint","Switching it on the capture toolbar updates this to your last choice", "在截圖工具列切換後，會記住最後一次的選擇", "截圖ツールバーで切り替えると、最後の選択がここに記録されます", "캐처 도구 모음에서 바꾸면 마지막 선택이 여기에 기록됩니다", "Le changer dans la barre de capture enregistre ici votre dernier choix", "Ändern in der Aufnahme-Leiste speichert hier die letzte Wahl", "Cambiarlo en la barra de captura guarda aquí tu última elección");
         Add("set.startup",   "Run at startup",       "開機時自動啟動",  "起動時に自動実行",    "시작 시 자동 실행", "Lancer au démarrage","Beim Start ausführen","Ejecutar al inicio");
         Add("set.saveSection","Saving",              "儲存",          "保存",              "저장",            "Enregistrement",    "Speichern",         "Guardado");
         Add("set.saveFolder","Default folder",       "預設資料夾",     "既定のフォルダー",    "기본 폴더",        "Dossier par défaut","Standardordner",    "Carpeta predeterminada");

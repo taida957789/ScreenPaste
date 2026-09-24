@@ -25,7 +25,7 @@ Tras capturar, aparece una **barra de herramientas** junto al cursor (arrastrabl
 - **Formas** — rectángulo / rectángulo redondeado / elipse, contorno o relleno, grosor y color ajustables
 - **Línea / flecha** — arrastra para dibujar; cada extremo puede convertirse en punta de flecha; grosor y color ajustables; mantén `Mayús` para ajustar a ángulos de 45°
 - **Imágenes pegadas** — pega PNG / JPEG / WebP, arrastra para mover, rueda para redimensionar
-- **Desenfoque** — desenfoque gaussiano / mosaico, intensidad ajustable; se dibuja por encima de todas las anotaciones, así que tapa los trazos y las formas que haya debajo, y se puede arrastrar a otro sitio (vuelve a muestrear lo que cubre ahora)
+- **Desenfoque** — desenfoque gaussiano / mosaico, intensidad ajustable; se dibuja por encima de todas las anotaciones, así que tapa los trazos y las formas que haya debajo, y se puede arrastrar a otro sitio (vuelve a muestrear lo que cubre ahora); el tipo (gaussiano / mosaico) tiene un valor predeterminado configurable en los ajustes, y cambiarlo en la barra de herramientas se recuerda para la próxima vez
 - **Lupa** — arrastra para encuadrar el área que quieres ampliar y la vista ampliada se coloca al lado: rectángulo / redondeado / círculo, zoom ajustable (1,2–10×), grosor y color del borde, conector, sombra, suavizado (desactivado muestra la cuadrícula de píxeles) y si el contenido ampliado incluye las demás anotaciones; la vista **y el marco del área de origen se pueden arrastrar en cualquier momento** — mover el marco cambia lo que se amplía y el conector se reorienta; al seleccionar una lupa aparecen **8 tiradores en el marco para cambiar su tamaño** (la vista ampliada escala con él), y la rueda cambia el zoom
 - **Selección / movimiento directo** — pasa el ratón sobre cualquier anotación colocada y **arrástrala directamente**; `Supr` la elimina; mover y eliminar se pueden deshacer
 - **Selector de color** — entrada Hex, RGB y opacidad (los colores translúcidos se previsualizan sobre un damero); los colores personalizados se recuerdan entre sesiones, clic derecho en una muestra para quitarla
@@ -51,7 +51,7 @@ Tras capturar, aparece una **barra de herramientas** junto al cursor (arrastrabl
 - Atajos globales (**F1** captura, **F2** grabación, ambos configurables) y arranque desde el icono de la **bandeja del sistema**
 - **Varios idiomas**: 繁體中文 / English / 日本語 / 한국어 / Français / Deutsch / Español (sigue el sistema por defecto)
 - Tema **claro / oscuro / según el sistema**, interfaz moderna con esquinas redondeadas y barras de título oscuras
-- **Ventana de ajustes** centralizada: idioma, atajos, tema, inicio automático, carpeta de guardado, formato / tasa de grabación (los campos de atajo se fijan pulsando la combinación)
+- **Ventana de ajustes** centralizada: idioma, atajos, tema, inicio automático, carpeta de guardado, valores predeterminados de anotación (tipo de desenfoque), formato / tasa de grabación (los campos de atajo se fijan pulsando la combinación)
 - **Inicio automático con Windows** (opcional)
 - **Actualización automática**: comprueba nuevas versiones vía GitHub Releases (activable en ajustes, o comprobación manual); descarga e instala con un clic
 

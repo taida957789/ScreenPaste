@@ -25,7 +25,7 @@ Nach der Aufnahme erscheint neben dem Cursor eine **Symbol-Werkzeugleiste** (ver
 - **Formen** — Rechteck / abgerundetes Rechteck / Ellipse, Umriss oder gefüllt, Linienstärke und Farbe einstellbar
 - **Linie / Pfeil** — zum Zeichnen ziehen; jedes Ende kann einzeln eine Pfeilspitze erhalten; Stärke und Farbe einstellbar; mit `Umschalt` an 45°-Winkeln einrasten
 - **Eingefügte Bilder** — PNG / JPEG / WebP einfügen, ziehen zum Verschieben, Mausrad zum Skalieren
-- **Weichzeichnen** — Gaußscher Weichzeichner / Mosaik, Stärke einstellbar; liegt über allen Anmerkungen und verdeckt damit auch Striche und Formen darunter, und lässt sich frei verschieben (der Bereich tastet danach die neue Stelle ab)
+- **Weichzeichnen** — Gaußscher Weichzeichner / Mosaik, Stärke einstellbar; liegt über allen Anmerkungen und verdeckt damit auch Striche und Formen darunter, und lässt sich frei verschieben (der Bereich tastet danach die neue Stelle ab); die Art (Gauß / Mosaik) hat einen in den Einstellungen wählbaren Standard, und ein Wechsel in der Werkzeugleiste wird für das nächste Mal gemerkt
 - **Lupe** — den zu vergrößernden Bereich aufziehen; die vergrößerte Ansicht wird direkt daneben platziert: Rechteck / abgerundet / Kreis, einstellbarer Zoom (1,2–10×), Rahmenstärke und -farbe, Verbindungslinie, Schatten, Glätten (aus zeigt das harte Pixelraster) sowie die Wahl, ob andere Anmerkungen mit vergrößert werden; die Ansicht **und der Rahmen des Quellbereichs lassen sich jederzeit verschieben** — den Rahmen zu verschieben ändert das Vergrößerte, die Verbindungslinie richtet sich neu aus; eine ausgewählte Lupe zeigt **8 Anfasser am Rahmen zum Ändern der Größe** (die vergrößerte Ansicht skaliert mit), das Mausrad ändert den Zoom
 - **Direktes Auswählen / Verschieben** — fahren Sie über eine platzierte Anmerkung und **ziehen Sie sie direkt**; `Entf` löscht sie; Verschieben und Löschen sind rückgängig machbar
 - **Farbwähler** — Hex-Eingabe, RGB und Deckkraft (transluzente Farben werden über einem Schachbrett angezeigt); eigene Farben werden sitzungsübergreifend gespeichert, Rechtsklick auf ein Farbfeld entfernt es
@@ -51,7 +51,7 @@ Nach der Aufnahme erscheint neben dem Cursor eine **Symbol-Werkzeugleiste** (ver
 - Globale Hotkeys (**F1** Aufnahme, **F2** Aufzeichnung, beide konfigurierbar) und Start über das **Infobereich**-Symbol
 - **Mehrsprachig**: 繁體中文 / English / 日本語 / 한국어 / Français / Deutsch / Español (folgt standardmäßig dem System)
 - **Hell / Dunkel / System**-Design, moderne abgerundete Oberfläche und dunkle Titelleisten
-- Zentrales **Einstellungsfenster**: Sprache, Hotkeys, Design, Autostart, Speicherordner, Aufnahmeformat / Bildrate (Hotkey-Felder werden durch einfaches Drücken der Kombination gesetzt)
+- Zentrales **Einstellungsfenster**: Sprache, Hotkeys, Design, Autostart, Speicherordner, Anmerkungs-Standards (Weichzeichner-Typ), Aufnahmeformat / Bildrate (Hotkey-Felder werden durch einfaches Drücken der Kombination gesetzt)
 - Optionaler **Autostart mit Windows**
 - **Auto-Update**: prüft über GitHub Releases auf neue Versionen (in den Einstellungen umschaltbar, auch manuell); Download und Installation mit einem Klick
 
