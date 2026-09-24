@@ -50,4 +50,9 @@
     <Using Remove="System.Drawing" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The magnifier geometry is internal to the app; the test project needs it. -->
+    <InternalsVisibleTo Include="ScreenPaste.Tests" />
+  </ItemGroup>
+
 </Project>
