@@ -29,6 +29,10 @@ public partial class App : Application
     private RecordingHud? _hud;
     private bool _selecting;
 
+    // What outlives one capture, in memory only: the last areas (R / Shift+R) and snips (, / .).
+    private readonly SnipRegionHistory _snipRegions = new();
+    private SnipRecordStore<SnipRecord> _snipRecords = new(0, 0);   // sized from the settings
+
     protected override void OnStartup(StartupEventArgs e)
     {
         // Must run before ANY window (incl. the hidden hotkey sink) is created.
@@ -74,6 +78,9 @@ public partial class App : Application
         }
 
         _settings = AppSettings.Load();
+        _snipRecords = new SnipRecordStore<SnipRecord>(
+            SnipHistoryLimits.Capacity(_settings.SnipHistoryCount),
+            SnipHistoryLimits.BudgetBytes(_settings.SnipHistoryBudgetMb));
         Loc.Init(_settings.Language);
         Theme.Apply(_settings.Theme);
         StartupManager.Sync(_settings.RunAtStartup);
@@ -269,8 +276,17 @@ public partial class App : Application
         try
         {
             Theme.Apply(_settings.Theme);   // pick up OS light/dark changes when following system
+            // The pointer first: once the overlay is up, its own cursor is the one on screen.
+            var cursor = CursorSnapshot.Capture();
             var screenshot = ScreenCapture.CaptureVirtualScreen(out var vs);
-            _overlay = new CaptureOverlayWindow(screenshot, vs, _settings);
+            _overlay = new CaptureOverlayWindow(new CaptureRequest
+            {
+                Screenshot = screenshot,
+                Screen = vs,
+                Cursor = cursor,
+                Regions = _snipRegions,
+                Records = _snipRecords,
+            }, _settings);
             PinManager.CaptureActive = true;
             _overlay.Closed += (_, _) => { _overlay = null; PinManager.CaptureActive = false; };
             _overlay.Show();

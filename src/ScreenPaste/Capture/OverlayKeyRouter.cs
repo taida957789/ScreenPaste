@@ -180,15 +180,19 @@ public sealed class OverlayKeyRouter
     }
 
     /// <summary>
-    /// A typed character (TextInput), for the keys whose place depends on the keyboard layout:
-    /// [ and ] step the pen size while editing, and + and - change the number marker's next
-    /// number, whatever modifiers typed them (Shift, or AltGr on many European layouts). Only
-    /// characters no key-down claimed arrive here.
+    /// A typed character (TextInput), for the keys whose place depends on the keyboard layout,
+    /// whatever modifiers typed them (Shift, or AltGr on many European layouts): in either
+    /// phase ` and ! show or hide the captured pointer and , and . replay the snip history;
+    /// while editing [ and ] step the pen size, and + and - change the number marker's next
+    /// number. Only characters no key-down claimed arrive here.
     /// </summary>
     public OverlayCommand RouteText(string text, OverlayKeyContext ctx)
     {
         if (ctx.DropDownOpen || ctx.TextBoxActive) return OverlayCommand.PassThrough;
-        if (ctx.Phase != OverlayPhase.Editing || ctx.Dragging) return OverlayCommand.None;
+        if (ctx.Dragging) return OverlayCommand.None;
+        var snip = SnipText(text);
+        if (snip != OverlayCommand.None) return snip;
+        if (ctx.Phase != OverlayPhase.Editing) return OverlayCommand.None;
         if (ctx.Tool == ToolKind.Number)
         {
             int step = ToolShortcuts.NumberStepDirection(text);
@@ -199,8 +203,8 @@ public sealed class OverlayKeyRouter
 
     /// <summary>
     /// Framing the area. Space takes the detected area, or mid-drag holds the area to move
-    /// it; Tab and Ctrl+A wait until the button is up; W/A/S/D and the arrows nudge the
-    /// cursor, which a drag follows.
+    /// it; Tab, Ctrl+A and the snip context's keys wait until the button is up; W/A/S/D and
+    /// the arrows nudge the cursor, which a drag follows.
     /// </summary>
     private static OverlayCommand RouteSelecting(OverlayKeyContext ctx)
     {
@@ -216,7 +220,7 @@ public sealed class OverlayKeyRouter
 
         if (ctx.Key == Key.Tab && ctx.Modifiers == ModifierKeys.None) return OverlayCommand.ToggleDetectMode;
         if (IsSelectAll(ctx)) return OverlayCommand.CycleScreenArea;
-        return OverlayCommand.None;
+        return RouteSnipKey(ctx);
     }
 
     /// <summary>Snipaste's fixed editing keys, tried after the configurable gestures so a
@@ -230,8 +234,34 @@ public sealed class OverlayKeyRouter
         if (ctx.Dragging) return OverlayCommand.None;
         if (CursorNudge.IsArrow(ctx.Key)) return RouteRegionArrow(ctx);
         var tool = RouteTool(ctx);
-        return tool != OverlayCommand.None ? tool : RouteOutput(ctx);
+        if (tool != OverlayCommand.None) return tool;
+        var output = RouteOutput(ctx);
+        return output != OverlayCommand.None ? output : RouteSnipKey(ctx);
     }
+
+    /// <summary>The snip context's keys, in either phase once the button is up: R steps back
+    /// through the areas of earlier snips, Shift+R the other way, and F5 (held: again and
+    /// again) captures the screen afresh.</summary>
+    private static OverlayCommand RouteSnipKey(OverlayKeyContext ctx)
+    {
+        if (ctx.Key == Key.R)
+        {
+            if (ctx.Modifiers == ModifierKeys.None) return OverlayCommand.PreviousRegion;
+            return ctx.Modifiers == ModifierKeys.Shift ? OverlayCommand.NextRegion : OverlayCommand.None;
+        }
+        if (ctx.Key == Key.F5 && ctx.Modifiers == ModifierKeys.None) return OverlayCommand.RefreshScreenshot;
+        return OverlayCommand.None;
+    }
+
+    /// <summary>` or ! toggles the pointer (two spellings, as ` is a dead key on many layouts);
+    /// , and . step back and forth through the snip history.</summary>
+    private static OverlayCommand SnipText(string text) => text switch
+    {
+        "`" or "!" => OverlayCommand.ToggleCursor,
+        "," => OverlayCommand.HistoryPrevious,
+        "." => OverlayCommand.HistoryNext,
+        _ => OverlayCommand.None,
+    };
 
     /// <summary>
     /// The annotation tool keys (<see cref="ToolShortcuts"/>): T/B/M/E pick a tool, Ctrl+digit

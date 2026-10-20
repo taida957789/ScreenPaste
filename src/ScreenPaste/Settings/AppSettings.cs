@@ -95,6 +95,11 @@ public sealed class AppSettings
     public bool ConfirmDiscardEdits { get; set; } = true;
     // 框選時顯示貫穿全螢幕的十字輔助線（Alt 單按切換，會記住上次的狀態）
     public bool SnipGuideLines { get; set; }
+    // 截圖中顯示開始截圖時的滑鼠游標（按 ` 或 ! 切換，會記住上次的狀態）
+    public bool SnipShowCursor { get; set; }
+    // 截圖歷史（按 , / . 回放，只存在記憶體）：保留筆數 0–8（0 = 停用）與記憶體上限 MB（最多 512）
+    public int SnipHistoryCount { get; set; } = 8;
+    public int SnipHistoryBudgetMb { get; set; } = 512;
 
     // ---- Startup ----
     public bool RunAtStartup { get; set; }

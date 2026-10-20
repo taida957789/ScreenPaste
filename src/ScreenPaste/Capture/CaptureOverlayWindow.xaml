@@ -19,6 +19,11 @@
             <Image x:Name="ScreenImage" Canvas.Left="0" Canvas.Top="0"
                    RenderOptions.BitmapScalingMode="NearestNeighbor"/>
 
+            <!-- The mouse pointer as it was when the capture began (` or ! shows it); part
+                 of the screenshot, so it sits under the mask and every annotation. -->
+            <Image x:Name="CursorImage" Visibility="Collapsed" IsHitTestVisible="False"
+                   RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+
             <!-- Dark mask with the selection "punched out" (even-odd fill). -->
             <Path x:Name="MaskPath" Fill="#66000000" IsHitTestVisible="False"/>
 

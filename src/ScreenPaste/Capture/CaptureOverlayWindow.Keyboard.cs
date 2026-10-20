@@ -21,6 +21,7 @@ public partial class CaptureOverlayWindow
     private OverlayKeyRouter _keyRouter = null!;
     private readonly ModifierTapTracker _modifierTaps = new();
     private bool _altChordRan;   // a key held with Alt ran a command since Alt went down
+    private bool _keyRepeating;  // the last key down was an auto-repeat (its typed character too)
 
     private void InitKeyboard()
     {
@@ -32,8 +33,8 @@ public partial class CaptureOverlayWindow
         PreviewKeyDown += Overlay_PreviewKeyDown;
         PreviewKeyUp += Overlay_PreviewKeyUp;
         KeyDown += Overlay_KeyDown;
-        // Layout-dependent keys ([ and ]) go by the character they type, which only arrives
-        // for keys no key-down handler claimed.
+        // Layout-dependent keys ([ ] + - ` ! , .) go by the character they type, which only
+        // arrives for keys no key-down handler claimed.
         PreviewTextInput += Overlay_PreviewTextInput;
 
         // A mouse button, the wheel or losing focus between a modifier's down and up means
@@ -47,6 +48,7 @@ public partial class CaptureOverlayWindow
     private void Overlay_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         var key = KeyInputNormalizer.Effective(e);
+        _keyRepeating = e.IsRepeat;
         _modifierTaps.KeyDown(key, Keyboard.Modifiers, AnyMouseButtonDown());
         if (IsAltKey(key) && !e.IsRepeat) _altChordRan = false;
         var ctx = KeyContext(key, e);
@@ -85,7 +87,7 @@ public partial class CaptureOverlayWindow
     private void Overlay_PreviewTextInput(object sender, TextCompositionEventArgs e)
     {
         if (string.IsNullOrEmpty(e.Text)) return;   // Ctrl chords type control characters
-        var ctx = StateContext();
+        var ctx = StateContext() with { IsRepeat = _keyRepeating };   // typed by the key just down
         if (RunKeyCommand(_keyRouter.RouteText(e.Text, ctx), ctx)) e.Handled = true;
     }
 
@@ -174,8 +176,9 @@ public partial class CaptureOverlayWindow
             case OverlayCommand.ToggleToolbar:
                 if (!ctx.IsRepeat) ToggleToolbar();   // a held Space must not make it flicker
                 return true;
-            // The annotation tool keys: CaptureOverlayWindow.Tools.cs.
-            default: return RunToolCommand(command, ctx);
+            // The annotation tool keys: CaptureOverlayWindow.Tools.cs; the snip context's
+            // (pointer, last areas, history, refresh): CaptureOverlayWindow.History.cs.
+            default: return RunToolCommand(command, ctx) || RunSnipCommand(command, ctx);
         }
     }
 }

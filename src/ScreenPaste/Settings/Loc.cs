@@ -236,6 +236,9 @@ public static class Loc
         Add("dlg.reselectTitle","Choose again",      "重新選取",       "範囲を選び直す",      "다시 선택",        "Choisir à nouveau", "Neu auswählen",     "Elegir de nuevo");
         Add("dlg.reselectMsg","Discard the annotations and choose the area again?", "要捨棄標註並重新選取截圖範圍嗎？", "注釈を破棄して範囲を選び直しますか？", "주석을 삭제하고 영역을 다시 선택할까요?", "Abandonner les annotations et choisir à nouveau la zone ?", "Anmerkungen verwerfen und den Bereich neu auswählen?", "¿Descartar las anotaciones y elegir el área de nuevo?");
         Add("dlg.reselectYes","Choose again",        "重新選取",       "選び直す",           "다시 선택",        "Choisir à nouveau", "Neu auswählen",     "Elegir de nuevo");
+        Add("dlg.historyTitle","Snip history",       "截圖歷史",       "キャプチャ履歴",      "캡처 기록",        "Historique des captures", "Aufnahmeverlauf", "Historial de capturas");
+        Add("dlg.historyMsg","Discard the annotations and show another snip?", "要捨棄標註並切換到其他截圖嗎？", "注釈を破棄して別のキャプチャを表示しますか？", "주석을 삭제하고 다른 캡처를 표시할까요?", "Abandonner les annotations et afficher une autre capture ?", "Anmerkungen verwerfen und eine andere Aufnahme anzeigen?", "¿Descartar las anotaciones y mostrar otra captura?");
+        Add("dlg.historyYes","Discard",              "捨棄標註",       "破棄",              "삭제",            "Abandonner",        "Verwerfen",         "Descartar");
         Add("set.confirmDiscard","Ask before discarding an annotated capture", "取消含標註的截圖前先詢問", "注釈付きキャプチャの破棄前に確認", "주석이 있는 캡처 취소 전 확인", "Confirmer avant d'abandonner une capture annotée", "Vor dem Verwerfen einer beschrifteten Aufnahme fragen", "Preguntar antes de descartar una captura anotada");
 
         // Color picker

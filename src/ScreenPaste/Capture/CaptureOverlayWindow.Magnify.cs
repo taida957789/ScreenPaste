@@ -134,8 +134,9 @@ public partial class CaptureOverlayWindow
     private BitmapSource MagnifyBeneath() => _magnifyBeneath ??=
         Compositor.ComposeBeneathMagnify(BlurBeneath(), _selection, BlurHost);
 
-    /// <summary>The bare screenshot crop, for magnifiers told to ignore other annotations.</summary>
-    private BitmapSource RegionCrop() => _regionCrop ??= Compositor.CropRegion(_screenshot, _selection);
+    /// <summary>The bare screenshot crop (with the pointer, when shown), for magnifiers told to
+    /// ignore other annotations.</summary>
+    private BitmapSource RegionCrop() => _regionCrop ??= Compositor.CropRegion(_screenshot, _selection, ShownCursor());
 
     /// <summary>Re-sample every magnifier from the content it was told to enlarge.</summary>
     private void RefreshMagnifiers()

@@ -13,7 +13,8 @@ namespace ScreenPaste.Capture;
 /// <summary>
 /// The capture's outputs. Copy, save, quick save, pin, print and copy as a file flatten the
 /// annotations onto the area and then leave the capture (not when a save or print dialog is
-/// cancelled, or the file could not be copied); V only copies the area's size. Enter, a
+/// cancelled, or the file could not be copied), remembering the snip for R and , / .
+/// (CaptureOverlayWindow.History.cs); V only copies the area's size. Enter, a
 /// double-click on the area with no tool and a middle-click inside it run the configurable
 /// <see cref="OutputAction"/>s (Snipaste: copy, copy, pin), Shift+click on Save quick-saves,
 /// and Space shows or hides the toolbar.
@@ -127,18 +128,38 @@ public partial class CaptureOverlayWindow
         // their layout; RenderTargetBitmap draws whatever was last *arranged*, so flush the
         // pending pass or a freshly sampled image would export at a stale (or zero) size.
         EditLayer.UpdateLayout();
-        return Compositor.Compose(_screenshot, _selection, Ink.Strokes, BlurHost, MagnifyHost,
-            ShapeHost, StickerHost, TextHost);
+        return ComposeRegion(ShownCursor());
     }
 
+    /// <summary>The area with every annotation, and the pointer when it is given.</summary>
+    private BitmapSource ComposeRegion(CursorLayer? cursor) => Compositor.Compose(_screenshot, _selection, cursor,
+        Ink.Strokes, BlurHost, MagnifyHost, ShapeHost, StickerHost, TextHost);
+
     /// <summary>Flatten, hand the image to <paramref name="output"/>, and leave the capture
-    /// once it reports success. False when it did not (a cancelled dialog).</summary>
+    /// once it reports success, remembering the snip (R, and , / .). False when it did not
+    /// (a cancelled dialog).</summary>
     private bool Export(Func<BitmapSource, bool> output)
     {
-        if (!output(Flatten())) return false;
-        PersistSettings();
-        Close();
+        var img = Flatten();
+        if (!output(img)) return false;
+        Leave(img);
         return true;
+    }
+
+    /// <summary>The output went out: remember the snip, keep the settings and leave. The
+    /// overlay leaves even when remembering fails, since the image is already copied, saved or
+    /// printed; the failure still reaches App's safety net, which logs it.</summary>
+    private void Leave(BitmapSource output)
+    {
+        try
+        {
+            RecordSnip(output);
+        }
+        finally
+        {
+            PersistSettings();
+            Close();
+        }
     }
 
     // Copy leaves even if another app kept the clipboard locked, as it always has.
@@ -191,8 +212,7 @@ public partial class CaptureOverlayWindow
             ShowAgain();
             return;
         }
-        PersistSettings();
-        Close();
+        Leave(img);
     }
 
     /// <summary>Back from hiding for a printer's dialog, with the keyboard.</summary>

@@ -18,7 +18,7 @@ public partial class CaptureOverlayWindow : Window
 {
     private enum Phase { Selecting, Editing }
 
-    private readonly BitmapSource _screenshot;
+    private BitmapSource _screenshot;   // the backdrop: swapped by F5 and , / . (History.cs)
     private readonly VirtualScreen _vs;
     private readonly AppSettings _settings;
 
@@ -101,10 +101,11 @@ public partial class CaptureOverlayWindow : Window
     private readonly List<Button> _shapeKindButtons = new();
     private readonly List<Button> _shapeStyleButtons = new();
 
-    public CaptureOverlayWindow(BitmapSource screenshot, VirtualScreen vs, AppSettings settings)
+    public CaptureOverlayWindow(CaptureRequest request, AppSettings settings)
     {
-        _screenshot = screenshot;
-        _vs = vs;
+        _request = request;
+        _screenshot = request.Screenshot;
+        _vs = request.Screen;
         _settings = settings;
 
         InitializeComponent();
@@ -147,9 +148,7 @@ public partial class CaptureOverlayWindow : Window
             if (_customColors.Count >= MaxCustomColors) break;
         }
 
-        ScreenImage.Source = _screenshot;
-        ScreenImage.Width = vs.Width;
-        ScreenImage.Height = vs.Height;
+        InitHistory();   // the backdrop and the pointer
 
         SourceInitialized += OnSourceInitialized;
         Loaded += (_, _) => { Activate(); Focus(); };
@@ -1010,7 +1009,7 @@ public partial class CaptureOverlayWindow : Window
     }
 
     private BitmapSource BlurBeneath() => _blurBeneath ??= Compositor.ComposeBeneathBlur(
-        _screenshot, _selection, Ink.Strokes, ShapeHost, StickerHost, TextHost);
+        _screenshot, _selection, ShownCursor(), Ink.Strokes, ShapeHost, StickerHost, TextHost);
 
     /// <summary>Re-sample every blur region from the content beneath the blur layer.</summary>
     private void RefreshBlurs()

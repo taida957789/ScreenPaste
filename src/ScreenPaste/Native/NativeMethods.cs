@@ -204,4 +204,33 @@ internal static class NativeMethods
     [DllImport("gdi32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool DeleteObject(IntPtr hObject);
+
+    // ---- Cursor snapshot (the pointer's image size, for a still screenshot) ----
+    [StructLayout(LayoutKind.Sequential)]
+    public struct BITMAP
+    {
+        public int bmType;
+        public int bmWidth;
+        public int bmHeight;
+        public int bmWidthBytes;
+        public ushort bmPlanes;
+        public ushort bmBitsPixel;
+        public IntPtr bmBits;
+    }
+
+    [DllImport("gdi32.dll", EntryPoint = "GetObjectW")]
+    public static extern int GetObject(IntPtr hgdiobj, int cbBuffer, out BITMAP lpvObject);
+
+    // ---- Display affinity (F5 re-captures the screen from under the overlay) ----
+    // WDA_EXCLUDEFROMCAPTURE needs Windows 10 2004; older systems fail the call.
+    public const uint WDA_NONE = 0x00000000;
+    public const uint WDA_EXCLUDEFROMCAPTURE = 0x00000011;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
+
+    /// <summary>Blocks until the desktop compositor has presented its next frame.</summary>
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmFlush();
 }

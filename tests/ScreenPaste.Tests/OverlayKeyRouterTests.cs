@@ -1097,4 +1097,141 @@ public sealed class OverlayKeyRouterTests
         Assert.Equal(OverlayCommand.ConfirmClose, Router.Route(line));
         Assert.Equal(OverlayCommand.RunEnterAction, Router.Route(line with { Key = Key.Enter }));
     }
+
+    // ---------------------------------------------------------------- snip context ---
+
+    public static TheoryData<OverlayPhase> BothPhases() => new() { OverlayPhase.Selecting, OverlayPhase.Editing };
+
+    private static OverlayKeyContext InPhase(OverlayPhase phase, Key key, ModifierKeys modifiers = None) =>
+        Selecting(key, modifiers) with { Phase = phase };
+
+    [Theory]
+    [MemberData(nameof(BothPhases))]
+    public void R_StepsBackToTheLastSnipsArea_InEitherPhase(OverlayPhase phase)
+    {
+        Assert.Equal(OverlayCommand.PreviousRegion, Router.Route(InPhase(phase, Key.R)));
+    }
+
+    [Theory]
+    [MemberData(nameof(BothPhases))]
+    public void ShiftR_StepsTheOtherWay(OverlayPhase phase)
+    {
+        Assert.Equal(OverlayCommand.NextRegion, Router.Route(InPhase(phase, Key.R, Shift)));
+    }
+
+    [Theory]
+    [MemberData(nameof(BothPhases))]
+    public void F5_RefreshesTheScreenshot_InEitherPhase(OverlayPhase phase)
+    {
+        Assert.Equal(OverlayCommand.RefreshScreenshot, Router.Route(InPhase(phase, Key.F5)));
+    }
+
+    [Theory]
+    [MemberData(nameof(BothPhases))]
+    public void F5_HeldDown_KeepsRefreshing(OverlayPhase phase)
+    {
+        var ctx = InPhase(phase, Key.F5) with { IsRepeat = true };
+
+        Assert.Equal(OverlayCommand.RefreshScreenshot, Router.Route(ctx));
+    }
+
+    [Theory]
+    [InlineData(Key.R, Ctrl)]
+    [InlineData(Key.R, Alt)]
+    [InlineData(Key.F5, Shift)]
+    [InlineData(Key.F5, Ctrl)]
+    public void ChordedSnipKeys_AreNotBound(Key key, ModifierKeys modifiers)
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(Selecting(key, modifiers)));
+        Assert.Equal(OverlayCommand.None, Router.Route(Editing(key, modifiers)));
+    }
+
+    [Theory]
+    [MemberData(nameof(BothPhases))]
+    public void SnipKeys_MidDrag_DoNothing(OverlayPhase phase)
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(InPhase(phase, Key.R) with { Dragging = true }));
+        Assert.Equal(OverlayCommand.None, Router.Route(InPhase(phase, Key.F5) with { Dragging = true }));
+    }
+
+    [Fact]
+    public void SnipKeys_WhileTyping_AreTyping()
+    {
+        Assert.Equal(OverlayCommand.PassThrough, Router.Route(Typing(Key.R)));
+        Assert.Equal(OverlayCommand.PassThrough, Router.Route(Typing(Key.F5)));
+    }
+
+    [Fact]
+    public void R_WithTheNumberTool_IsStillTheLastArea()
+    {
+        var ctx = Editing(Key.R) with { Tool = ToolKind.Number };
+
+        Assert.Equal(OverlayCommand.PreviousRegion, Router.Route(ctx));
+    }
+
+    [Fact]
+    public void AGestureBoundToF5_WinsWhileEditing()
+    {
+        var bindings = OverlayKeyBindings.FromSettings(new AppSettings()) with { Save = new KeyChord(Key.F5, None) };
+
+        Assert.Equal(OverlayCommand.Save, new OverlayKeyRouter(bindings).Route(Editing(Key.F5)));
+    }
+
+    [Theory]
+    [InlineData("`", OverlayCommand.ToggleCursor)]
+    [InlineData("!", OverlayCommand.ToggleCursor)]
+    [InlineData(",", OverlayCommand.HistoryPrevious)]
+    [InlineData(".", OverlayCommand.HistoryNext)]
+    public void SnipContextCharacters_WhileSelecting(string text, OverlayCommand expected)
+    {
+        Assert.Equal(expected, Router.RouteText(text, Selecting(Key.None)));
+    }
+
+    [Theory]
+    [InlineData("`", OverlayCommand.ToggleCursor)]
+    [InlineData("!", OverlayCommand.ToggleCursor)]
+    [InlineData(",", OverlayCommand.HistoryPrevious)]
+    [InlineData(".", OverlayCommand.HistoryNext)]
+    public void SnipContextCharacters_WhileEditing(string text, OverlayCommand expected)
+    {
+        Assert.Equal(expected, Router.RouteText(text, Editing(Key.None)));
+    }
+
+    [Theory]
+    [InlineData(Shift)]       // ! over 1 on a US keyboard
+    [InlineData(None)]        // ! has a key of its own on a French one
+    [InlineData(Ctrl | Alt)]  // AltGr
+    public void ExclamationMark_MatchesByCharacter_WhateverModifiersTypedIt(ModifierKeys modifiers)
+    {
+        Assert.Equal(OverlayCommand.ToggleCursor, Router.RouteText("!", Selecting(Key.None, modifiers)));
+    }
+
+    [Fact]
+    public void SnipContextCharacters_WithTheNumberTool_KeepTheirMeaning()
+    {
+        Assert.Equal(OverlayCommand.HistoryNext, Router.RouteText(".", Numbering()));
+        Assert.Equal(OverlayCommand.ToggleCursor, Router.RouteText("!", Numbering()));
+    }
+
+    [Fact]
+    public void SnipContextCharacters_WhileTypingOrInTheFontList_AreLeftToTheControl()
+    {
+        Assert.Equal(OverlayCommand.PassThrough, Router.RouteText(",", Typing(Key.None)));
+        Assert.Equal(OverlayCommand.PassThrough, Router.RouteText("`", Editing(Key.None) with { DropDownOpen = true }));
+    }
+
+    [Theory]
+    [MemberData(nameof(BothPhases))]
+    public void SnipContextCharacters_MidDrag_DoNothing(OverlayPhase phase)
+    {
+        Assert.Equal(OverlayCommand.None, Router.RouteText(",", InPhase(phase, Key.None) with { Dragging = true }));
+        Assert.Equal(OverlayCommand.None, Router.RouteText("`", InPhase(phase, Key.None) with { Dragging = true }));
+    }
+
+    [Fact]
+    public void Digit1_IsStillThePenSize_NotTheCursorToggle()
+    {
+        Assert.Equal(OverlayCommand.PenSizeDown, Router.Route(Editing(Key.D1)));
+        Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.D1, Shift)));   // types "!" instead
+    }
 }
