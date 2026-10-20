@@ -128,6 +128,8 @@ public sealed class AppSettings
     public bool PinDoubleClickTipShown { get; set; }
     // 沒有貼圖取得焦點時，在任何地方按 Esc 會關閉所有顯示中的貼圖（可再叫回）
     public bool PinGlobalEscClosesAll { get; set; } = true;
+    // Shift+雙擊貼圖切換的縮圖邊長（100% 縮放下的像素，16–512）
+    public int PinThumbnailSize { get; set; } = 64;
 
     // ---- Startup ----
     public bool RunAtStartup { get; set; }

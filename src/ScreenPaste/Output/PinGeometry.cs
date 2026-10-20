@@ -80,6 +80,37 @@ public static class PinGeometry
         return new Point(x, y);
     }
 
+    /// <summary>
+    /// The image pixel the pin shows at <paramref name="offset"/> (physical px from the shown
+    /// part's top-left), in px of the image as turned, for the pin's loupe: the shown part is
+    /// <paramref name="shown"/> (the whole image, or a thumbnail's crop) at
+    /// <paramref name="scaleX"/> x <paramref name="scaleY"/> screen px per image px. Null off it.
+    /// </summary>
+    public static (int X, int Y)? PixelAt(Point offset, double scaleX, double scaleY, Rect shown)
+    {
+        if (shown.IsEmpty || scaleX <= 0 || scaleY <= 0 || offset.X < 0 || offset.Y < 0) return null;
+        int x = (int)Math.Floor(offset.X / scaleX), y = (int)Math.Floor(offset.Y / scaleY);
+        if (x >= shown.Width || y >= shown.Height) return null;
+        return (x + (int)shown.X, y + (int)shown.Y);
+    }
+
+    /// <summary>Where a <paramref name="width"/> x <paramref name="height"/> loupe goes:
+    /// <paramref name="gap"/> px below and right of the cursor, flipped to the other side near
+    /// the right or bottom of <paramref name="monitor"/>, and never off it (as the capture's).</summary>
+    public static Point LoupeAt(Point cursor, double width, double height, Rect monitor, double gap)
+    {
+        double x = cursor.X + gap;
+        if (x + width > monitor.Right) x = cursor.X - gap - width;
+        double y = cursor.Y + gap;
+        if (y + height > monitor.Bottom) y = cursor.Y - gap - height;
+        return new Point(
+            ClampTolerant(x, monitor.Left, monitor.Right - width),
+            ClampTolerant(y, monitor.Top, monitor.Bottom - height));
+    }
+
+    private static double ClampTolerant(double value, double min, double max) =>
+        max < min ? min : Math.Clamp(value, min, max);
+
     private static (int Width, int Height) Turned(int width, int height, int rotation) =>
         rotation % 180 == 0 ? (width, height) : (height, width);
 }

@@ -8,8 +8,9 @@ namespace ScreenPaste.Output;
 /// <summary>
 /// Keyboard handling for a focused pin. Which command a key runs is decided by the pure
 /// <see cref="PinKeyRouter"/>; this half builds its context and runs the result, as the
-/// menu does for its entries. The IME is off for pins, so 1-6 and W/A/S/D arrive as keys
-/// rather than ImeProcessed while a Chinese or Japanese IME is on.
+/// menu does for its entries; a modifier tapped on its own goes through
+/// <see cref="PinKeyRouter.RouteTap"/> (Alt: the loupe). The IME is off for pins, so 1-6,
+/// W/A/S/D and C arrive as keys rather than ImeProcessed while a Chinese or Japanese IME is on.
 /// </summary>
 public sealed partial class PinWindow
 {
@@ -28,6 +29,7 @@ public sealed partial class PinWindow
     private void Pin_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         var key = KeyInputNormalizer.Effective(e);
+        _modifierTaps.KeyDown(key, Keyboard.Modifiers, AnyMouseButtonDown());
         if (IsAltKey(key) && !e.IsRepeat) _altChordRan = false;
 
         var ctx = new PinKeyContext
@@ -36,6 +38,7 @@ public sealed partial class PinWindow
             Modifiers = Keyboard.Modifiers,
             Text = LayoutText(key),
             IsRepeat = e.IsRepeat,
+            LoupeVisible = LoupeShowing,
         };
         // Built per press, so a gesture changed in the settings applies to open pins at once.
         var command = new PinKeyRouter(PinKeyBindings.FromSettings(_settings)).Route(ctx);
@@ -47,16 +50,31 @@ public sealed partial class PinWindow
         RunCommand(command, ctx);
     }
 
-    /// <summary>Windows never saw the handled key of an Alt chord (Ctrl+Alt+C), so it would
-    /// take the Alt release for an Alt tap and enter menu mode, eating the next key. And the
-    /// Menu key opened the menu on its way down, where WPF would open it again on the way up.</summary>
+    /// <summary>A modifier tapped on its own runs its command (Alt: the loupe; Shift: its
+    /// colour format), and the release is kept from Windows, which would take an Alt tap into
+    /// menu mode. Windows never saw the handled key of an Alt chord (Ctrl+Alt+C) either, so it
+    /// would take that Alt release for a tap too. And the Menu key opened the menu on its way
+    /// down, where WPF would open it again on the way up.</summary>
     private void Pin_PreviewKeyUp(object sender, KeyEventArgs e)
     {
         var key = KeyInputNormalizer.Effective(e);
+        var tapped = _modifierTaps.KeyUp(key);
         if (key == Key.Apps && ContextMenu is { IsOpen: true })
         {
             e.Handled = true;
             return;
+        }
+        if (tapped != ModifierKeys.None)
+        {
+            var ctx = new PinKeyContext { Key = key, Modifiers = Keyboard.Modifiers, LoupeVisible = LoupeShowing };
+            var command = PinKeyRouter.RouteTap(tapped, ctx);
+            if (command != PinCommand.None)
+            {
+                e.Handled = true;
+                _altChordRan = false;
+                RunCommand(command, ctx);
+                return;
+            }
         }
         if (!IsAltKey(key) || !_altChordRan) return;
         _altChordRan = false;
@@ -64,13 +82,14 @@ public sealed partial class PinWindow
     }
 
     /// <summary>Run a routed command. The menu runs its entries through here as well, with
-    /// a default context (no key).</summary>
+    /// a default context (no key). Closing, destroying, moves and opacity act on every pin
+    /// picked with this one (Ctrl+click, Ctrl+A).</summary>
     private void RunCommand(PinCommand command, PinKeyContext ctx)
     {
         switch (command)
         {
-            case PinCommand.Close: PinManager.CloseRecoverable(this); break;
-            case PinCommand.Destroy: PinManager.Destroy(this); break;
+            case PinCommand.Close: ForGroup(PinManager.CloseRecoverable); break;
+            case PinCommand.Destroy: ForGroup(PinManager.Destroy); break;
             case PinCommand.RotateClockwise: Apply(_state.RotateClockwise()); break;
             case PinCommand.RotateCounterClockwise: Apply(_state.RotateCounterClockwise()); break;
             case PinCommand.FlipHorizontal: Apply(_state.FlipHorizontally()); break;
@@ -79,8 +98,8 @@ public sealed partial class PinWindow
             case PinCommand.ToggleInvert: Apply(_state.ToggleInvert()); break;
             case PinCommand.ZoomIn: Apply(_state.ZoomBy(ZoomStep)); break;
             case PinCommand.ZoomOut: Apply(_state.ZoomBy(1 / ZoomStep)); break;
-            case PinCommand.OpacityUp: Apply(_state.WithOpacityStep(1)); break;
-            case PinCommand.OpacityDown: Apply(_state.WithOpacityStep(-1)); break;
+            case PinCommand.OpacityUp: ForGroup(pin => pin.Apply(pin._state.WithOpacityStep(1))); break;
+            case PinCommand.OpacityDown: ForGroup(pin => pin.Apply(pin._state.WithOpacityStep(-1))); break;
             case PinCommand.Copy: CopyImage(); break;
             case PinCommand.CopyAsFile: CopyAsFile(); break;
             case PinCommand.Save: SaveAs(); break;
@@ -92,6 +111,10 @@ public sealed partial class PinWindow
             case PinCommand.OpenMenu: OpenMenu(); break;
             case PinCommand.PasteClipboard: PasteClipboard(); break;
             case PinCommand.CopyText: CopyText(); break;
+            case PinCommand.SelectAll: PinManager.SelectAllVisible(); break;
+            case PinCommand.ToggleLoupe: SetLoupe(!_loupeOn); break;
+            case PinCommand.CopyLoupeColor: CopyLoupeColour(); break;
+            case PinCommand.CycleLoupeFormat: CycleLoupeFormat(); break;
         }
     }
 
@@ -109,26 +132,30 @@ public sealed partial class PinWindow
         if (_content.SourceText is { } text) ClipboardService.CopyText(text);
     }
 
-    /// <summary>An arrow: move the pin a pixel, faster while the key is held.</summary>
+    /// <summary>An arrow: move the pin, and every pin picked with it, a pixel, faster while
+    /// the key is held. A drag under way owns the position (DragMove let no key through either).</summary>
     private void MoveBy(Key key, bool isRepeat)
     {
+        if (_move != null || _resize != null) return;
         int step = CursorNudge.Step(NextNudgeRepeat(isRepeat));
         var (dx, dy) = CursorNudge.Direction(key);
-        var hwnd = Handle;
-        if (hwnd == IntPtr.Zero || !NativeMethods.GetWindowRect(hwnd, out var r)) return;
-        NativeMethods.SetWindowPos(hwnd, IntPtr.Zero, r.Left + dx * step, r.Top + dy * step, 0, 0,
-            NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
+        ForGroup(pin => pin.MoveWindowBy(dx * step, dy * step));
+        UpdateLoupe();   // another pixel is under the cursor now
     }
 
     /// <summary>W/A/S/D: move the cursor a pixel, faster while the key is held, to pick a
-    /// colour off the pin exactly.</summary>
+    /// colour off the pin exactly. A drag follows the cursor, so with the left button held
+    /// they move the pin a pixel at a time; SetCursorPos posts a mouse move too, but
+    /// following at once keeps up with a held key.</summary>
     private void NudgeCursor(Key key, bool isRepeat)
     {
         int step = CursorNudge.Step(NextNudgeRepeat(isRepeat));
         if (!NativeMethods.GetCursorPos(out var pt)) return;
         var (dx, dy) = CursorNudge.Direction(key);
         var (x, y) = CursorNudge.Clamp(pt.X + dx * step, pt.Y + dy * step, VirtualScreen.Current);
-        if (x != pt.X || y != pt.Y) NativeMethods.SetCursorPos(x, y);
+        if (x == pt.X && y == pt.Y) return;
+        NativeMethods.SetCursorPos(x, y);
+        FollowCursor();
     }
 
     private int NextNudgeRepeat(bool isRepeat) =>

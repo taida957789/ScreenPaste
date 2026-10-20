@@ -238,6 +238,111 @@ public sealed class HandleGeometryTests
         Assert.Equal(new Rect(0, 0, 500, 400), result);
     }
 
+    // ---------------------------------------------------------------- aspect (pin border) ---
+
+    private static readonly Rect Pin = new(100, 100, 200, 100);
+
+    [Theory]
+    [InlineData(7, 50, 10, 100, 100, 250, 125)]      // SE: the wider move sets the scale
+    [InlineData(7, 10, 50, 100, 100, 300, 150)]      // SE: the taller move does
+    [InlineData(0, 20, 0, 120, 110, 180, 90)]        // NW dragged in: the SE corner stays
+    [InlineData(2, 20, -30, 100, 70, 260, 130)]      // NE out: the SW corner stays
+    [InlineData(4, 100, 0, 100, 75, 300, 150)]       // E: the W edge stays, centred vertically
+    [InlineData(3, -50, 0, 50, 87.5, 250, 125)]      // W: the E edge stays
+    [InlineData(1, 0, -50, 50, 50, 300, 150)]        // N: the S edge stays, centred across
+    [InlineData(6, 0, 20, 80, 100, 240, 120)]        // S: the N edge stays
+    public void DragEdgesAspect_ScalesFromTheOppositeEdgeOrCorner(
+        int handle, double dx, double dy, double x, double y, double w, double h)
+    {
+        var result = HandleGeometry.DragEdgesAspect(Pin, handle, dx, dy, Min);
+
+        Assert.Equal(new Rect(x, y, w, h), result);
+    }
+
+    [Theory]
+    [MemberData(nameof(AllHandles))]
+    public void DragEdgesAspect_KeepsTheRatio(int handle)
+    {
+        var result = HandleGeometry.DragEdgesAspect(Pin, handle, 37, -23, Min);
+
+        Assert.Equal(2.0, result.Width / result.Height, 9);
+    }
+
+    [Theory]
+    [MemberData(nameof(AllHandles))]
+    public void DragEdgesAspect_StopsAtTheMinimumSize_KeepingTheRatio(int handle)
+    {
+        var (west, _, north, _) = HandleGeometry.EdgesFor(handle);
+        double dx = west ? 9999 : -9999, dy = north ? 9999 : -9999;
+
+        var result = HandleGeometry.DragEdgesAspect(Pin, handle, dx, dy, Min);
+
+        Assert.Equal(Min, result.Height);
+        Assert.Equal(2 * Min, result.Width);
+    }
+
+    [Fact]
+    public void DragEdgesAspect_OfAnEmptyRect_LeavesIt()
+    {
+        var flat = new Rect(10, 10, 0, 50);
+
+        Assert.Equal(flat, HandleGeometry.DragEdgesAspect(flat, 7, 20, 20, Min));
+    }
+
+    [Theory]
+    [InlineData(0, 150, 150, 150, 50)]   // NW: the SE corner stays
+    [InlineData(7, 100, 100, 150, 50)]   // SE: the NW corner stays
+    [InlineData(4, 100, 125, 150, 50)]   // E: the W edge stays, centred vertically
+    [InlineData(1, 125, 150, 150, 50)]   // N: the S edge stays, centred across
+    public void ResizeAnchored_KeepsWhatTheHandleDoesNotDrag(int handle, double x, double y, double w, double h)
+    {
+        var result = HandleGeometry.ResizeAnchored(Pin, handle, 150, 50);
+
+        Assert.Equal(new Rect(x, y, w, h), result);
+    }
+
+    // ---------------------------------------------------------------- border band (pin) ---
+
+    [Theory]
+    [InlineData(101, 101, 0)]   // NW
+    [InlineData(200, 101, 1)]   // N
+    [InlineData(298, 101, 2)]   // NE
+    [InlineData(101, 150, 3)]   // W
+    [InlineData(299, 150, 4)]   // E
+    [InlineData(101, 199, 5)]   // SW
+    [InlineData(200, 199, 6)]   // S
+    [InlineData(299, 199, 7)]   // SE
+    public void BorderHandleAt_FindsTheEdgeOrCornerUnderThePoint(double x, double y, int expected)
+    {
+        Assert.Equal(expected, HandleGeometry.BorderHandleAt(Pin, new Point(x, y), 6));
+    }
+
+    [Theory]
+    [InlineData(110, 101, 0)]   // on the top edge, close to the corner
+    [InlineData(101, 110, 0)]   // on the left edge, close to the corner
+    [InlineData(113, 101, 1)]   // further along: the top edge
+    [InlineData(289, 199, 7)]
+    public void BorderHandleAt_CornersReachAlongTheEdges(double x, double y, int expected)
+    {
+        Assert.Equal(expected, HandleGeometry.BorderHandleAt(Pin, new Point(x, y), 6));
+    }
+
+    [Theory]
+    [InlineData(200, 150)]   // the middle
+    [InlineData(99, 150)]    // left of the rect
+    [InlineData(300, 150)]   // the right edge itself is outside, as GetWindowRect has it
+    [InlineData(200, 200)]
+    public void BorderHandleAt_IsNullAwayFromTheBorder(double x, double y)
+    {
+        Assert.Null(HandleGeometry.BorderHandleAt(Pin, new Point(x, y), 6));
+    }
+
+    [Fact]
+    public void BorderHandleAt_WithoutABand_IsNull()
+    {
+        Assert.Null(HandleGeometry.BorderHandleAt(Pin, new Point(101, 101), 0));
+    }
+
     // ---------------------------------------------------------------- placement ---
 
     /// <summary>

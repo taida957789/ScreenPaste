@@ -289,6 +289,7 @@ public static class Loc
         Add("pin.saveFailed","Could not save the image: {0}", "無法儲存圖片：{0}", "画像を保存できませんでした：{0}", "이미지를 저장하지 못했습니다: {0}", "Impossible d'enregistrer l'image : {0}", "Das Bild konnte nicht gespeichert werden: {0}", "No se pudo guardar la imagen: {0}");
         Add("pin.paste",     "Paste from clipboard", "貼上剪貼簿內容", "クリップボードから貼り付け", "클립보드에서 붙여넣기", "Coller le presse-papiers", "Aus Zwischenablage einfügen", "Pegar del portapapeles");
         Add("pin.copyText",  "Copy text",            "複製文字",       "テキストをコピー",    "텍스트 복사",      "Copier le texte",   "Text kopieren",     "Copiar texto");
+        Add("pin.thumbnail", "Thumbnail",            "縮圖",          "サムネイル",          "썸네일",          "Miniature",         "Miniaturansicht",   "Miniatura");
 
         // Settings window
         Add("set.title",     "ScreenPaste Settings", "ScreenPaste 設定","ScreenPaste 設定",  "ScreenPaste 설정","Paramètres ScreenPaste","ScreenPaste-Einstellungen","Ajustes de ScreenPaste");

@@ -17,11 +17,14 @@ namespace ScreenPaste.Output;
 
 /// <summary>
 /// A frameless, always-on-top window that pins a composed image onto the screen.
-/// Drag to move, mouse-wheel to zoom at the cursor (Ctrl: opacity), middle-click to reset to
-/// 100% and back, right-click or the Menu key for actions; the keys are PinWindow.Keyboard.cs's
-/// (Ctrl+V shows the clipboard instead, Ctrl+Shift+C copies a text pin's text), and closing,
-/// destroying, a double-click and dropped files PinWindow.Lifecycle.cs's. The click-through
-/// hotkey can make the pin let clicks through to the window beneath (<see cref="SetClickThrough"/>).
+/// Mouse-wheel to zoom at the cursor (Ctrl: opacity), middle-click to reset to 100% and back,
+/// right-click or the Menu key for actions; the keys are PinWindow.Keyboard.cs's (Ctrl+V shows
+/// the clipboard instead, Ctrl+Shift+C copies a text pin's text), closing, destroying, a
+/// double-click and dropped files PinWindow.Lifecycle.cs's, dragging, Shift-snapping and
+/// border resizing PinWindow.Drag.cs's, thumbnail mode PinWindow.Thumbnail.cs's and the Alt
+/// loupe PinWindow.Loupe.cs's. The click-through hotkey can make the pin let clicks through to
+/// the window beneath (<see cref="SetClickThrough"/>). Pins picked together (Ctrl+click,
+/// Ctrl+A) move, fade, reset, close and destroy as one (<see cref="PinManager.Selection"/>).
 ///
 /// The pin shows its image through a <see cref="PinTransformState"/> (zoom, quarter turns,
 /// flips, opacity, grayscale, invert). Content is authored in physical px and the window is
@@ -39,13 +42,16 @@ public sealed partial class PinWindow : Window
     private const double MenuKeysOpacity = 0.6;
     private const string MenuCheckMark = "✓";
     private static readonly Duration SaveFlashDuration = new(TimeSpan.FromMilliseconds(400));
-    private static readonly SolidColorBrush FrameBrush = CreateFrameBrush(0xAA);
-    private static readonly SolidColorBrush ClickThroughFrameBrush = CreateFrameBrush(0x40);
+    private static readonly SolidColorBrush FrameBrush = CreateFrameBrush(Color.FromArgb(0xAA, 0x3D, 0xA9, 0xFC));
+    private static readonly SolidColorBrush ClickThroughFrameBrush = CreateFrameBrush(Color.FromArgb(0x40, 0x3D, 0xA9, 0xFC));
+    private static readonly SolidColorBrush SelectedFrameBrush = CreateFrameBrush(Color.FromRgb(0xFF, 0x9F, 0x1C));
 
     private readonly AppSettings _settings;
     private readonly int _startX, _startY;     // physical px: where the image goes when first shown
     private readonly Image _image;
     private readonly Rectangle _saveFlash;     // quick save's white flash over the image
+    private readonly Grid _layers;             // the image and its flash
+    private readonly Canvas _viewport;         // what the window shows: all of the layers, or a thumbnail's part
     private readonly Border _frame;
     private readonly MatrixTransform _layout = new();   // orientation and zoom, image px to DIPs
     private PinContent _content;               // what is pinned, as it came; a dropped file replaces it
@@ -93,13 +99,16 @@ public sealed partial class PinWindow : Window
         RenderOptions.SetBitmapScalingMode(_image, BitmapScalingMode.HighQuality);
         _saveFlash = new Rectangle { Fill = Brushes.White, Opacity = 0, IsHitTestVisible = false };
 
-        // The image and its flash turn and zoom together; the frame stays one pixel wide.
-        var layers = new Grid { LayoutTransform = _layout };
-        layers.Children.Add(_image);
-        layers.Children.Add(_saveFlash);
+        // The image and its flash turn and zoom together; the frame stays one pixel wide. The
+        // viewport clips them to what the window shows, which a thumbnail makes a part of them.
+        _layers = new Grid { LayoutTransform = _layout };
+        _layers.Children.Add(_image);
+        _layers.Children.Add(_saveFlash);
+        _viewport = new Canvas { ClipToBounds = true };
+        _viewport.Children.Add(_layers);
         _frame = new Border
         {
-            Child = layers,
+            Child = _viewport,
             BorderBrush = FrameBrush,
             BorderThickness = new Thickness(FramePx),
         };
@@ -108,8 +117,10 @@ public sealed partial class PinWindow : Window
         BuildContextMenu();
         InitKeyboard();
         InitLifecycle();
+        InitDrag();
+        InitThumbnail();
+        InitLoupe();
 
-        MouseLeftButtonDown += OnLeftDown;
         MouseDown += OnMiddleDown;
         MouseWheel += OnWheel;
         SourceInitialized += OnSourceInitialized;
@@ -119,9 +130,9 @@ public sealed partial class PinWindow : Window
         PinManager.Add(this);
     }
 
-    private static SolidColorBrush CreateFrameBrush(byte alpha)
+    private static SolidColorBrush CreateFrameBrush(Color color)
     {
-        var brush = new SolidColorBrush(Color.FromArgb(alpha, 0x3D, 0xA9, 0xFC));
+        var brush = new SolidColorBrush(color);
         brush.Freeze();
         return brush;
     }
@@ -162,10 +173,13 @@ public sealed partial class PinWindow : Window
     }
 
     /// <summary>Change to <paramref name="next"/>. A new zoom keeps the image point at
-    /// <paramref name="zoomAnchor"/> (physical screen px) still; a quarter turn keeps the centre.</summary>
+    /// <paramref name="zoomAnchor"/> (physical screen px) still; a quarter turn keeps the centre.
+    /// A thumbnail shows a part of the image as it is turned, at its own size, so a turn, a
+    /// flip or a zoom brings the whole pin back first; opacity and effects keep it.</summary>
     private void Apply(PinTransformState next, Point zoomAnchor)
     {
         if (next == _state) return;
+        if (_thumbnail != null && ReshapesPin(next)) ExitThumbnail();
         var (w, h) = OutputSize(next);
         bool quarterTurn = next.QuarterTurned != _state.QuarterTurned;
         Present(next, PinGeometry.NextTopLeft(ImageRect(), zoomAnchor, _state.Zoom, next.Zoom, w, h, quarterTurn));
@@ -174,7 +188,11 @@ public sealed partial class PinWindow : Window
     /// <summary>A change from a key or the menu: a zoom stays centred.</summary>
     private void Apply(PinTransformState next) => Apply(next, Centre(ImageRect()));
 
-    /// <summary>Show <paramref name="next"/> with the image's top-left at
+    private bool ReshapesPin(PinTransformState next) =>
+        next.Zoom != _state.Zoom || next.Rotation != _state.Rotation ||
+        next.FlipHorizontal != _state.FlipHorizontal || next.FlipVertical != _state.FlipVertical;
+
+    /// <summary>Show <paramref name="next"/> with the image's (or the thumbnail's) top-left at
     /// <paramref name="imageTopLeft"/> (physical screen px).</summary>
     private void Present(PinTransformState next, Point imageTopLeft)
     {
@@ -185,7 +203,7 @@ public sealed partial class PinWindow : Window
 
         var hwnd = Handle;
         if (hwnd == IntPtr.Zero) return;
-        var (w, h) = OutputSize(next);
+        var (w, h) = ShownSize();
         // The first placement also shows the window, which Show() is still on its way to doing.
         uint flags = NativeMethods.SWP_NOACTIVATE | (_placed ? 0u : NativeMethods.SWP_SHOWWINDOW);
         NativeMethods.SetWindowPos(hwnd, NativeMethods.HWND_TOPMOST,
@@ -195,19 +213,32 @@ public sealed partial class PinWindow : Window
     }
 
     /// <summary>Turn, flip and scale the image so it fills its rounded output size exactly,
-    /// in DIPs for the current monitor; the frame stays one physical pixel.</summary>
+    /// in DIPs for the current monitor; the frame stays one physical pixel. The viewport is
+    /// the size the window shows, and a thumbnail shifts the image so its part is in view.</summary>
     private void UpdateLayoutTransform()
     {
-        var (sx, sy) = PinGeometry.PixelScale(Source.PixelWidth, Source.PixelHeight, _state.Rotation, _state.Zoom);
+        var (sx, sy) = DisplayScale();
         _layout.Matrix = _state.Orientation * new Matrix(sx / _dpi, 0, 0, sy / _dpi, 0, 0);
         _frame.BorderThickness = new Thickness(FramePx / _dpi);
+
+        var (w, h) = ShownSize();
+        _viewport.Width = w / _dpi;
+        _viewport.Height = h / _dpi;
+        var crop = _thumbnail?.Crop ?? new Rect();
+        Canvas.SetLeft(_layers, -crop.X * sx / _dpi);
+        Canvas.SetTop(_layers, -crop.Y * sy / _dpi);
     }
 
-    /// <summary>Where the image is now (physical screen px): read back from the window, which
-    /// may have been dragged, or where it goes before the window is first shown.</summary>
+    /// <summary>Screen px per image px along each screen axis as the pin shows it now: at its
+    /// zoom, or at a thumbnail's scale.</summary>
+    private (double X, double Y) DisplayScale() =>
+        PinGeometry.PixelScale(Source.PixelWidth, Source.PixelHeight, _state.Rotation, _thumbnail?.Scale ?? _state.Zoom);
+
+    /// <summary>Where the image (or the thumbnail) is now (physical screen px): read back from
+    /// the window, which may have been dragged, or where it goes before it is first shown.</summary>
     private Rect ImageRect()
     {
-        var (w, h) = OutputSize(_state);
+        var (w, h) = ShownSize();
         if (_placed && NativeMethods.GetWindowRect(Handle, out var r))
             return new Rect(r.Left + FramePx, r.Top + FramePx, w, h);
         return new Rect(_startX, _startY, w, h);
@@ -215,6 +246,15 @@ public sealed partial class PinWindow : Window
 
     private (int Width, int Height) OutputSize(PinTransformState state) =>
         PinGeometry.OutputPixelSize(Source.PixelWidth, Source.PixelHeight, state.Rotation, state.Zoom);
+
+    /// <summary>What the window shows (physical px, frame excluded): the image as turned and
+    /// zoomed, or the thumbnail.</summary>
+    private (int Width, int Height) ShownSize() => _thumbnail?.OutputSize ?? OutputSize(_state);
+
+    /// <summary>The image's size as turned, in image px.</summary>
+    private (int Width, int Height) TurnedSourceSize() => _state.QuarterTurned
+        ? (Source.PixelHeight, Source.PixelWidth)
+        : (Source.PixelWidth, Source.PixelHeight);
 
     private static Point Centre(Rect r) => new(r.X + r.Width / 2, r.Y + r.Height / 2);
 
@@ -252,13 +292,33 @@ public sealed partial class PinWindow : Window
         // The window is already layered (AllowsTransparency); transparent makes it click-through.
         if (on) NativeMethods.AddExStyle(hwnd, NativeMethods.WS_EX_TRANSPARENT);
         else NativeMethods.RemoveExStyle(hwnd, NativeMethods.WS_EX_TRANSPARENT);
-        _frame.BorderBrush = on ? ClickThroughFrameBrush : FrameBrush;
+        RefreshFrame();
+    }
+
+    // ----------------------------------------------------------- selection ---
+
+    /// <summary>The frame says how the pin stands: dimmed while clicks go through it,
+    /// highlighted while it is picked with others (Ctrl+click, Ctrl+A).</summary>
+    internal void RefreshFrame()
+    {
+        if (_closed) return;
+        _frame.BorderBrush = _clickThrough ? ClickThroughFrameBrush
+            : PinManager.IsSelected(this) ? SelectedFrameBrush
+            : FrameBrush;
+    }
+
+    /// <summary>Run <paramref name="run"/> on this pin, or, when it is picked, on every shown
+    /// pin picked with it: moves, opacity, resets, closing and destroying act on them all.</summary>
+    private void ForGroup(Action<PinWindow> run)
+    {
+        foreach (var pin in PinManager.GroupOf(this))
+            if (!pin._closed) run(pin);
     }
 
     // ------------------------------------------------------------- mouse ---
 
     /// <summary>The wheel zooms, anchored at the cursor (or the top-left with PinZoomAtCursor
-    /// off); with Ctrl it steps the opacity instead.</summary>
+    /// off); with Ctrl it steps the opacity instead, of every pin picked with this one too.</summary>
     private void OnWheel(object sender, MouseWheelEventArgs e)
     {
         e.Handled = true;
@@ -266,18 +326,26 @@ public sealed partial class PinWindow : Window
         if (notch == 0) return;
         if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
         {
-            Apply(_state.WithOpacityStep(notch));
+            ForGroup(pin => pin.Apply(pin._state.WithOpacityStep(notch)));
             return;
         }
+        if (_resize != null) return;   // the border drag owns the size
         Apply(_state.ZoomBy(notch > 0 ? ZoomStep : 1 / ZoomStep), PointerAnchor());
     }
 
-    /// <summary>A middle-click resets to 100% size and opacity; the next one goes back.</summary>
+    /// <summary>A middle-click resets to 100% size and opacity; the next one goes back. Pins
+    /// picked with this one reset about their own centres.</summary>
     private void OnMiddleDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ChangedButton != MouseButton.Middle) return;
         e.Handled = true;
-        Apply(_state.ToggleReset(), PointerAnchor());
+        if (_move != null || _resize != null) return;
+        var anchor = PointerAnchor();
+        ForGroup(pin =>
+        {
+            if (pin == this) Apply(_state.ToggleReset(), anchor);
+            else pin.Apply(pin._state.ToggleReset());
+        });
     }
 
     /// <summary>Where a mouse zoom is anchored: the cursor, or the image's top-left (how pins
@@ -408,7 +476,9 @@ public sealed partial class PinWindow : Window
         menu.Items.Add(FixedEntry("pin.opacityDown", PinCommand.OpacityDown,
             isEnabled: _state.Opacity > PinTransformState.MinOpacity));
         menu.Items.Add(MenuEntry(Loc.T("pin.reset"), Loc.T("set.middleClickAction"),
-            () => Apply(_state.Reset()), isChecked: false, isEnabled: !_state.IsAtRest));
+            () => ForGroup(pin => pin.Apply(pin._state.Reset())), isChecked: false, isEnabled: !_state.IsAtRest));
+        menu.Items.Add(MenuEntry(Loc.T("pin.thumbnail"), "Shift+" + Loc.T("set.dblClickAction"),
+            ToggleThumbnail, isChecked: _thumbnail != null, isEnabled: true));
         menu.Items.Add(new Separator());
         menu.Items.Add(MenuEntry(Loc.T("pin.dblClickClose"), null, ToggleDoubleClickClose,
             isChecked: DoubleClickCloses, isEnabled: true));

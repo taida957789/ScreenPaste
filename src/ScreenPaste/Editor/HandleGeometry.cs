@@ -3,8 +3,9 @@ using System.Windows;
 namespace ScreenPaste.Editor;
 
 /// <summary>
-/// Geometry for the 8 resize handles, shared by the capture region and by a magnifier's
-/// framed source. Handle indices are <c>0=NW 1=N 2=NE 3=W 4=E 5=SW 6=S 7=SE</c>.
+/// Geometry for the 8 resize handles, shared by the capture region, a magnifier's framed
+/// source and a pin's border (which scales it, keeping its shape). Handle indices are
+/// <c>0=NW 1=N 2=NE 3=W 4=E 5=SW 6=S 7=SE</c>.
 ///
 /// Deliberately free of any WPF UI type so the arithmetic can be unit tested without a
 /// dispatcher — the edge maths used to live inline in two mouse handlers, where it was
@@ -83,6 +84,72 @@ public static class HandleGeometry
     private static double SymmetricGrowth(double growth, double size, double roomBefore,
         double roomAfter, double minSize) =>
         ClampTolerant(growth, (minSize - size) / 2, Math.Min(roomBefore, roomAfter));
+
+    /// <summary>
+    /// A pin's border drag: scale <paramref name="start"/> keeping its width-to-height ratio.
+    /// A corner handle scales by whichever of its two edges moved further (relative to its
+    /// side) and keeps the opposite corner; an edge handle keeps the opposite edge and stays
+    /// centred along it (<see cref="ResizeAnchored"/>). The shorter side never drops below
+    /// <paramref name="minSize"/>; an empty rect is left as it is. Unbounded: the caller
+    /// clamps the result (a pin's zoom range).
+    /// </summary>
+    public static Rect DragEdgesAspect(Rect start, int index, double dx, double dy, double minSize)
+    {
+        if (start.IsEmpty || start.Width <= 0 || start.Height <= 0) return start;
+        var (west, east, north, south) = EdgesFor(index);
+
+        // The scale each owned axis asks for: dragging an east/south edge out is +delta.
+        double? sx = west || east ? (start.Width + (east ? dx : -dx)) / start.Width : null;
+        double? sy = north || south ? (start.Height + (south ? dy : -dy)) / start.Height : null;
+        double scale = (sx, sy) switch
+        {
+            ({ } x, { } y) => Math.Abs(x - 1) >= Math.Abs(y - 1) ? x : y,
+            ({ } x, null) => x,
+            (null, { } y) => y,
+            _ => 1,
+        };
+        scale = Math.Max(scale, minSize / Math.Min(start.Width, start.Height));
+        return ResizeAnchored(start, index, start.Width * scale, start.Height * scale);
+    }
+
+    /// <summary>
+    /// <paramref name="start"/> at a new size, kept where handle <paramref name="index"/>
+    /// does not drag: a corner handle keeps the opposite corner, an edge handle the opposite
+    /// edge with the rect centred along it.
+    /// </summary>
+    public static Rect ResizeAnchored(Rect start, int index, double width, double height)
+    {
+        var (west, east, north, south) = EdgesFor(index);
+        double x = west ? start.Right - width : east ? start.Left : start.X + (start.Width - width) / 2;
+        double y = north ? start.Bottom - height : south ? start.Top : start.Y + (start.Height - height) / 2;
+        return new Rect(x, y, width, height);
+    }
+
+    /// <summary>
+    /// The handle a pin's border offers at <paramref name="p"/> (physical px, as
+    /// GetWindowRect gives the rect: the right and bottom edges outside): an edge within
+    /// <paramref name="band"/> px of it, a corner where the point is near one edge and within
+    /// twice the band of the other, so corners are easier to catch. Null inside or outside.
+    /// </summary>
+    public static int? BorderHandleAt(Rect r, Point p, double band)
+    {
+        if (r.IsEmpty || band <= 0) return null;
+        if (p.X < r.Left || p.X >= r.Right || p.Y < r.Top || p.Y >= r.Bottom) return null;
+
+        // Distances in whole pixels from each edge's own pixel row or column.
+        double dl = p.X - r.Left, dr = r.Right - 1 - p.X, dt = p.Y - r.Top, db = r.Bottom - 1 - p.Y;
+        bool w = dl < band, e = dr < band, n = dt < band, s = db < band;
+        if (!(w || e || n || s)) return null;
+
+        double reach = band * 2;
+        if ((w && dt < reach) || (n && dl < reach)) return 0;   // NW
+        if ((e && dt < reach) || (n && dr < reach)) return 2;   // NE
+        if ((w && db < reach) || (s && dl < reach)) return 5;   // SW
+        if ((e && db < reach) || (s && dr < reach)) return 7;   // SE
+        if (n) return 1;
+        if (s) return 6;
+        return w ? 3 : 4;
+    }
 
     /// <summary>Move <paramref name="r"/> back inside <paramref name="bounds"/>, keeping its
     /// size; it is shrunk only when it is too large to fit.</summary>

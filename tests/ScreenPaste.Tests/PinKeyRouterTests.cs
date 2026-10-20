@@ -379,4 +379,95 @@ public sealed class PinKeyRouterTests
         Assert.Contains(new KeyChord(Key.C, Ctrl | Shift), PinKeyRouter.FixedChords);
         Assert.Contains(new KeyChord(Key.W, Ctrl), PinKeyRouter.FixedChords);
     }
+
+    // ---------------------------------------------------------------- multi-selection ---
+
+    [Fact]
+    public void CtrlA_SelectsEveryShownPin()
+    {
+        Assert.Equal(PinCommand.SelectAll, Router.Route(Press(Key.A, Ctrl)));
+    }
+
+    [Fact]
+    public void CtrlA_IsAFixedChord()
+    {
+        Assert.Contains(new KeyChord(Key.A, Ctrl), PinKeyRouter.FixedChords);
+    }
+
+    [Fact]
+    public void AGestureBoundToCtrlA_WinsOverSelectingAll()
+    {
+        var router = new PinKeyRouter(PinKeyBindings.FromSettings(new AppSettings { CopyHotkey = "Ctrl+A" }));
+
+        Assert.Equal(PinCommand.Copy, router.Route(Press(Key.A, Ctrl)));
+    }
+
+    [Fact]
+    public void BareA_StillMovesTheCursor()
+    {
+        Assert.Equal(PinCommand.NudgeCursor, Router.Route(Press(Key.A)));
+    }
+
+    // ---------------------------------------------------------------- loupe ---
+
+    private static PinKeyContext WithLoupe(Key key, ModifierKeys modifiers = None) =>
+        Press(key, modifiers) with { LoupeVisible = true };
+
+    [Fact]
+    public void C_WithTheLoupeShowing_CopiesTheColour()
+    {
+        Assert.Equal(PinCommand.CopyLoupeColor, Router.Route(WithLoupe(Key.C)));
+    }
+
+    [Fact]
+    public void C_WithoutTheLoupe_DoesNothing()
+    {
+        Assert.Equal(PinCommand.None, Router.Route(Press(Key.C)));
+    }
+
+    [Fact]
+    public void CtrlC_WithTheLoupeShowing_StillCopiesThePin()
+    {
+        Assert.Equal(PinCommand.Copy, Router.Route(WithLoupe(Key.C, Ctrl)));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AltTap_TurnsTheLoupeOnAndOff(bool loupeVisible)
+    {
+        var ctx = Press(Key.LeftAlt) with { LoupeVisible = loupeVisible };
+
+        Assert.Equal(PinCommand.ToggleLoupe, PinKeyRouter.RouteTap(Alt, ctx));
+    }
+
+    [Fact]
+    public void ShiftTap_WithTheLoupeShowing_CyclesTheColourFormat()
+    {
+        Assert.Equal(PinCommand.CycleLoupeFormat, PinKeyRouter.RouteTap(Shift, WithLoupe(Key.LeftShift)));
+    }
+
+    [Fact]
+    public void ShiftTap_WithoutTheLoupe_DoesNothing()
+    {
+        Assert.Equal(PinCommand.None, PinKeyRouter.RouteTap(Shift, Press(Key.LeftShift)));
+    }
+
+    [Theory]
+    [InlineData(Ctrl)]
+    [InlineData(ModifierKeys.Windows)]
+    public void OtherTaps_DoNothing(ModifierKeys tapped)
+    {
+        Assert.Equal(PinCommand.None, PinKeyRouter.RouteTap(tapped, WithLoupe(Key.LeftCtrl)));
+    }
+
+    [Theory]
+    [InlineData(PinCommand.SelectAll)]
+    [InlineData(PinCommand.CopyLoupeColor)]
+    [InlineData(PinCommand.ToggleLoupe)]
+    [InlineData(PinCommand.CycleLoupeFormat)]
+    public void SelectionAndLoupeCommands_RunOncePerPress(PinCommand command)
+    {
+        Assert.False(PinKeyRouter.RunsOnRepeat(command));
+    }
 }

@@ -194,4 +194,55 @@ public sealed class PinGeometryTests
 
         Assert.Equal(new Point(-200, 50), PinGeometry.PasteAt(new Point(-10, 50), 200, 100, left));
     }
+
+    // ---------------------------------------------------------------- loupe ---
+
+    private static readonly Rect WholeImage = new(0, 0, 100, 50);
+
+    [Theory]
+    [InlineData(0, 0, 0, 0)]
+    [InlineData(5, 3, 2, 1)]
+    [InlineData(199.5, 99, 99, 49)]
+    public void PixelAt_FindsTheImagePixelUnderAPointOfThePin(double x, double y, int px, int py)
+    {
+        // Shown at 200%.
+        Assert.Equal((px, py), PinGeometry.PixelAt(new Point(x, y), 2, 2, WholeImage));
+    }
+
+    [Theory]
+    [InlineData(200, 0)]
+    [InlineData(0, 100)]
+    [InlineData(-0.5, 10)]
+    public void PixelAt_OffTheShownImage_IsNull(double x, double y)
+    {
+        Assert.Null(PinGeometry.PixelAt(new Point(x, y), 2, 2, WholeImage));
+    }
+
+    [Fact]
+    public void PixelAt_InAThumbnail_CountsFromItsCrop()
+    {
+        // The thumbnail shows image px (30,10)-(50,30) at 300%.
+        Assert.Equal((31, 12), PinGeometry.PixelAt(new Point(4, 7), 3, 3, new Rect(30, 10, 20, 20)));
+    }
+
+    [Fact]
+    public void LoupeAt_SitsBelowAndRightOfTheCursor()
+    {
+        Assert.Equal(new Point(520, 320), PinGeometry.LoupeAt(new Point(500, 300), 180, 200, Monitor, 20));
+    }
+
+    [Fact]
+    public void LoupeAt_NearTheRightAndBottom_FlipsToTheOtherSide()
+    {
+        Assert.Equal(new Point(1700, 840), PinGeometry.LoupeAt(new Point(1900, 1080 - 20), 180, 200, Monitor, 20));
+    }
+
+    [Fact]
+    public void LoupeAt_NeverLeavesTheMonitor()
+    {
+        // A monitor too small to flip into: kept to its top-left.
+        var small = new Rect(0, 0, 200, 150);
+
+        Assert.Equal(new Point(0, 0), PinGeometry.LoupeAt(new Point(100, 75), 180, 200, small, 20));
+    }
 }

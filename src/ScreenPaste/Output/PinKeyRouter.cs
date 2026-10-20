@@ -32,6 +32,10 @@ public enum PinCommand
     OpenMenu,                // the Menu (Apps) key
     PasteClipboard,          // Ctrl+V: show what the clipboard holds instead
     CopyText,                // Ctrl+Shift+C: the text a text pin was made from
+    SelectAll,               // Ctrl+A: pick every shown pin, to move, fade or close them together
+    ToggleLoupe,             // an Alt tap: the magnifier and colour picker over the pin
+    CopyLoupeColor,          // C, the loupe showing: the colour under the cursor, as written
+    CycleLoupeFormat,        // a Shift tap, the loupe showing: HEX, RGB, HSV
 }
 
 /// <summary>A key press on a pin, as <see cref="PinKeyRouter"/> sees it.</summary>
@@ -45,6 +49,8 @@ public readonly record struct PinKeyContext
     public string? Text { get; init; }
     /// <summary>A keyboard auto-repeat of a held key.</summary>
     public bool IsRepeat { get; init; }
+    /// <summary>The pin's loupe is on and showing a pixel, so C copies its colour.</summary>
+    public bool LoupeVisible { get; init; }
 }
 
 /// <summary>The configurable gestures a pin follows (settings.json); null means unbound.
@@ -76,6 +82,7 @@ public sealed class PinKeyRouter
     private static readonly KeyChord DestroyChord = new(Key.Escape, ModifierKeys.Shift);
     private static readonly KeyChord PasteChord = new(Key.V, ModifierKeys.Control);
     private static readonly KeyChord CopyTextChord = new(Key.C, CtrlShift);
+    private static readonly KeyChord SelectAllChord = new(Key.A, ModifierKeys.Control);
 
     private readonly PinKeyBindings _bindings;
 
@@ -86,6 +93,7 @@ public sealed class PinKeyRouter
     public static IReadOnlyList<KeyChord> FixedChords { get; } = new[]
     {
         CopyAliasChord, CopyAsFileChord, OpenSettingsChord, CloseChord, DestroyChord, PasteChord, CopyTextChord,
+        SelectAllChord,
     };
 
     public PinCommand Route(PinKeyContext ctx)
@@ -102,10 +110,20 @@ public sealed class PinKeyRouter
 
         if (ctx.Modifiers == ModifierKeys.None)
         {
+            if (ctx.LoupeVisible && ctx.Key == Key.C) return PinCommand.CopyLoupeColor;
             var bare = RouteBareKey(ctx.Key);
             if (bare != PinCommand.None) return bare;
         }
         return RouteZoomKey(ctx);
+    }
+
+    /// <summary>A modifier pressed and released on its own (<see cref="ModifierTapTracker"/>):
+    /// Alt turns the loupe on and off; Shift, while it shows, cycles its colour format.</summary>
+    public static PinCommand RouteTap(ModifierKeys tapped, PinKeyContext ctx)
+    {
+        if (tapped == ModifierKeys.Alt) return PinCommand.ToggleLoupe;
+        if (tapped == ModifierKeys.Shift && ctx.LoupeVisible) return PinCommand.CycleLoupeFormat;
+        return PinCommand.None;
     }
 
     /// <summary>Whether a held key's auto-repeats run <paramref name="command"/> again: zoom,
@@ -148,7 +166,8 @@ public sealed class PinKeyRouter
 
     /// <summary>The fixed chords: Ctrl+Insert copies (an alias that does not follow the Copy
     /// gesture), Ctrl+Alt+C copies as a file, Ctrl+Shift+P opens the settings, Ctrl+W closes,
-    /// Ctrl+V shows the clipboard instead and Ctrl+Shift+C copies a text pin's text.</summary>
+    /// Ctrl+V shows the clipboard instead, Ctrl+Shift+C copies a text pin's text and Ctrl+A
+    /// picks every shown pin.</summary>
     private static PinCommand RouteChord(PinKeyContext ctx)
     {
         if (CopyAliasChord.Matches(ctx.Key, ctx.Modifiers)) return PinCommand.Copy;
@@ -157,6 +176,7 @@ public sealed class PinKeyRouter
         if (CloseChord.Matches(ctx.Key, ctx.Modifiers)) return PinCommand.Close;
         if (PasteChord.Matches(ctx.Key, ctx.Modifiers)) return PinCommand.PasteClipboard;
         if (CopyTextChord.Matches(ctx.Key, ctx.Modifiers)) return PinCommand.CopyText;
+        if (SelectAllChord.Matches(ctx.Key, ctx.Modifiers)) return PinCommand.SelectAll;
         return PinCommand.None;
     }
 

@@ -44,11 +44,12 @@ public sealed partial class PinWindow
         Close();
     }
 
-    /// <summary>The window still exists here, so where the pin is can be read back.</summary>
+    /// <summary>The window still exists here, so where the pin is can be read back. A
+    /// thumbnail comes back as the whole pin, where it would have gone.</summary>
     private void OnClosing(object? sender, CancelEventArgs e)
     {
         if (e.Cancel) return;
-        var at = ImageRect().TopLeft;
+        var at = FullImageTopLeft();
         var closed = new ClosedPin(_content, (int)Math.Round(at.X), (int)Math.Round(at.Y), _state, _settings);
         PinManager.Remember(closed, _closeKind);
     }
@@ -56,11 +57,12 @@ public sealed partial class PinWindow
     /// <summary>
     /// Show <paramref name="content"/> instead (a dropped file; the clipboard). The turn,
     /// flips, zoom, opacity and effects stay, and so does the image's top-left, while the
-    /// window takes the new image's size.
+    /// window takes the new image's size. A thumbnail of the old image ends first.
     /// </summary>
     public void ReplaceContent(PinContent content)
     {
         if (_closed) return;
+        ExitThumbnail();
         var topLeft = ImageRect().TopLeft;
         _content = content;
         _effected = null;   // made from the image that is going
@@ -70,29 +72,19 @@ public sealed partial class PinWindow
     }
 
     // ------------------------------------------------------- double-click ---
-
-    /// <summary>Each press drags the pin; a plain double-click closes it instead (when the
-    /// settings say so). With a modifier held a double-click is two drags, as it always was.</summary>
-    private void OnLeftDown(object sender, MouseButtonEventArgs e)
-    {
-        if (e.ButtonState != MouseButtonState.Pressed) return;
-        if (e.ClickCount == 2 && Keyboard.Modifiers == ModifierKeys.None && OnDoubleClick())
-        {
-            e.Handled = true;
-            return;
-        }
-        DragMove();
-    }
+    // A press is dispatched in PinWindow.Drag.cs: a plain double-click lands here; with Shift
+    // it toggles the thumbnail, with Ctrl each click picks the pin or drops it, and with any
+    // other modifier it is two drags, as it always was.
 
     private bool DoubleClickCloses =>
         PinDoubleClickActions.Parse(_settings.PinDoubleClickAction) == PinDoubleClickAction.Close;
 
-    /// <summary>Close recoverably, or false when a double-click does nothing. The first time
-    /// it says so and asks, once this click is over.</summary>
+    /// <summary>Close recoverably, with every pin picked with this one as Esc does, or false
+    /// when a double-click does nothing. The first time it says so and asks, once this click is over.</summary>
     private bool OnDoubleClick()
     {
         if (!DoubleClickCloses) return false;
-        if (_settings.PinDoubleClickTipShown) PinManager.CloseRecoverable(this);
+        if (_settings.PinDoubleClickTipShown) ForGroup(PinManager.CloseRecoverable);
         else if (!_askingDoubleClick)
         {
             _askingDoubleClick = true;
@@ -112,7 +104,7 @@ public sealed partial class PinWindow
             Loc.T("pin.dblClickTitle"), MessageBoxButton.YesNo, MessageBoxImage.Question));
         _settings.PinDoubleClickTipShown = true;
         _settings.Save();
-        if (answer == MessageBoxResult.Yes) PinManager.CloseRecoverable(this);
+        if (answer == MessageBoxResult.Yes) ForGroup(PinManager.CloseRecoverable);
     }
 
     /// <summary>The menu's "Close on double-click": saved at once, and no tip is needed after.</summary>
