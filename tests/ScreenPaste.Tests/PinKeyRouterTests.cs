@@ -11,7 +11,8 @@ namespace ScreenPaste.Tests;
 /// zoom (with Ctrl: opacity), the arrows move it, W/A/S/D move the cursor, the Copy / Save /
 /// Quick save / Print gestures follow the settings, and Ctrl+Insert, Ctrl+Alt+C,
 /// Ctrl+Shift+P and the Menu key are fixed. + and - go by the character the key types on the
-/// current layout, since where they sit differs between layouts.
+/// current layout, since where they sit differs between layouts. Esc and Ctrl+W close the pin
+/// so it can be brought back; Shift+Esc destroys it.
 /// </summary>
 public sealed class PinKeyRouterTests
 {
@@ -212,6 +213,49 @@ public sealed class PinKeyRouterTests
         Assert.Equal(PinCommand.Close, Router.Route(Press(Key.Escape)));
     }
 
+    [Fact]
+    public void ShiftEsc_DestroysThePin()
+    {
+        Assert.Equal(PinCommand.Destroy, Router.Route(Press(Key.Escape, Shift)));
+    }
+
+    [Theory]
+    [InlineData(Ctrl)]
+    [InlineData(Alt)]
+    [InlineData(Ctrl | Shift)]
+    public void Esc_WithAnotherModifier_StillOnlyCloses(ModifierKeys modifiers)
+    {
+        Assert.Equal(PinCommand.Close, Router.Route(Press(Key.Escape, modifiers)));
+    }
+
+    [Fact]
+    public void CtrlW_ClosesThePin()
+    {
+        Assert.Equal(PinCommand.Close, Router.Route(Press(Key.W, Ctrl)));
+    }
+
+    [Fact]
+    public void CtrlShiftW_DoesNothing()
+    {
+        Assert.Equal(PinCommand.None, Router.Route(Press(Key.W, Ctrl | Shift)));
+    }
+
+    [Fact]
+    public void AGestureBoundToCtrlW_WinsOverClosing()
+    {
+        var router = new PinKeyRouter(PinKeyBindings.FromSettings(new AppSettings { CopyHotkey = "Ctrl+W" }));
+
+        Assert.Equal(PinCommand.Copy, router.Route(Press(Key.W, Ctrl)));
+    }
+
+    [Fact]
+    public void AGestureBoundToEsc_DoesNotTakeOverClosing()
+    {
+        var router = new PinKeyRouter(PinKeyBindings.FromSettings(new AppSettings { CopyHotkey = "Shift+Esc" }));
+
+        Assert.Equal(PinCommand.Destroy, router.Route(Press(Key.Escape, Shift)));
+    }
+
     // ---------------------------------------------------------------- auto-repeat ---
 
     [Theory]
@@ -237,6 +281,7 @@ public sealed class PinKeyRouterTests
     [InlineData(PinCommand.OpenSettings)]
     [InlineData(PinCommand.OpenMenu)]
     [InlineData(PinCommand.Close)]
+    [InlineData(PinCommand.Destroy)]
     public void HeldKeys_RunOneShotCommandsOnce(PinCommand command)
     {
         Assert.False(PinKeyRouter.RunsOnRepeat(command));
@@ -246,6 +291,7 @@ public sealed class PinKeyRouterTests
 
     [Theory]
     [InlineData(PinCommand.Close)]
+    [InlineData(PinCommand.Destroy)]
     [InlineData(PinCommand.RotateClockwise)]
     [InlineData(PinCommand.RotateCounterClockwise)]
     [InlineData(PinCommand.FlipHorizontal)]
@@ -269,6 +315,12 @@ public sealed class PinKeyRouterTests
     {
         Assert.Equal("Ctrl+" + text, PinKeyRouter.FixedKeys(command));
         Assert.Equal(command, Router.Route(Press(key, Ctrl, text)));
+    }
+
+    [Fact]
+    public void FixedKeys_ForDestroy_IsShiftEsc()
+    {
+        Assert.Equal("Shift+Esc", PinKeyRouter.FixedKeys(PinCommand.Destroy));
     }
 
     [Theory]

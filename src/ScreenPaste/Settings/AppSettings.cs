@@ -102,6 +102,14 @@ public sealed class AppSettings
     public int SnipHistoryBudgetMb { get; set; } = 512;
     // 貼圖滾輪縮放以滑鼠游標為中心（關閉則固定左上角）
     public bool PinZoomAtCursor { get; set; } = true;
+    // 以 Esc／Ctrl+W／雙擊關閉的貼圖可再叫回的數量（0 = 停用；Shift+Esc 銷毀的不會保留）
+    public int MaxRecoverableClosedPins { get; set; } = 1;
+    // 雙擊貼圖：Close（關閉，可再叫回）| None（不動作）
+    public string PinDoubleClickAction { get; set; } = "Close";
+    // 第一次雙擊貼圖時已提示過
+    public bool PinDoubleClickTipShown { get; set; }
+    // 沒有貼圖取得焦點時，在任何地方按 Esc 會關閉所有顯示中的貼圖（可再叫回）
+    public bool PinGlobalEscClosesAll { get; set; } = true;
 
     // ---- Startup ----
     public bool RunAtStartup { get; set; }

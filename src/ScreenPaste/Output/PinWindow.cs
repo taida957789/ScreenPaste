@@ -18,8 +18,8 @@ namespace ScreenPaste.Output;
 /// <summary>
 /// A frameless, always-on-top window that pins a composed image onto the screen.
 /// Drag to move, mouse-wheel to zoom at the cursor (Ctrl: opacity), middle-click to reset to
-/// 100% and back, right-click or the Menu key for actions, Esc to close; the other keys are
-/// PinWindow.Keyboard.cs's.
+/// 100% and back, right-click or the Menu key for actions; the keys are PinWindow.Keyboard.cs's,
+/// and closing, destroying, a double-click and dropped files PinWindow.Lifecycle.cs's.
 ///
 /// The pin shows its image through a <see cref="PinTransformState"/> (zoom, quarter turns,
 /// flips, opacity, grayscale, invert). Content is authored in physical px and the window is
@@ -45,20 +45,30 @@ public sealed partial class PinWindow : Window
     private readonly Rectangle _saveFlash;     // quick save's white flash over the image
     private readonly Border _frame;
     private readonly MatrixTransform _layout = new();   // orientation and zoom, image px to DIPs
-    private BitmapSource _source;              // the pinned image as it came
-    private BitmapSource? _effected;           // _source with the effects in _effectedFor
+    private PinContent _content;               // what is pinned, as it came; a dropped file replaces it
+    private BitmapSource? _effected;           // Source with the effects in _effectedFor
     private (bool Grayscale, bool Invert) _effectedFor;
-    private PinTransformState _state = PinTransformState.Identity;
+    private PinTransformState _state;
     private double _dpi = 1.0;
     private bool _placed;                      // the window has been put on screen
     private bool _closed;
 
     public PinWindow(BitmapSource image, int screenX, int screenY, AppSettings settings)
+        : this(new PinContent(image), screenX, screenY, settings, PinTransformState.Identity)
     {
-        _source = image;
+    }
+
+    /// <summary>A pin showing <paramref name="content"/> as <paramref name="state"/> turns,
+    /// zooms and fades it, the image's top-left at (<paramref name="screenX"/>,
+    /// <paramref name="screenY"/>) in physical screen px.</summary>
+    public PinWindow(PinContent content, int screenX, int screenY, AppSettings settings, PinTransformState state)
+    {
+        _content = content;
+        _state = state;
         _startX = screenX;
         _startY = screenY;
         _settings = settings;
+        var image = content.Image;
 
         Title = "ScreenPaste Pin";   // not displayed (borderless) — used for identification
         WindowStyle = WindowStyle.None;
@@ -80,12 +90,12 @@ public sealed partial class PinWindow : Window
         _saveFlash = new Rectangle { Fill = Brushes.White, Opacity = 0, IsHitTestVisible = false };
 
         // The image and its flash turn and zoom together; the frame stays one pixel wide.
-        var content = new Grid { LayoutTransform = _layout };
-        content.Children.Add(_image);
-        content.Children.Add(_saveFlash);
+        var layers = new Grid { LayoutTransform = _layout };
+        layers.Children.Add(_image);
+        layers.Children.Add(_saveFlash);
         _frame = new Border
         {
-            Child = content,
+            Child = layers,
             BorderBrush = FrameBrush,
             BorderThickness = new Thickness(FramePx),
         };
@@ -93,8 +103,9 @@ public sealed partial class PinWindow : Window
 
         BuildContextMenu();
         InitKeyboard();
+        InitLifecycle();
 
-        MouseLeftButtonDown += (_, e) => { if (e.ButtonState == MouseButtonState.Pressed) DragMove(); };
+        MouseLeftButtonDown += OnLeftDown;
         MouseDown += OnMiddleDown;
         MouseWheel += OnWheel;
         SourceInitialized += OnSourceInitialized;
@@ -112,6 +123,12 @@ public sealed partial class PinWindow : Window
     }
 
     private IntPtr Handle => new WindowInteropHelper(this).Handle;
+
+    /// <summary>The pinned image as it came, before its turn, zoom and effects.</summary>
+    private BitmapSource Source => _content.Image;
+
+    /// <summary>The settings this pin follows (shared with the app, so changes apply at once).</summary>
+    internal AppSettings Settings => _settings;
 
     // ------------------------------------------------------------ layout ---
 
@@ -177,7 +194,7 @@ public sealed partial class PinWindow : Window
     /// in DIPs for the current monitor; the frame stays one physical pixel.</summary>
     private void UpdateLayoutTransform()
     {
-        var (sx, sy) = PinGeometry.PixelScale(_source.PixelWidth, _source.PixelHeight, _state.Rotation, _state.Zoom);
+        var (sx, sy) = PinGeometry.PixelScale(Source.PixelWidth, Source.PixelHeight, _state.Rotation, _state.Zoom);
         _layout.Matrix = _state.Orientation * new Matrix(sx / _dpi, 0, 0, sy / _dpi, 0, 0);
         _frame.BorderThickness = new Thickness(FramePx / _dpi);
     }
@@ -193,17 +210,17 @@ public sealed partial class PinWindow : Window
     }
 
     private (int Width, int Height) OutputSize(PinTransformState state) =>
-        PinGeometry.OutputPixelSize(_source.PixelWidth, _source.PixelHeight, state.Rotation, state.Zoom);
+        PinGeometry.OutputPixelSize(Source.PixelWidth, Source.PixelHeight, state.Rotation, state.Zoom);
 
     private static Point Centre(Rect r) => new(r.X + r.Width / 2, r.Y + r.Height / 2);
 
     /// <summary>The image with the state's effects, kept until they change.</summary>
     private BitmapSource Effected(PinTransformState state)
     {
-        if (!state.Grayscale && !state.Invert) return _source;
+        if (!state.Grayscale && !state.Invert) return Source;
         if (_effected == null || _effectedFor != (state.Grayscale, state.Invert))
         {
-            _effected = PinRenderer.Effects(_source, state);
+            _effected = PinRenderer.Effects(Source, state);
             _effectedFor = (state.Grayscale, state.Invert);
         }
         return _effected;
@@ -365,8 +382,11 @@ public sealed partial class PinWindow : Window
         menu.Items.Add(MenuEntry(Loc.T("pin.reset"), Loc.T("set.middleClickAction"),
             () => Apply(_state.Reset()), isChecked: false, isEnabled: !_state.IsAtRest));
         menu.Items.Add(new Separator());
+        menu.Items.Add(MenuEntry(Loc.T("pin.dblClickClose"), null, ToggleDoubleClickClose,
+            isChecked: DoubleClickCloses, isEnabled: true));
         menu.Items.Add(FixedEntry("tray.settings", PinCommand.OpenSettings));
         menu.Items.Add(FixedEntry("pin.close", PinCommand.Close));
+        menu.Items.Add(FixedEntry("pin.destroy", PinCommand.Destroy));
     }
 
     /// <summary>A configurable gesture as the settings window writes it; null when unbound.</summary>

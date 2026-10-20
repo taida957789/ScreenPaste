@@ -9,7 +9,8 @@ public enum PinCommand
 {
     /// <summary>No binding: the key is left unhandled.</summary>
     None,
-    Close,                   // Esc
+    Close,                   // Esc or Ctrl+W: recoverably, the paste hotkey brings it back
+    Destroy,                 // Shift+Esc: for good
     RotateClockwise,         // 1
     RotateCounterClockwise,  // 2
     FlipHorizontal,          // 3
@@ -69,6 +70,8 @@ public sealed class PinKeyRouter
     private static readonly KeyChord CopyAliasChord = new(Key.Insert, ModifierKeys.Control);
     private static readonly KeyChord CopyAsFileChord = new(Key.C, CtrlAlt);
     private static readonly KeyChord OpenSettingsChord = new(Key.P, CtrlShift);
+    private static readonly KeyChord CloseChord = new(Key.W, ModifierKeys.Control);
+    private static readonly KeyChord DestroyChord = new(Key.Escape, ModifierKeys.Shift);
 
     private readonly PinKeyBindings _bindings;
 
@@ -76,8 +79,9 @@ public sealed class PinKeyRouter
 
     public PinCommand Route(PinKeyContext ctx)
     {
-        // Today's behaviour, whatever is held with it.
-        if (ctx.Key == Key.Escape) return PinCommand.Close;
+        // Esc closes whatever else is held with it, as it always did; only Shift+Esc destroys.
+        if (ctx.Key == Key.Escape)
+            return DestroyChord.Matches(ctx.Key, ctx.Modifiers) ? PinCommand.Destroy : PinCommand.Close;
 
         var gesture = RouteGesture(ctx);
         if (gesture != PinCommand.None) return gesture;
@@ -105,6 +109,7 @@ public sealed class PinKeyRouter
     public static string? FixedKeys(PinCommand command) => command switch
     {
         PinCommand.Close => "Esc",
+        PinCommand.Destroy => DestroyChord.ToString(),
         PinCommand.RotateClockwise => "1",
         PinCommand.RotateCounterClockwise => "2",
         PinCommand.FlipHorizontal => "3",
@@ -129,12 +134,13 @@ public sealed class PinKeyRouter
     }
 
     /// <summary>The fixed chords: Ctrl+Insert copies (an alias that does not follow the Copy
-    /// gesture), Ctrl+Alt+C copies as a file, Ctrl+Shift+P opens the settings.</summary>
+    /// gesture), Ctrl+Alt+C copies as a file, Ctrl+Shift+P opens the settings, Ctrl+W closes.</summary>
     private static PinCommand RouteChord(PinKeyContext ctx)
     {
         if (CopyAliasChord.Matches(ctx.Key, ctx.Modifiers)) return PinCommand.Copy;
         if (CopyAsFileChord.Matches(ctx.Key, ctx.Modifiers)) return PinCommand.CopyAsFile;
         if (OpenSettingsChord.Matches(ctx.Key, ctx.Modifiers)) return PinCommand.OpenSettings;
+        if (CloseChord.Matches(ctx.Key, ctx.Modifiers)) return PinCommand.Close;
         return PinCommand.None;
     }
 

@@ -7,14 +7,20 @@ using ScreenPaste.Native;
 namespace ScreenPaste.Output;
 
 /// <summary>
-/// Tracks all open pins and provides the global-Esc policy:
+/// Tracks all open pins, the pins closed recoverably, and the global-Esc policy:
 ///   • a focused pin closes itself (handled by the pin's own key handler);
-///   • pressing Esc when NO pin is focused closes every pin at once.
+///   • pressing Esc when NO pin is focused closes every shown pin at once (unless
+///     AppSettings.PinGlobalEscClosesAll is off); hidden pins are left alone.
 /// The second case needs a low-level keyboard hook, installed only while pins exist.
+///
+/// Snipaste's close-versus-destroy model: a pin closed any way but Destroy (Esc, Ctrl+W, a
+/// double-click, the menu, the global Esc, Alt+F4) goes to <see cref="ClosedPins"/>, and
+/// <see cref="RestoreLastClosed"/> opens the newest one again where it was.
 /// </summary>
 public static class PinManager
 {
     private static readonly List<PinWindow> Pins = new();
+    private static readonly ClosedPinHistory<ClosedPin> ClosedPins = new(0);   // sized on each close
     private static IntPtr _hook = IntPtr.Zero;
     private static NativeMethods.HookProc? _proc;   // kept alive to avoid GC of the callback
 
@@ -36,6 +42,31 @@ public static class PinManager
         _dialogDepth++;
         try { show(); }
         finally { _dialogDepth--; }
+    }
+
+    /// <summary>How many closed pins <see cref="RestoreLastClosed"/> can still bring back.</summary>
+    public static int ClosedCount => ClosedPins.Count;
+
+    /// <summary>Close <paramref name="pin"/> so it can be brought back.</summary>
+    public static void CloseRecoverable(PinWindow pin) => pin.CloseAs(PinCloseKind.Recoverable);
+
+    /// <summary>Close <paramref name="pin"/> for good: it skips the history, so nothing keeps its image.</summary>
+    public static void Destroy(PinWindow pin) => pin.CloseAs(PinCloseKind.Destroy);
+
+    /// <summary>Open the newest closed pin again, as and where it was. False when none is left.</summary>
+    public static bool RestoreLastClosed()
+    {
+        if (ClosedPins.Pop() is not { } closed) return false;
+        PinWindow.Reopen(closed).Show();
+        return true;
+    }
+
+    /// <summary>A pin is closing (the pin calls this while its window still exists): keep it
+    /// unless it is being destroyed, within the capacity its settings give now.</summary>
+    internal static void Remember(ClosedPin closed, PinCloseKind kind)
+    {
+        ClosedPins.Capacity = ClosedPinLimits.Capacity(closed.Settings.MaxRecoverableClosedPins);
+        ClosedPins.Add(closed, kind);
     }
 
     public static void Add(PinWindow pin)
@@ -91,13 +122,14 @@ public static class PinManager
         bool pinFocused = Pins.Any(p => new WindowInteropHelper(p).Handle == fg);
         if (pinFocused) return;
 
-        // No pin focused → close them all (marshal onto the UI thread to be safe).
+        // No pin focused → close every shown one, recoverably (marshal onto the UI thread to
+        // be safe). Hidden pins are put away, not in the way, so they stay.
         var app = Application.Current;
         if (app == null) return;
         app.Dispatcher.BeginInvoke(new Action(() =>
         {
-            foreach (var pin in Pins.ToList())
-                pin.Close();
+            foreach (var pin in Pins.Where(p => p.IsVisible && p.Settings.PinGlobalEscClosesAll).ToList())
+                CloseRecoverable(pin);
         }));
     }
 }

@@ -68,7 +68,8 @@ public sealed partial class PinWindow
     {
         switch (command)
         {
-            case PinCommand.Close: Close(); break;
+            case PinCommand.Close: PinManager.CloseRecoverable(this); break;
+            case PinCommand.Destroy: PinManager.Destroy(this); break;
             case PinCommand.RotateClockwise: Apply(_state.RotateClockwise()); break;
             case PinCommand.RotateCounterClockwise: Apply(_state.RotateCounterClockwise()); break;
             case PinCommand.FlipHorizontal: Apply(_state.FlipHorizontally()); break;
