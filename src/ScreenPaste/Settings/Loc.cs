@@ -165,6 +165,7 @@ public static class Loc
         Add("tool.blur",     "Blur",                 "模糊",          "ぼかし",             "흐림",            "Flou",              "Weichzeichnen",     "Desenfoque");
         Add("tool.magnify",  "Magnifier",            "局部放大",      "拡大表示",           "부분 확대",       "Loupe",             "Lupe",              "Lupa");
         Add("magnify.hint",  "drag to frame the area to enlarge; the wheel re-zooms it once selected", "拖曳框出要放大的區域；選取後可以滾輪調倍率", "拡大したい範囲をドラッグで囲む；選択中はホイールで倍率を変更", "확대할 영역을 드래그하세요. 선택 후 휠로 배율 조정", "glissez pour cadrer la zone à agrandir ; molette pour le zoom", "Bereich zum Vergrößern aufziehen; Rad ändert den Zoom", "arrastra para encuadrar el área; la rueda cambia el zoom");
+        Add("tool.tabVariant","Tab: switch type",    "Tab 切換類型",   "Tab で種類を切替",    "Tab: 종류 전환",   "Tab : changer de type","Tab: Typ wechseln", "Tab: cambiar tipo");
         Add("lbl.zoom",      "Zoom",                 "倍率",          "倍率",              "배율",            "Zoom",              "Zoom",              "Zoom");
         Add("lbl.border",    "Border",               "邊框",          "枠線",              "테두리",          "Bordure",           "Rahmen",            "Borde");
         Add("magnify.connector","Connector",         "連接線",    "引き線",            "연결선",          "Trait de liaison",  "Verbindung",        "Conector");
@@ -179,6 +180,7 @@ public static class Loc
         Add("action.save",   "Save",                 "儲存",          "保存",              "저장",            "Enregistrer",       "Speichern",         "Guardar");
         Add("action.pin",    "Pin to screen",        "釘選到螢幕",     "画面に固定",         "화면에 고정",      "Épingler à l'écran","Am Bildschirm anheften","Fijar en pantalla");
         Add("action.close",  "Close",                "關閉",          "閉じる",             "닫기",            "Fermer",            "Schließen",         "Cerrar");
+        Add("action.clearAll","Clear all annotations","清除所有標註",  "すべての注釈を消去",   "모든 주석 지우기",  "Effacer toutes les annotations","Alle Anmerkungen löschen","Borrar todas las anotaciones");
         Add("action.shiftQuickSave","Shift+click: quick save", "Shift+點擊：快速儲存", "Shift+クリックでクイック保存", "Shift+클릭: 빠른 저장", "Maj+clic : enregistrement rapide", "Umschalt+Klick: Schnellspeichern", "Mayús+clic: guardado rápido");
         Add("size.copied",   "size copied",          "已複製尺寸",     "サイズをコピーしました", "크기 복사됨",     "taille copiée",     "Größe kopiert",     "tamaño copiado");
         Add("size.copyFailed","size not copied",     "無法複製尺寸",   "サイズをコピーできませんでした", "크기를 복사하지 못함", "taille non copiée", "Größe nicht kopiert", "tamaño no copiado");
@@ -211,6 +213,7 @@ public static class Loc
         // Magnifier readout
         Add("mag.copy",      "C: copy color",        "C 複製色彩值",   "C でカラー値をコピー", "C: 색상 값 복사",  "C : copier la couleur","C: Farbwert kopieren","C: copiar color");
         Add("mag.format",    "Shift: HEX / RGB / HSV", "Shift 切換 HEX / RGB / HSV", "Shift で HEX / RGB / HSV 切替", "Shift: HEX / RGB / HSV 전환", "Maj : HEX / RGB / HSV","Umschalt: HEX/RGB/HSV","Mayús: HEX / RGB / HSV");
+        Add("mag.picked",    "Alt+C: color picked",  "Alt+C 已取色",   "Alt+C で色を取得",    "Alt+C: 색 가져옴",  "Alt+C : couleur prélevée","Alt+C: Farbe übernommen","Alt+C: color tomado");
 
         // Detection mode on the size chip while framing (Tab switches)
         Add("detect.element","Element",              "元素",          "要素",              "요소",            "Élément",           "Element",           "Elemento");

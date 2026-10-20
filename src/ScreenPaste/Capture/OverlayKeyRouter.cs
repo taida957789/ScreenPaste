@@ -1,4 +1,5 @@
 using System.Windows.Input;
+using ScreenPaste.Editor;
 using ScreenPaste.Input;
 using ScreenPaste.Settings;
 
@@ -108,13 +109,15 @@ public readonly record struct OverlayKeyContext
     public bool Dragging { get; init; }
     /// <summary>Selecting: hovering has a window or UI element highlighted.</summary>
     public bool HasDetectedArea { get; init; }
+    /// <summary>Editing: the active annotation tool (None: moving the region).</summary>
+    public ToolKind Tool { get; init; }
 }
 
 /// <summary>The user-configurable gestures (settings.json); null means unbound. Read with
 /// <see cref="KeyChord.ParseGesture"/>, so a bare letter or digit stays unbound.</summary>
 public sealed record OverlayKeyBindings(
     KeyChord? Undo, KeyChord? Redo, KeyChord? Copy, KeyChord? Save, KeyChord? QuickSave,
-    KeyChord? Pin, KeyChord? Print)
+    KeyChord? Pin, KeyChord? Print, KeyChord? ClearAll)
 {
     public static OverlayKeyBindings FromSettings(AppSettings s) => new(
         KeyChord.ParseGesture(s.UndoHotkey),
@@ -123,7 +126,8 @@ public sealed record OverlayKeyBindings(
         KeyChord.ParseGesture(s.SaveHotkey),
         KeyChord.ParseGesture(s.QuickSaveHotkey),
         KeyChord.ParseGesture(s.PinHotkey),
-        KeyChord.ParseGesture(s.PrintHotkey));
+        KeyChord.ParseGesture(s.PrintHotkey),
+        KeyChord.ParseGesture(s.ClearAllHotkey));
 }
 
 /// <summary>
@@ -138,6 +142,7 @@ public sealed class OverlayKeyRouter
     // and would skip instrumenting the whole app.
     private static readonly ModifierKeys ChordModifiers = ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Windows;
     private static readonly ModifierKeys CopyAsFileModifiers = ModifierKeys.Control | ModifierKeys.Alt;
+    private static readonly ModifierKeys TabBackModifiers = ModifierKeys.Control | ModifierKeys.Shift;
 
     private readonly OverlayKeyBindings _bindings;
 
@@ -166,6 +171,18 @@ public sealed class OverlayKeyRouter
         if (tapped == ModifierKeys.Shift && ctx.LoupeVisible) return OverlayCommand.CycleLoupeFormat;
         if (tapped == ModifierKeys.Alt && ctx.Phase == OverlayPhase.Selecting) return OverlayCommand.ToggleGuideLines;
         return OverlayCommand.None;
+    }
+
+    /// <summary>
+    /// A typed character (TextInput), for the keys whose place depends on the keyboard layout:
+    /// [ and ] step the pen size while editing, whatever modifiers typed them (AltGr on many
+    /// European layouts). Only characters no key-down claimed arrive here.
+    /// </summary>
+    public OverlayCommand RouteText(string text, OverlayKeyContext ctx)
+    {
+        if (ctx.DropDownOpen || ctx.TextBoxActive) return OverlayCommand.PassThrough;
+        if (ctx.Phase != OverlayPhase.Editing || ctx.Dragging) return OverlayCommand.None;
+        return PenSize(ToolShortcuts.PenSizeDirection(text));
     }
 
     /// <summary>
@@ -200,8 +217,42 @@ public sealed class OverlayKeyRouter
         if (CursorNudge.IsWasd(ctx.Key) && IsNudge(ctx)) return OverlayCommand.NudgeCursor;
         if (ctx.Dragging) return OverlayCommand.None;
         if (CursorNudge.IsArrow(ctx.Key)) return RouteRegionArrow(ctx);
-        return RouteOutput(ctx);
+        var tool = RouteTool(ctx);
+        return tool != OverlayCommand.None ? tool : RouteOutput(ctx);
     }
+
+    /// <summary>
+    /// The annotation tool keys (<see cref="ToolShortcuts"/>): T/B/M pick a tool, Ctrl+digit
+    /// picks one by Snipaste's meaning, Ctrl+Tab and Ctrl+Shift+Tab cycle, Tab flips the
+    /// current tool's variant (otherwise it still moves the focus), 1/2 step the width and
+    /// Alt+C picks the colour under the cursor.
+    /// </summary>
+    private static OverlayCommand RouteTool(OverlayKeyContext ctx)
+    {
+        if (ctx.Modifiers == ModifierKeys.None)
+        {
+            if (ToolShortcuts.ToolForLetter(ctx.Key) != null) return OverlayCommand.SelectToolByLetter;
+            if (ctx.Key == Key.Tab)
+                return ToolShortcuts.HasVariant(ctx.Tool) ? OverlayCommand.ToggleToolVariant : OverlayCommand.None;
+            return PenSize(ToolShortcuts.PenSizeDirection(ctx.Key));
+        }
+        if (ctx.Modifiers == ModifierKeys.Control)
+        {
+            if (ToolShortcuts.DigitOf(ctx.Key) != null) return OverlayCommand.SelectToolByNumber;
+            if (ctx.Key == Key.Tab) return OverlayCommand.NextTool;
+            return OverlayCommand.None;
+        }
+        if (ctx.Key == Key.Tab && ctx.Modifiers == TabBackModifiers) return OverlayCommand.PreviousTool;
+        if (ctx.Key == Key.C && ctx.Modifiers == ModifierKeys.Alt) return OverlayCommand.PickColor;
+        return OverlayCommand.None;
+    }
+
+    private static OverlayCommand PenSize(int direction) => direction switch
+    {
+        < 0 => OverlayCommand.PenSizeDown,
+        > 0 => OverlayCommand.PenSizeUp,
+        _ => OverlayCommand.None,
+    };
 
     /// <summary>Space shows or hides the toolbar; mid-drag it holds the area to move it.</summary>
     private static OverlayCommand RouteEditingSpace(OverlayKeyContext ctx)
@@ -228,12 +279,12 @@ public sealed class OverlayKeyRouter
     }
 
     /// <summary>The arrows adjust the chosen region a pixel at a time (RegionNudge): plain
-    /// arrows move it unless an annotation is selected, Ctrl grows and Shift shrinks it on
-    /// the arrow's side, whatever is selected or whichever tool is active.</summary>
+    /// arrows move it, or the selected annotation when there is one; Ctrl grows and Shift
+    /// shrinks the region on the arrow's side, whatever is selected or whichever tool is active.</summary>
     private static OverlayCommand RouteRegionArrow(OverlayKeyContext ctx)
     {
         if (ctx.Modifiers == ModifierKeys.None)
-            return ctx.HasSelection ? OverlayCommand.None : OverlayCommand.MoveRegion;
+            return ctx.HasSelection ? OverlayCommand.MoveAnnotation : OverlayCommand.MoveRegion;
         if (ctx.Modifiers == ModifierKeys.Control) return OverlayCommand.GrowRegion;
         if (ctx.Modifiers == ModifierKeys.Shift) return OverlayCommand.ShrinkRegion;
         return OverlayCommand.None;
@@ -282,7 +333,9 @@ public sealed class OverlayKeyRouter
     }
 
     /// <summary>The configurable gestures. QuickSave is tried before Save so a binding that
-    /// extends Save's (Ctrl+Shift+S over Ctrl+S) is never shadowed.</summary>
+    /// extends Save's (Ctrl+Shift+S over Ctrl+S) is never shadowed, and the destructive
+    /// ClearAll comes after Undo/Redo, so it loses a tie and waits while a drag owns the
+    /// annotations.</summary>
     private OverlayCommand RouteGesture(OverlayKeyContext ctx)
     {
         if (Is(_bindings.QuickSave, ctx)) return OverlayCommand.QuickSave;
@@ -292,6 +345,7 @@ public sealed class OverlayKeyRouter
         if (Is(_bindings.Save, ctx)) return OverlayCommand.Save;
         if (Is(_bindings.Pin, ctx)) return OverlayCommand.Pin;
         if (Is(_bindings.Print, ctx)) return OverlayCommand.Print;
+        if (!ctx.Dragging && Is(_bindings.ClearAll, ctx)) return OverlayCommand.ClearAll;
         return OverlayCommand.None;
     }
 

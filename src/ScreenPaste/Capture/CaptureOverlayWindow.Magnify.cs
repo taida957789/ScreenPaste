@@ -173,7 +173,7 @@ public partial class CaptureOverlayWindow
     private void Magnify_MouseMove(Point p)
     {
         if (_magnifyPreview == null) return;
-        var r = MakeRect(_magnifyStart, p);
+        var r = DragRect(_magnifyStart, p);
         Canvas.SetLeft(_magnifyPreview, r.X);
         Canvas.SetTop(_magnifyPreview, r.Y);
         _magnifyPreview.Width = r.Width;
@@ -189,7 +189,7 @@ public partial class CaptureOverlayWindow
         _magnifyPreview = null;
 
         var region = RegionBounds();
-        var source = MakeRect(_magnifyStart, p);
+        var source = DragRect(_magnifyStart, p);
         source.Intersect(region);
         if (source.Width < 6 || source.Height < 6) return;
 

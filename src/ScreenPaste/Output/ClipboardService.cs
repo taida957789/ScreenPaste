@@ -22,6 +22,13 @@ public static class ClipboardService
     /// <summary>Copy plain text, retrying briefly if the clipboard is locked.</summary>
     public static bool CopyText(string text) => Retry(() => Clipboard.SetText(text));
 
+    /// <summary>The clipboard's text ("" when it holds none), or null when it stayed locked.</summary>
+    public static string? GetText()
+    {
+        string text = "";
+        return Retry(() => text = Clipboard.GetText()) ? text : null;
+    }
+
     /// <summary>
     /// Copy the image as a file (Snipaste's Ctrl+Alt+C), so it pastes into Explorer or an
     /// upload box: a PNG in <see cref="TempDirectory"/>, then put on the clipboard as a file

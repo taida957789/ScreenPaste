@@ -20,6 +20,8 @@ public sealed class AppSettings
     public string QuickSaveHotkey { get; set; } = "Ctrl+Shift+S";
     public string PinHotkey { get; set; } = "Ctrl+T";
     public string PrintHotkey { get; set; } = "Ctrl+P";
+    // 清除所有標註（可復原；留空即停用）
+    public string ClearAllHotkey { get; set; } = "Ctrl+Shift+Z";
 
     // 框選完成後在範圍內按 Enter／雙擊／中鍵的動作：Copy | Pin | Save | QuickSave | CopyAndPin | None
     public string EnterAction { get; set; } = "Copy";

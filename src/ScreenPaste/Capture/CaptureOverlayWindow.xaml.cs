@@ -158,6 +158,7 @@ public partial class CaptureOverlayWindow : Window
         InitRegion();
         InitKeyboard();
         InitOutput();
+        InitTools();
         // A resolution / monitor change (common over RDP) invalidates the frozen
         // screenshot and every cached physical coordinate, so the selection would drift
         // against a screen that no longer matches.
@@ -322,15 +323,14 @@ public partial class CaptureOverlayWindow : Window
         Toolbar.BorderBrush = Theme.ButtonBorderBrush;
 
         var toolsRow = new StackPanel { Orientation = Orientation.Horizontal };
-        toolsRow.Children.Add(MakeToolButton(GlyphMarker, Loc.T("tool.marker"), ToolKind.MarkerPen));
-        toolsRow.Children.Add(MakeToolButton(GlyphHighlighter, Loc.T("tool.highlighter"), ToolKind.Highlighter));
-        toolsRow.Children.Add(MakeToolButton(GlyphText, Loc.T("tool.text"), ToolKind.Text));
-        toolsRow.Children.Add(MakeToolButton(GlyphShape, Loc.T("tool.shape"), ToolKind.Shape));
-        toolsRow.Children.Add(MakeToolButton(GlyphLine, Loc.T("tool.line"), ToolKind.Line));
-        toolsRow.Children.Add(MakeToolButton(GlyphSticker, Loc.T("tool.sticker"), ToolKind.Sticker));
-        toolsRow.Children.Add(MakeToolButton(GlyphBlur, Loc.T("tool.blur"), ToolKind.Blur));
-        toolsRow.Children.Add(MakeToolButton(GlyphMagnify,
-            Loc.T("tool.magnify") + " - " + Loc.T("magnify.hint"), ToolKind.Magnify));
+        toolsRow.Children.Add(MakeToolButton(GlyphMarker, ToolKind.MarkerPen));
+        toolsRow.Children.Add(MakeToolButton(GlyphHighlighter, ToolKind.Highlighter));
+        toolsRow.Children.Add(MakeToolButton(GlyphText, ToolKind.Text));
+        toolsRow.Children.Add(MakeToolButton(GlyphShape, ToolKind.Shape));
+        toolsRow.Children.Add(MakeToolButton(GlyphLine, ToolKind.Line));
+        toolsRow.Children.Add(MakeToolButton(GlyphSticker, ToolKind.Sticker));
+        toolsRow.Children.Add(MakeToolButton(GlyphBlur, ToolKind.Blur));
+        toolsRow.Children.Add(MakeToolButton(GlyphMagnify, ToolKind.Magnify));
         toolsRow.Children.Add(MakeSeparator());
         _undoButton = MakeActionButton(GlyphUndo, Loc.T("action.undo") + " (" + _settings.UndoHotkey + ")", () => _history.Undo());
         _redoButton = MakeActionButton(GlyphRedo, Loc.T("action.redo") + " (" + _settings.RedoHotkey + ")", () => _history.Redo());
@@ -629,9 +629,9 @@ public partial class CaptureOverlayWindow : Window
         Toolbar.ReleaseMouseCapture();
     }
 
-    private Button MakeToolButton(string glyph, string tooltip, ToolKind kind)
+    private Button MakeToolButton(string glyph, ToolKind kind)
     {
-        var b = MakeIconButton(glyph, tooltip);
+        var b = MakeIconButton(glyph, ToolTipFor(kind));
         b.Tag = kind;
         b.Click += (_, _) => SelectTool(kind);
         _toolButtons.Add(b);
@@ -724,6 +724,7 @@ public partial class CaptureOverlayWindow : Window
             Tag = c,   // lets RefreshSwatchSelection find and mark the active colour
         };
         b.Click += (_, _) => OnColorPicked(c);
+        b.MouseWheel += Swatch_MouseWheel;   // the wheel steps the tool colour's opacity
         return b;
     }
 
@@ -827,6 +828,7 @@ public partial class CaptureOverlayWindow : Window
             ToolTip = Loc.T("color.more"),
         };
         b.Click += (_, _) => OpenColorPicker();
+        b.MouseWheel += Swatch_MouseWheel;
         return b;
     }
 
@@ -894,132 +896,16 @@ public partial class CaptureOverlayWindow : Window
         return new Rect(_vs.X + left, _vs.Y + top, ToolbarWidth(), ToolbarHeight());
     }
 
-    // ---------------------------------------------------------- tool state ---
-
-    private void SelectTool(ToolKind kind)
-    {
-        if (_editingText != null && kind != ToolKind.Text) CommitActiveText(discardIfEmpty: true);
-        _tool = kind;
-
-        foreach (var b in _toolButtons)
-        {
-            bool active = (ToolKind)b.Tag! == kind;
-            b.Background = active ? Theme.ActiveBrush : Theme.ButtonBgBrush;
-        }
-
-        bool isNone = kind is ToolKind.None;
-        bool isPen = kind is ToolKind.MarkerPen or ToolKind.Highlighter;
-        bool isBlur = kind is ToolKind.Blur;
-        bool isText = kind is ToolKind.Text;
-        bool isShape = kind is ToolKind.Shape;
-        bool isLine = kind is ToolKind.Line;
-        bool isSticker = kind is ToolKind.Sticker;
-        bool isMagnify = kind is ToolKind.Magnify;
-        // Selection survives tool switches — grabbing works with every tool.
-
-        _penOptionsPanel.Visibility = isPen ? Visibility.Visible : Visibility.Collapsed;
-        _blurOptionsPanel.Visibility = isBlur ? Visibility.Visible : Visibility.Collapsed;
-        _textOptionsPanel.Visibility = isText ? Visibility.Visible : Visibility.Collapsed;
-        _shapeOptionsPanel.Visibility = isShape ? Visibility.Visible : Visibility.Collapsed;
-        _lineOptionsPanel.Visibility = isLine ? Visibility.Visible : Visibility.Collapsed;
-        _stickerOptionsPanel.Visibility = isSticker ? Visibility.Visible : Visibility.Collapsed;
-        _magnifyOptionsPanel.Visibility = isMagnify ? Visibility.Visible : Visibility.Collapsed;
-
-        Ink.EditingMode = isPen ? InkCanvasEditingMode.Ink : InkCanvasEditingMode.None;
-        Ink.IsHitTestVisible = isPen;
-        // Region tools capture via InteractionLayer; with no tool it catches drags that
-        // move the whole selection; sticker mode lets clicks reach the sticker images
-        // below so they can be dragged/resized. (Annotation grabbing is handled earlier
-        // by the tunneling EditLayer handlers, for every tool.)
-        InteractionLayer.IsHitTestVisible = isBlur || isText || isShape || isLine || isNone || isMagnify;
-        InteractionLayer.Cursor = DefaultInteractionCursor();
-
-        if (isPen) LoadPenControls();
-        if (isBlur) SelectBlurKind(_blurKind);
-        if (isShape) { SelectShapeKind(_shapeKind); SelectShapeStyle(_shapeFilled); }
-        if (isLine) RefreshArrowToggles();
-        if (isSticker && StickerHost.Children.Count == 0) AddSticker();
-        if (isMagnify) { SelectMagnifyShape(_magnifyShape); RefreshMagnifyToggles(); }
-        RefreshSwatchSelection();
-    }
-
-    /// <summary>With no tool, dragging the interaction layer moves the whole selection; every
-    /// other tool draws with it. Hover feedback overrides this while something is grabbable.</summary>
-    private Cursor DefaultInteractionCursor() =>
-        _tool == ToolKind.None ? Cursors.SizeAll : Cursors.Arrow;
-
-    private void SelectBlurKind(BlurKind kind)
-    {
-        _blurKind = kind;
-        foreach (var b in _blurKindButtons)
-        {
-            bool active = (BlurKind)b.Tag! == kind;
-            b.Background = active ? Theme.ActiveBrush : Theme.ButtonBgBrush;
-        }
-    }
-
-    private void LoadPenControls()
-    {
-        bool hl = _tool == ToolKind.Highlighter;
-        _widthSlider.Value = hl ? _hlWidth : _penWidth;
-        _opacitySlider.Value = hl ? _hlOpacity : _penOpacity;
-        ApplyDrawingAttributes();
-    }
-
-    private void ApplyDrawingAttributes()
-    {
-        bool hl = _tool == ToolKind.Highlighter;
-        double width = hl ? _hlWidth : _penWidth;
-        double opacity = hl ? _hlOpacity : _penOpacity;
-        Color baseColor = hl ? _hlColor : _penColor;
-        var color = Color.FromArgb((byte)Math.Round(opacity * 255), baseColor.R, baseColor.G, baseColor.B);
-
-        Ink.DefaultDrawingAttributes = new DrawingAttributes
-        {
-            Color = color,
-            Width = width,
-            Height = width,
-            IsHighlighter = hl,
-            FitToCurve = true,
-            StylusTip = StylusTip.Ellipse,
-        };
-    }
-
-    private void OnWidthChanged()
-    {
-        if (_tool == ToolKind.Highlighter) _hlWidth = _widthSlider.Value;
-        else _penWidth = _widthSlider.Value;
-        ApplyDrawingAttributes();
-    }
-
-    private void OnOpacityChanged()
-    {
-        if (_tool == ToolKind.Highlighter) _hlOpacity = _opacitySlider.Value;
-        else _penOpacity = _opacitySlider.Value;
-        ApplyDrawingAttributes();
-    }
-
-    private void OnColorPicked(Color c)
-    {
-        if (_tool == ToolKind.Text) { _textColor = Color.FromArgb(_textColor.A, c.R, c.G, c.B); ApplyTextStyle(); RefocusText(); }
-        else if (_tool == ToolKind.Shape) { _shapeColor = Color.FromArgb(_shapeColor.A, c.R, c.G, c.B); }
-        else if (_tool == ToolKind.Line) { _lineColor = Color.FromArgb(_lineColor.A, c.R, c.G, c.B); }
-        else if (_tool == ToolKind.Magnify) { _magnifyBorderColor = Color.FromArgb(_magnifyBorderColor.A, c.R, c.G, c.B); }
-        else
-        {
-            if (_tool == ToolKind.Highlighter) _hlColor = c;
-            else _penColor = c;
-            ApplyDrawingAttributes();
-        }
-        RefreshSwatchSelection();
-    }
-
     // ------------------------------------------------------ ink undo/redo ---
 
     private void Ink_StrokeCollected(object sender, InkCanvasStrokeCollectedEventArgs e)
     {
-        if (_suppressStrokeHistory) return;
-        var stroke = e.Stroke;
+        if (!_suppressStrokeHistory) PushStrokeHistory(e.Stroke);
+    }
+
+    /// <summary>Record a stroke already on the canvas (drawn, or a Shift straight segment).</summary>
+    private void PushStrokeHistory(Stroke stroke)
+    {
         _history.Push(
             undo: () => { _suppressStrokeHistory = true; Ink.Strokes.Remove(stroke); _suppressStrokeHistory = false; },
             redo: () => { _suppressStrokeHistory = true; Ink.Strokes.Add(stroke); _suppressStrokeHistory = false; });
@@ -1058,8 +944,7 @@ public partial class CaptureOverlayWindow : Window
         if (_lineDragging) { Line_MouseMove(e.GetPosition(InteractionLayer)); return; }
         if (_magnifyDragging) { Magnify_MouseMove(e.GetPosition(InteractionLayer)); return; }
         if (!_blurDragging || _blurPreview == null) return;
-        var p = e.GetPosition(InteractionLayer);
-        var r = MakeRect(_blurStart, p);
+        var r = DragRect(_blurStart, e.GetPosition(InteractionLayer));
         Canvas.SetLeft(_blurPreview, r.X);
         Canvas.SetTop(_blurPreview, r.Y);
         _blurPreview.Width = r.Width;
@@ -1079,7 +964,7 @@ public partial class CaptureOverlayWindow : Window
         if (_blurPreview != null) BlurHost.Children.Remove(_blurPreview);
         _blurPreview = null;
 
-        var rel = MakeRect(_blurStart, e.GetPosition(InteractionLayer));
+        var rel = DragRect(_blurStart, e.GetPosition(InteractionLayer));
         // Clamp to selection.
         rel.Intersect(new Rect(0, 0, _selection.Width, _selection.Height));
         if (rel.Width < 6 || rel.Height < 6) return;
@@ -1153,12 +1038,17 @@ public partial class CaptureOverlayWindow : Window
     private void Shape_MouseMove(Point p)
     {
         if (_shapePreview == null) return;
-        var r = MakeRect(_shapeStart, p);
-        Canvas.SetLeft(_shapePreview, r.X);
-        Canvas.SetTop(_shapePreview, r.Y);
-        _shapePreview.Width = r.Width;
-        _shapePreview.Height = r.Height;
-        if (_shapePreview is Rectangle rect && _shapeKind == ShapeKind.RoundedRectangle)
+        LayoutShape(_shapePreview, DragRect(_shapeStart, p), _shapeKind == ShapeKind.RoundedRectangle);
+    }
+
+    /// <summary>Place a rectangle or ellipse; a rounded rectangle's corners follow its size.</summary>
+    private static void LayoutShape(Shape shape, Rect r, bool rounded)
+    {
+        Canvas.SetLeft(shape, r.X);
+        Canvas.SetTop(shape, r.Y);
+        shape.Width = r.Width;
+        shape.Height = r.Height;
+        if (shape is Rectangle rect && rounded)
         {
             double radius = Math.Min(16, Math.Min(r.Width, r.Height) / 3.0);
             rect.RadiusX = radius;
@@ -1175,8 +1065,8 @@ public partial class CaptureOverlayWindow : Window
         _shapePreview = null;
         if (shape == null) return;
 
-        var r = MakeRect(_shapeStart, p);
-        if (r.Width < 4 || r.Height < 4) { ShapeHost.Children.Remove(shape); return; }
+        var r = DragRect(_shapeStart, p);
+        if (r.Width < MinShapeSize || r.Height < MinShapeSize) { ShapeHost.Children.Remove(shape); return; }
 
         _history.Push(
             undo: () => ShapeHost.Children.Remove(shape),
@@ -1358,9 +1248,9 @@ public partial class CaptureOverlayWindow : Window
 
         if (_magnifySourceDrag is { } mag)
         {
+            var (sdx, sdy) = MoveDelta(_magnifySourceGrab, p);
             MagnifyEffects.MoveSourceTo(mag, ClampSourceToRegion(new Rect(
-                _magnifySourceStart.X + (p.X - _magnifySourceGrab.X),
-                _magnifySourceStart.Y + (p.Y - _magnifySourceGrab.Y),
+                _magnifySourceStart.X + sdx, _magnifySourceStart.Y + sdy,
                 _magnifySourceStart.Width, _magnifySourceStart.Height)).TopLeft);
             ResampleMagnifier(mag);   // it now frames different pixels
             LayoutMagnifySourceHandles();
@@ -1370,15 +1260,11 @@ public partial class CaptureOverlayWindow : Window
 
         if (_moveDragging && _selected != null)
         {
+            var (dx, dy) = MoveDelta(_moveGrab, p);
             var tt = EnsureTranslate(_selected);
-            tt.X = _moveOrigX + (p.X - _moveGrab.X);
-            tt.Y = _moveOrigY + (p.Y - _moveGrab.Y);
-            // A blur shows the pixels it currently sits over, so it has to follow the drag.
-            if (_selected.Parent == BlurHost) BlurEffects.Resample(_selected, BlurBeneath());
-            // A magnifier keeps its content (it is tied to the framed source), but the frame
-            // and connector are drawn relative to the view, so they get rebuilt.
-            else if (_selected.Parent == MagnifyHost) MagnifyEffects.UpdateDecoration(_selected);
-            UpdateSelectionBox();
+            tt.X = _moveOrigX + dx;
+            tt.Y = _moveOrigY + dy;
+            AfterAnnotationMoved(_selected);
             e.Handled = true;
             return;
         }
@@ -1421,13 +1307,7 @@ public partial class CaptureOverlayWindow : Window
         e.Handled = true;
         if (_selected is not { } el) return;
 
-        var tt = EnsureTranslate(el);
-        double ox = _moveOrigX, oy = _moveOrigY, nx = tt.X, ny = tt.Y;
-        if (Math.Abs(nx - ox) < 0.5 && Math.Abs(ny - oy) < 0.5) return;   // click, not a move
-
-        _history.Push(
-            undo: () => { var t = EnsureTranslate(el); t.X = ox; t.Y = oy; },
-            redo: () => { var t = EnsureTranslate(el); t.X = nx; t.Y = ny; });
+        PushMove(el, new Point(_moveOrigX, _moveOrigY));
     }
 
     private void DeleteSelected()
@@ -1676,6 +1556,7 @@ public partial class CaptureOverlayWindow : Window
         // NOTE: no commit-on-focus-loss — clicking a toolbar style button must not
         // dismiss the box. It commits on Enter/Esc, a new placement, tool switch, or export.
 
+        box.PreviewMouseDown += TextBox_PreviewMiddleDown;   // middle-click pastes the clipboard text
         box.Loaded += (_, _) => { box.Focus(); Keyboard.Focus(box); };
         box.Focus();
         Keyboard.Focus(box);

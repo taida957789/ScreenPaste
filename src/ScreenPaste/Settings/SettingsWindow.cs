@@ -20,7 +20,7 @@ public sealed class SettingsWindow : Window
     private readonly Action _onCheckUpdates;
 
     private TextBox _capture = null!, _record = null!, _undo = null!, _redo = null!, _copy = null!, _save = null!, _quickSave = null!;
-    private TextBox _pin = null!, _print = null!;
+    private TextBox _pin = null!, _print = null!, _clearAll = null!;
     private ComboBox _enterAction = null!, _doubleClickAction = null!, _middleClickAction = null!;
     private ComboBox _language = null!;
     private ComboBox _theme = null!;
@@ -105,6 +105,7 @@ public sealed class SettingsWindow : Window
         _quickSave = HotkeyBox(_s.QuickSaveHotkey); body.Children.Add(Row(Loc.T("set.quickSave"), _quickSave));
         _pin = HotkeyBox(_s.PinHotkey); body.Children.Add(Row(Loc.T("action.pin"), _pin));
         _print = HotkeyBox(_s.PrintHotkey); body.Children.Add(Row(Loc.T("set.print"), _print));
+        _clearAll = HotkeyBox(_s.ClearAllHotkey); body.Children.Add(Row(Loc.T("action.clearAll"), _clearAll));
 
         body.Children.Add(Header(Loc.T("set.outputActions")));
         body.Children.Add(Hint(Loc.T("set.outputActionsHint")));
@@ -183,6 +184,7 @@ public sealed class SettingsWindow : Window
         _s.QuickSaveHotkey = _quickSave.Text.Trim();
         _s.PinHotkey = _pin.Text.Trim();
         _s.PrintHotkey = _print.Text.Trim();
+        _s.ClearAllHotkey = _clearAll.Text.Trim();
         _s.EnterAction = ComboValue(_enterAction);
         _s.DoubleClickAction = ComboValue(_doubleClickAction);
         _s.MiddleClickAction = ComboValue(_middleClickAction);

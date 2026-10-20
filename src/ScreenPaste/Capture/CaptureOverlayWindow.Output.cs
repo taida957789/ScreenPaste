@@ -212,9 +212,16 @@ public partial class CaptureOverlayWindow
     private void CopySize()
     {
         bool copied = ClipboardService.CopyText(OutputActions.SizeText(_selection.Width, _selection.Height));
-        ShowSizeReadout(RegionOnCanvas(), Loc.T(copied ? "size.copied" : "size.copyFailed"));
+        FlashSizeNote(Loc.T(copied ? "size.copied" : "size.copyFailed"));
+    }
+
+    /// <summary>Show <paramref name="note"/> after the size on the chip for a moment (a copied
+    /// size, a new pen width ...), then the size alone again.</summary>
+    private void FlashSizeNote(string note)
+    {
+        ShowSizeReadout(RegionOnCanvas(), note);
         _sizeFlash ??= new DispatcherTimer(SizeFlashDuration, DispatcherPriority.Normal, (_, _) => EndSizeFlash(), Dispatcher);
-        _sizeFlash.Stop();   // restart: a second V keeps the note up for the full time
+        _sizeFlash.Stop();   // restart: a second note stays up for the full time
         _sizeFlash.Start();
     }
 

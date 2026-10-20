@@ -5,7 +5,6 @@ using System.Windows.Media;
 using ScreenPaste.Editor;
 using ScreenPaste.Input;
 using ScreenPaste.Native;
-using ScreenPaste.Rendering;
 using ScreenPaste.Settings;
 
 namespace ScreenPaste.Capture;
@@ -153,21 +152,13 @@ public partial class CaptureOverlayWindow
     }
 
     /// <summary>Mouse wheel while framing: cycle the detection level (element ⇄ window),
-    /// leaving window mode if Tab chose it. While editing, it re-zooms the selected
-    /// magnifier instead.</summary>
+    /// leaving window mode if Tab chose it. While editing it belongs to the annotations
+    /// (<see cref="OnEditingWheel"/>).</summary>
     private void OnDetectLevelWheel(object sender, MouseWheelEventArgs e)
     {
         if (_phase == Phase.Editing)
         {
-            if (_selected?.Parent == MagnifyHost && MagnifyEffects.SpecOf(_selected) is { } spec &&
-                MagnifyEffects.SetZoom(_selected, spec.Zoom + (e.Delta > 0 ? 0.5 : -0.5)))
-            {
-                MagnifyEffects.ClampViewInto(_selected, RegionBounds());
-                ResampleMagnifier(_selected);
-                MagnifyHost.UpdateLayout();   // the view just resized; re-fit the marching box
-                UpdateSelectionBox();
-                e.Handled = true;
-            }
+            OnEditingWheel(e);
             return;
         }
         if (_phase != Phase.Selecting || _dragging || _detectRect == null) return;

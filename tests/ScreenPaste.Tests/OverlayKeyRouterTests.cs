@@ -1,5 +1,6 @@
 using System.Windows.Input;
 using ScreenPaste.Capture;
+using ScreenPaste.Editor;
 using ScreenPaste.Input;
 using ScreenPaste.Settings;
 using Xunit;
@@ -225,9 +226,9 @@ public sealed class OverlayKeyRouterTests
     }
 
     [Fact]
-    public void CtrlShiftZ_NeverMatchesUndo()
+    public void CtrlShiftZ_ClearsEverything_NeverUndoes()
     {
-        Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.Z, Ctrl | Shift)));
+        Assert.Equal(OverlayCommand.ClearAll, Router.Route(Editing(Key.Z, Ctrl | Shift)));
     }
 
     [Fact]
@@ -681,6 +682,7 @@ public sealed class OverlayKeyRouterTests
         Assert.Equal(new KeyChord(Key.S, Ctrl | Shift), bindings.QuickSave);
         Assert.Equal(new KeyChord(Key.T, Ctrl), bindings.Pin);
         Assert.Equal(new KeyChord(Key.P, Ctrl), bindings.Print);
+        Assert.Equal(new KeyChord(Key.Z, Ctrl | Shift), bindings.ClearAll);
     }
 
     [Fact]
@@ -698,5 +700,267 @@ public sealed class OverlayKeyRouterTests
     public void AnUnboundKey_IsLeftAlone()
     {
         Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.F7)));
+    }
+
+    // ---------------------------------------------------------------- clear all ---
+
+    [Fact]
+    public void CtrlShiftZ_MidDrag_DoesNotClear()
+    {
+        // A drawing or a move owns the annotations until the button is up.
+        var ctx = Editing(Key.Z, Ctrl | Shift) with { Dragging = true };
+
+        Assert.Equal(OverlayCommand.None, Router.Route(ctx));
+    }
+
+    [Fact]
+    public void CtrlShiftZ_WhileSelecting_DoesNothing()
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(Selecting(Key.Z, Ctrl | Shift)));
+    }
+
+    [Fact]
+    public void ARedoBoundToCtrlShiftZ_WinsOverClearAll()
+    {
+        var bindings = OverlayKeyBindings.FromSettings(new AppSettings()) with { Redo = new KeyChord(Key.Z, Ctrl | Shift) };
+
+        Assert.Equal(OverlayCommand.Redo, new OverlayKeyRouter(bindings).Route(Editing(Key.Z, Ctrl | Shift)));
+    }
+
+    [Fact]
+    public void FromSettings_FollowsTheClearAllGesture()
+    {
+        var rebound = new OverlayKeyRouter(OverlayKeyBindings.FromSettings(new AppSettings { ClearAllHotkey = "Ctrl+Shift+Delete" }));
+        var disabled = new OverlayKeyRouter(OverlayKeyBindings.FromSettings(new AppSettings { ClearAllHotkey = "" }));
+
+        Assert.Equal(OverlayCommand.ClearAll, rebound.Route(Editing(Key.Delete, Ctrl | Shift)));
+        Assert.Equal(OverlayCommand.None, rebound.Route(Editing(Key.Z, Ctrl | Shift)));
+        Assert.Equal(OverlayCommand.None, disabled.Route(Editing(Key.Z, Ctrl | Shift)));
+    }
+
+    // ---------------------------------------------------------------- annotation arrows ---
+
+    [Theory]
+    [InlineData(Key.Up)]
+    [InlineData(Key.Down)]
+    [InlineData(Key.Left)]
+    [InlineData(Key.Right)]
+    public void Arrows_WithAnAnnotationSelected_MoveTheAnnotation(Key key)
+    {
+        var ctx = Editing(key) with { HasSelection = true };
+
+        Assert.Equal(OverlayCommand.MoveAnnotation, Router.Route(ctx));
+        Assert.Equal(OverlayCommand.MoveAnnotation, Router.Route(ctx with { IsRepeat = true }));
+    }
+
+    [Fact]
+    public void Arrows_WithAnAnnotationSelected_MidDrag_DoNothing()
+    {
+        var ctx = Editing(Key.Left) with { HasSelection = true, Dragging = true };
+
+        Assert.Equal(OverlayCommand.None, Router.Route(ctx));
+    }
+
+    // ---------------------------------------------------------------- tool letters ---
+
+    [Theory]
+    [InlineData(Key.T)]
+    [InlineData(Key.B)]
+    [InlineData(Key.M)]
+    public void ToolLetters_WhileEditing_SwitchTheTool(Key key)
+    {
+        Assert.Equal(OverlayCommand.SelectToolByLetter, Router.Route(Editing(key)));
+    }
+
+    [Theory]
+    [InlineData(Shift)]
+    [InlineData(Alt)]
+    public void ChordedToolLetters_AreNotToolSwitches(ModifierKeys modifiers)
+    {
+        Assert.NotEqual(OverlayCommand.SelectToolByLetter, Router.Route(Editing(Key.B, modifiers)));
+    }
+
+    [Fact]
+    public void ToolLetters_WhileSelectingTypingOrDragging_DoNotSwitchTools()
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(Selecting(Key.T)));
+        Assert.Equal(OverlayCommand.PassThrough, Router.Route(Typing(Key.T)));
+        Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.T) with { Dragging = true }));
+    }
+
+    [Fact]
+    public void AnUnmappedLetter_WhileEditing_DoesNothing()
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.J)));
+    }
+
+    // ---------------------------------------------------------------- digits ---
+
+    [Theory]
+    [InlineData(Key.D0)]
+    [InlineData(Key.D1)]
+    [InlineData(Key.D2)]
+    [InlineData(Key.D9)]
+    [InlineData(Key.NumPad3)]
+    public void CtrlDigits_SwitchTheTool(Key key)
+    {
+        Assert.Equal(OverlayCommand.SelectToolByNumber, Router.Route(Editing(key, Ctrl)));
+    }
+
+    [Theory]
+    [InlineData(Key.D1, OverlayCommand.PenSizeDown)]
+    [InlineData(Key.NumPad1, OverlayCommand.PenSizeDown)]
+    [InlineData(Key.D2, OverlayCommand.PenSizeUp)]
+    [InlineData(Key.NumPad2, OverlayCommand.PenSizeUp)]
+    public void Digits1And2_WithoutCtrl_StepThePenSize(Key key, OverlayCommand expected)
+    {
+        Assert.Equal(expected, Router.Route(Editing(key)));
+    }
+
+    [Theory]
+    [InlineData(Key.D3)]
+    [InlineData(Key.D0)]
+    public void OtherDigits_WithoutCtrl_DoNothing(Key key)
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(Editing(key)));
+    }
+
+    [Theory]
+    [InlineData(Key.D1, None)]
+    [InlineData(Key.D1, Ctrl)]
+    public void Digits_WhileSelecting_DoNothing(Key key, ModifierKeys modifiers)
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(Selecting(key, modifiers)));
+    }
+
+    [Fact]
+    public void Digits_MidDrag_DoNothing()
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.D2) with { Dragging = true }));
+        Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.D2, Ctrl) with { Dragging = true }));
+    }
+
+    [Fact]
+    public void Digits_WhileTyping_AreTyping()
+    {
+        Assert.Equal(OverlayCommand.PassThrough, Router.Route(Typing(Key.D1)));
+        Assert.Equal(OverlayCommand.PassThrough, Router.Route(Typing(Key.D1, Ctrl)));
+    }
+
+    [Fact]
+    public void AGestureBoundToCtrlDigit_WinsOverTheToolSwitch()
+    {
+        var bindings = OverlayKeyBindings.FromSettings(new AppSettings()) with { Save = new KeyChord(Key.D1, Ctrl) };
+
+        Assert.Equal(OverlayCommand.Save, new OverlayKeyRouter(bindings).Route(Editing(Key.D1, Ctrl)));
+    }
+
+    // ---------------------------------------------------------------- Tab / Ctrl+Tab ---
+
+    [Theory]
+    [InlineData(ToolKind.Shape)]
+    [InlineData(ToolKind.Line)]
+    [InlineData(ToolKind.Blur)]
+    [InlineData(ToolKind.Magnify)]
+    public void Tab_WithAToolThatHasVariants_TogglesTheVariant(ToolKind tool)
+    {
+        var ctx = Editing(Key.Tab) with { Tool = tool };
+
+        Assert.Equal(OverlayCommand.ToggleToolVariant, Router.Route(ctx));
+    }
+
+    [Theory]
+    [InlineData(ToolKind.None)]
+    [InlineData(ToolKind.MarkerPen)]
+    [InlineData(ToolKind.Text)]
+    public void Tab_WithAToolWithoutVariants_IsLeftAlone(ToolKind tool)
+    {
+        var ctx = Editing(Key.Tab) with { Tool = tool };
+
+        Assert.Equal(OverlayCommand.None, Router.Route(ctx));
+    }
+
+    [Fact]
+    public void CtrlTab_CyclesToTheNextTool_AndCtrlShiftTab_ToThePrevious()
+    {
+        Assert.Equal(OverlayCommand.NextTool, Router.Route(Editing(Key.Tab, Ctrl)));
+        Assert.Equal(OverlayCommand.PreviousTool, Router.Route(Editing(Key.Tab, Ctrl | Shift)));
+    }
+
+    [Fact]
+    public void CtrlTab_WhileSelectingOrMidDrag_DoesNothing()
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(Selecting(Key.Tab, Ctrl)));
+        Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.Tab, Ctrl) with { Dragging = true }));
+    }
+
+    [Fact]
+    public void ShiftTab_IsNotAVariantToggle()
+    {
+        var ctx = Editing(Key.Tab, Shift) with { Tool = ToolKind.Shape };
+
+        Assert.Equal(OverlayCommand.None, Router.Route(ctx));
+    }
+
+    // ---------------------------------------------------------------- Alt+C ---
+
+    [Fact]
+    public void AltC_WhileEditing_PicksTheScreenColour()
+    {
+        Assert.Equal(OverlayCommand.PickColor, Router.Route(Editing(Key.C, Alt)));
+    }
+
+    [Fact]
+    public void AltC_WhileSelectingOrMidDrag_DoesNothing()
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(Selecting(Key.C, Alt)));
+        Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.C, Alt) with { Dragging = true }));
+    }
+
+    [Fact]
+    public void CtrlAltC_IsStillCopyAsFile_NotTheColourPick()
+    {
+        Assert.Equal(OverlayCommand.CopyAsFile, Router.Route(Editing(Key.C, Ctrl | Alt)));
+    }
+
+    // ---------------------------------------------------------------- typed characters ---
+
+    [Theory]
+    [InlineData("[", OverlayCommand.PenSizeDown)]
+    [InlineData("]", OverlayCommand.PenSizeUp)]
+    public void Brackets_WhileEditing_StepThePenSize(string text, OverlayCommand expected)
+    {
+        Assert.Equal(expected, Router.RouteText(text, Editing(Key.None)));
+    }
+
+    [Theory]
+    [InlineData(Ctrl | Alt)]   // AltGr: how a German or French keyboard types a bracket
+    [InlineData(Shift)]
+    public void Brackets_MatchByCharacter_WhateverModifiersTypedThem(ModifierKeys modifiers)
+    {
+        Assert.Equal(OverlayCommand.PenSizeUp, Router.RouteText("]", Editing(Key.None, modifiers)));
+    }
+
+    [Fact]
+    public void Brackets_WhileTypingOrInTheFontList_AreLeftToTheControl()
+    {
+        Assert.Equal(OverlayCommand.PassThrough, Router.RouteText("[", Typing(Key.None)));
+        Assert.Equal(OverlayCommand.PassThrough, Router.RouteText("[", Editing(Key.None) with { DropDownOpen = true }));
+    }
+
+    [Fact]
+    public void Brackets_WhileSelectingOrMidDrag_DoNothing()
+    {
+        Assert.Equal(OverlayCommand.None, Router.RouteText("[", Selecting(Key.None)));
+        Assert.Equal(OverlayCommand.None, Router.RouteText("]", Editing(Key.None) with { Dragging = true }));
+    }
+
+    [Theory]
+    [InlineData("a")]
+    [InlineData("1")]
+    [InlineData("")]
+    public void OtherText_IsNotAShortcut(string text)
+    {
+        Assert.Equal(OverlayCommand.None, Router.RouteText(text, Editing(Key.None)));
     }
 }

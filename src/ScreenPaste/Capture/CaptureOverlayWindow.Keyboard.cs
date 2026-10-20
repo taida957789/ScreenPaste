@@ -20,6 +20,7 @@ public partial class CaptureOverlayWindow
 {
     private OverlayKeyRouter _keyRouter = null!;
     private readonly ModifierTapTracker _modifierTaps = new();
+    private bool _altChordRan;   // a key held with Alt ran a command since Alt went down
 
     private void InitKeyboard()
     {
@@ -31,6 +32,9 @@ public partial class CaptureOverlayWindow
         PreviewKeyDown += Overlay_PreviewKeyDown;
         PreviewKeyUp += Overlay_PreviewKeyUp;
         KeyDown += Overlay_KeyDown;
+        // Layout-dependent keys ([ and ]) go by the character they type, which only arrives
+        // for keys no key-down handler claimed.
+        PreviewTextInput += Overlay_PreviewTextInput;
 
         // A mouse button, the wheel or losing focus between a modifier's down and up means
         // it was part of a gesture (Shift+drag, Shift+wheel), not a tap.
@@ -44,8 +48,11 @@ public partial class CaptureOverlayWindow
     {
         var key = KeyInputNormalizer.Effective(e);
         _modifierTaps.KeyDown(key, Keyboard.Modifiers, AnyMouseButtonDown());
+        if (IsAltKey(key) && !e.IsRepeat) _altChordRan = false;
         var ctx = KeyContext(key, e);
-        if (RunKeyCommand(_keyRouter.Route(ctx), ctx)) e.Handled = true;
+        if (!RunKeyCommand(_keyRouter.Route(ctx), ctx)) return;
+        e.Handled = true;
+        if (ctx.Modifiers.HasFlag(ModifierKeys.Alt)) _altChordRan = true;
     }
 
     /// <summary>Reached only by keys nobody handled on the way down; that matters solely
@@ -61,19 +68,39 @@ public partial class CaptureOverlayWindow
     {
         var key = KeyInputNormalizer.Effective(e);
         if (key == Key.Space) EndHoldToMove();
+        if (CursorNudge.IsArrow(key)) CommitAnnotationNudge();   // a held arrow's moves: one undo step
         var tapped = _modifierTaps.KeyUp(key);
+        if (IsAltKey(key) && _altChordRan)
+        {
+            // Windows never saw the handled key of an Alt chord (Alt+C), so it would take
+            // this release for an Alt tap and enter menu mode, eating the next key.
+            _altChordRan = false;
+            if (tapped == ModifierKeys.None) e.Handled = true;
+        }
         if (tapped == ModifierKeys.None) return;
         var ctx = KeyContext(key, e);
         if (RunKeyCommand(_keyRouter.RouteTap(tapped, ctx), ctx)) e.Handled = true;
     }
 
-    private OverlayKeyContext KeyContext(Key key, KeyEventArgs e) => new()
+    private void Overlay_PreviewTextInput(object sender, TextCompositionEventArgs e)
     {
-        Phase = _phase == Phase.Editing ? OverlayPhase.Editing : OverlayPhase.Selecting,
+        if (string.IsNullOrEmpty(e.Text)) return;   // Ctrl chords type control characters
+        var ctx = StateContext();
+        if (RunKeyCommand(_keyRouter.RouteText(e.Text, ctx), ctx)) e.Handled = true;
+    }
+
+    private OverlayKeyContext KeyContext(Key key, KeyEventArgs e) => StateContext() with
+    {
         Key = key,
-        Modifiers = Keyboard.Modifiers,
         IsRepeat = e.IsRepeat,
         ImeProcessed = e.Key == Key.ImeProcessed,
+    };
+
+    /// <summary>The overlay's state as the router sees it, without a key.</summary>
+    private OverlayKeyContext StateContext() => new()
+    {
+        Phase = _phase == Phase.Editing ? OverlayPhase.Editing : OverlayPhase.Selecting,
+        Modifiers = Keyboard.Modifiers,
         TextBoxActive = _editingText != null,
         DropDownOpen = _fontCombo?.IsDropDownOpen == true,   // built with the toolbar
         LoupeVisible = Magnifier.Visibility == Visibility.Visible,
@@ -81,7 +108,10 @@ public partial class CaptureOverlayWindow
         FramedSourceDragging = _magnifySourceDrag != null || _magnifySourceResize != null,
         Dragging = Mouse.LeftButton == MouseButtonState.Pressed,
         HasDetectedArea = _phase == Phase.Selecting && _detectRect != null,
+        Tool = _tool,
     };
+
+    private static bool IsAltKey(Key key) => key is Key.LeftAlt or Key.RightAlt;
 
     private static bool AnyMouseButtonDown() =>
         Mouse.LeftButton == MouseButtonState.Pressed ||
@@ -92,6 +122,8 @@ public partial class CaptureOverlayWindow
     /// depend on the key itself (direction, auto-repeat) read it from <paramref name="ctx"/>.</summary>
     private bool RunKeyCommand(OverlayCommand command, OverlayKeyContext ctx)
     {
+        // A held arrow's moves become one undo step before anything else can happen.
+        if (command != OverlayCommand.MoveAnnotation) CommitAnnotationNudge();
         switch (command)
         {
             case OverlayCommand.ToggleDetectMode: ToggleDetectMode(); return true;
@@ -130,7 +162,8 @@ public partial class CaptureOverlayWindow
             case OverlayCommand.ToggleToolbar:
                 if (!ctx.IsRepeat) ToggleToolbar();   // a held Space must not make it flicker
                 return true;
-            default: return false;   // None, PassThrough, and rows not wired up yet
+            // The annotation tool keys: CaptureOverlayWindow.Tools.cs.
+            default: return RunToolCommand(command, ctx);
         }
     }
 }
