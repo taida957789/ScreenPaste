@@ -248,11 +248,23 @@ public static class Loc
         Add("common.cancel", "Cancel",               "取消",          "キャンセル",         "취소",            "Annuler",           "Abbrechen",         "Cancelar");
         Add("common.save",   "Save",                 "儲存",          "保存",              "저장",            "Enregistrer",       "Speichern",         "Guardar");
 
-        // Pin window
-        Add("pin.copy",      "Copy (Ctrl+C)",        "複製 (Ctrl+C)", "コピー (Ctrl+C)",    "복사 (Ctrl+C)",   "Copier (Ctrl+C)",   "Kopieren (Strg+C)", "Copiar (Ctrl+C)");
+        // Pin window (right-click / Menu key; each row also shows the keys that do the same)
+        Add("pin.copy",      "Copy",                 "複製",          "コピー",             "복사",            "Copier",            "Kopieren",          "Copiar");
+        Add("pin.copyFile",  "Copy as file",         "複製為檔案",     "ファイルとしてコピー", "파일로 복사",      "Copier en tant que fichier", "Als Datei kopieren", "Copiar como archivo");
         Add("pin.save",      "Save…",                "儲存…",         "保存…",             "저장…",           "Enregistrer…",      "Speichern…",        "Guardar…");
-        Add("pin.reset",     "Reset zoom (100%)",    "重設縮放 (100%)","ズームをリセット (100%)","확대/축소 초기화 (100%)","Zoom 100 %",   "Zoom zurücksetzen (100%)","Restablecer zoom (100%)");
-        Add("pin.close",     "Close (Esc)",          "關閉 (Esc)",    "閉じる (Esc)",       "닫기 (Esc)",      "Fermer (Échap)",    "Schließen (Esc)",   "Cerrar (Esc)");
+        Add("pin.quickSave", "Quick save",           "快速儲存",       "クイック保存",        "빠른 저장",        "Enregistrement rapide", "Schnellspeichern", "Guardado rápido");
+        Add("pin.print",     "Print…",               "列印…",         "印刷…",             "인쇄…",           "Imprimer…",         "Drucken…",          "Imprimir…");
+        Add("pin.rotateCw",  "Rotate clockwise",     "順時針旋轉",     "時計回りに回転",      "시계 방향으로 회전", "Rotation horaire",  "Im Uhrzeigersinn drehen", "Girar a la derecha");
+        Add("pin.rotateCcw", "Rotate counterclockwise", "逆時針旋轉",  "反時計回りに回転",    "시계 반대 방향으로 회전", "Rotation antihoraire", "Gegen den Uhrzeigersinn drehen", "Girar a la izquierda");
+        Add("pin.flipH",     "Flip horizontally",    "水平翻轉",       "左右反転",           "좌우 반전",        "Retourner horizontalement", "Horizontal spiegeln", "Voltear horizontalmente");
+        Add("pin.flipV",     "Flip vertically",      "垂直翻轉",       "上下反転",           "상하 반전",        "Retourner verticalement", "Vertikal spiegeln", "Voltear verticalmente");
+        Add("pin.grayscale", "Grayscale",            "灰階",          "グレースケール",      "회색조",          "Niveaux de gris",   "Graustufen",        "Escala de grises");
+        Add("pin.invert",    "Invert colors",        "反轉色彩",       "色を反転",           "색상 반전",        "Inverser les couleurs", "Farben umkehren", "Invertir colores");
+        Add("pin.opacityUp", "Increase opacity",     "提高不透明度",   "不透明度を上げる",    "불투명도 높이기",   "Augmenter l'opacité", "Deckkraft erhöhen", "Aumentar la opacidad");
+        Add("pin.opacityDown","Decrease opacity",    "降低不透明度",   "不透明度を下げる",    "불투명도 낮추기",   "Diminuer l'opacité", "Deckkraft verringern", "Reducir la opacidad");
+        Add("pin.reset",     "Reset size and opacity (100%)", "重設大小與不透明度 (100%)", "サイズと不透明度をリセット (100%)", "크기와 불투명도 초기화 (100%)", "Taille et opacité à 100 %", "Größe und Deckkraft zurücksetzen (100%)", "Restablecer tamaño y opacidad (100%)");
+        Add("pin.close",     "Close",                "關閉",          "閉じる",             "닫기",            "Fermer",            "Schließen",         "Cerrar");
+        Add("pin.saveFailed","Could not save the image: {0}", "無法儲存圖片：{0}", "画像を保存できませんでした：{0}", "이미지를 저장하지 못했습니다: {0}", "Impossible d'enregistrer l'image : {0}", "Das Bild konnte nicht gespeichert werden: {0}", "No se pudo guardar la imagen: {0}");
 
         // Settings window
         Add("set.title",     "ScreenPaste Settings", "ScreenPaste 設定","ScreenPaste 設定",  "ScreenPaste 설정","Paramètres ScreenPaste","ScreenPaste-Einstellungen","Ajustes de ScreenPaste");

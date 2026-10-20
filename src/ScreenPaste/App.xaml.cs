@@ -89,6 +89,7 @@ public partial class App : Application
 
         SetupTray();
         SetupHotkey();
+        PinManager.OpenSettingsRequested = OpenSettings;   // a pin's Ctrl+Shift+P
 
         _tray?.ShowBalloonTip(3000, "ScreenPaste",
             Loc.T("tray.started", _settings.CaptureHotkey), Forms.ToolTipIcon.Info);

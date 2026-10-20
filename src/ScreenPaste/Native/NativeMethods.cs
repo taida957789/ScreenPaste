@@ -133,6 +133,14 @@ internal static class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool SetCursorPos(int X, int Y);
 
+    // ---- Keyboard layout (a pin's + and - go by the character a key types) ----
+    public const uint MAPVK_VK_TO_CHAR = 2;
+
+    /// <summary>With MAPVK_VK_TO_CHAR: the character the key types unshifted on the current
+    /// layout in the low word, 0 for none; the top bit is set for a dead key.</summary>
+    [DllImport("user32.dll", EntryPoint = "MapVirtualKeyW")]
+    public static extern uint MapVirtualKey(uint uCode, uint uMapType);
+
     // ---- Foreground window ----
     [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();

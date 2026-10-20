@@ -18,8 +18,25 @@ public static class PinManager
     private static IntPtr _hook = IntPtr.Zero;
     private static NativeMethods.HookProc? _proc;   // kept alive to avoid GC of the callback
 
+    private static int _dialogDepth;   // pins' own dialogs open (save, print, a message)
+
     /// <summary>Set while the capture overlay is up, so Esc there won't wipe existing pins.</summary>
     public static bool CaptureActive { get; set; }
+
+    /// <summary>Opens the settings window; App sets it. Lets a pin's Ctrl+Shift+P reach the
+    /// settings (useful with the tray icon hidden) without the pin knowing App.</summary>
+    public static Action? OpenSettingsRequested { get; set; }
+
+    public static void RequestSettings() => OpenSettingsRequested?.Invoke();
+
+    /// <summary>Run a pin's modal dialog. While it is up, Esc only cancels the dialog: no pin
+    /// is focused then, which would otherwise read as "close every pin".</summary>
+    public static void ShowingDialog(Action show)
+    {
+        _dialogDepth++;
+        try { show(); }
+        finally { _dialogDepth--; }
+    }
 
     public static void Add(PinWindow pin)
     {
@@ -65,8 +82,8 @@ public static class PinManager
 
     private static void OnEscape()
     {
-        // Don't interfere with cancelling a capture.
-        if (CaptureActive) return;
+        // Don't interfere with cancelling a capture, or a pin's own dialog.
+        if (CaptureActive || _dialogDepth > 0) return;
 
         IntPtr fg = NativeMethods.GetForegroundWindow();
 

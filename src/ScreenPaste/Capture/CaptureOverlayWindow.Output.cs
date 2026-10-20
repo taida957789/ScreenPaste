@@ -226,7 +226,7 @@ public partial class CaptureOverlayWindow
 
     /// <summary>A pin of the image, over the spot it was captured from.</summary>
     private void PinImage(BitmapSource img) =>
-        new PinWindow(img, _vs.X + _selection.X, _vs.Y + _selection.Y, _settings.SaveDirectory).Show();
+        new PinWindow(img, _vs.X + _selection.X, _vs.Y + _selection.Y, _settings).Show();
 
     /// <summary>V: copy the area's size ("800x600") and say on the size chip for a moment
     /// whether it worked (another app can keep the clipboard locked).</summary>

@@ -100,6 +100,8 @@ public sealed class AppSettings
     // 截圖歷史（按 , / . 回放，只存在記憶體）：保留筆數 0–8（0 = 停用）與記憶體上限 MB（最多 512）
     public int SnipHistoryCount { get; set; } = 8;
     public int SnipHistoryBudgetMb { get; set; } = 512;
+    // 貼圖滾輪縮放以滑鼠游標為中心（關閉則固定左上角）
+    public bool PinZoomAtCursor { get; set; } = true;
 
     // ---- Startup ----
     public bool RunAtStartup { get; set; }
