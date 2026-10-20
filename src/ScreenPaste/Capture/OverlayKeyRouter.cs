@@ -35,6 +35,7 @@ public enum OverlayCommand
     CycleScreenArea,     // Ctrl+A: active screen, then all screens
     NudgeCursor,         // W/A/S/D, and the arrows before a region is chosen
     AcceptDetected,      // Space: take the detected area
+    HoldToMove,          // Space held mid-drag: move the area instead of resizing it
     ToggleGuideLines,    // Alt tap
 
     // ---- Region (editing phase)
@@ -88,6 +89,8 @@ public readonly record struct OverlayKeyContext
     /// <summary>The effective key (<see cref="KeyInputNormalizer"/>).</summary>
     public Key Key { get; init; }
     public ModifierKeys Modifiers { get; init; }
+    /// <summary>A keyboard auto-repeat of a held key.</summary>
+    public bool IsRepeat { get; init; }
     /// <summary>WPF delivered the key as ImeProcessed: an IME composition owns it.</summary>
     public bool ImeProcessed { get; init; }
     /// <summary>A text annotation is being typed.</summary>
@@ -101,6 +104,10 @@ public readonly record struct OverlayKeyContext
     public bool HasSelection { get; init; }
     /// <summary>A magnifier's framed source is being moved or resized.</summary>
     public bool FramedSourceDragging { get; init; }
+    /// <summary>The left button is held: framing the area, resizing or moving it, drawing.</summary>
+    public bool Dragging { get; init; }
+    /// <summary>Selecting: hovering has a window or UI element highlighted.</summary>
+    public bool HasDetectedArea { get; init; }
 }
 
 /// <summary>The user-configurable gestures (settings.json); null means unbound. Read with
@@ -141,10 +148,11 @@ public sealed class OverlayKeyRouter
         if (ctx.LoupeVisible && ctx.Key == Key.C && ctx.Modifiers == ModifierKeys.None)
             return OverlayCommand.CopyLoupeColor;
 
-        if (ctx.Phase != OverlayPhase.Editing) return OverlayCommand.None;
+        if (ctx.Phase != OverlayPhase.Editing) return RouteSelecting(ctx);
 
         if (ctx.Key == Key.Delete && ctx.HasSelection) return OverlayCommand.DeleteSelected;
-        return RouteGesture(ctx);
+        var gesture = RouteGesture(ctx);
+        return gesture != OverlayCommand.None ? gesture : RouteEditing(ctx);
     }
 
     /// <summary>A modifier pressed and released on its own (<see cref="ModifierTapTracker"/>).</summary>
@@ -152,8 +160,50 @@ public sealed class OverlayKeyRouter
     {
         if (ctx.DropDownOpen || ctx.TextBoxActive) return OverlayCommand.None;
         if (tapped == ModifierKeys.Shift && ctx.LoupeVisible) return OverlayCommand.CycleLoupeFormat;
+        if (tapped == ModifierKeys.Alt && ctx.Phase == OverlayPhase.Selecting) return OverlayCommand.ToggleGuideLines;
         return OverlayCommand.None;
     }
+
+    /// <summary>
+    /// Framing the area. Space takes the detected area, or mid-drag holds the area to move
+    /// it; Tab and Ctrl+A wait until the button is up; W/A/S/D and the arrows nudge the
+    /// cursor, which a drag follows.
+    /// </summary>
+    private static OverlayCommand RouteSelecting(OverlayKeyContext ctx)
+    {
+        if (ctx.Key == Key.Space && (ctx.Modifiers & ChordModifiers) == 0)
+        {
+            if (ctx.Dragging) return OverlayCommand.HoldToMove;
+            if (ctx.HasDetectedArea && ctx.Modifiers == ModifierKeys.None) return OverlayCommand.AcceptDetected;
+            return OverlayCommand.None;
+        }
+        if ((CursorNudge.IsWasd(ctx.Key) || CursorNudge.IsArrow(ctx.Key)) && IsNudge(ctx))
+            return OverlayCommand.NudgeCursor;
+        if (ctx.Dragging) return OverlayCommand.None;
+
+        if (ctx.Key == Key.Tab && ctx.Modifiers == ModifierKeys.None) return OverlayCommand.ToggleDetectMode;
+        if (IsSelectAll(ctx)) return OverlayCommand.CycleScreenArea;
+        return OverlayCommand.None;
+    }
+
+    /// <summary>Snipaste's fixed editing keys, tried after the configurable gestures so a
+    /// gesture the user bound to the same chord wins.</summary>
+    private static OverlayCommand RouteEditing(OverlayKeyContext ctx)
+    {
+        if (ctx.Key == Key.Space && ctx.Dragging && (ctx.Modifiers & ChordModifiers) == 0)
+            return OverlayCommand.HoldToMove;
+        if (IsSelectAll(ctx) && !ctx.Dragging) return OverlayCommand.CycleScreenArea;
+        if (CursorNudge.IsWasd(ctx.Key) && IsNudge(ctx)) return OverlayCommand.NudgeCursor;
+        return OverlayCommand.None;
+    }
+
+    /// <summary>A bare nudge key, or Shift+key mid-drag so a Shift+drag square can be
+    /// fine-tuned too.</summary>
+    private static bool IsNudge(OverlayKeyContext ctx) =>
+        ctx.Modifiers == ModifierKeys.None || (ctx.Dragging && ctx.Modifiers == ModifierKeys.Shift);
+
+    private static bool IsSelectAll(OverlayKeyContext ctx) =>
+        ctx.Key == Key.A && ctx.Modifiers == ModifierKeys.Control;
 
     /// <summary>
     /// The text box sees keys first: Esc and Enter end the edit, Shift+Enter is a new line,

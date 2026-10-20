@@ -50,6 +50,13 @@
             <Rectangle x:Name="SelectionBorder" Visibility="Collapsed" IsHitTestVisible="False"
                        Stroke="#3DA9FC" StrokeThickness="1.5"/>
 
+            <!-- Full-screen crosshair guide lines through the cursor while framing (an Alt
+                 tap toggles them); 1 unit = 1 physical px under RootCanvas's scale. -->
+            <Rectangle x:Name="GuideH" Visibility="Collapsed" IsHitTestVisible="False"
+                       Height="1" Fill="#B03DA9FC"/>
+            <Rectangle x:Name="GuideV" Visibility="Collapsed" IsHitTestVisible="False"
+                       Width="1" Fill="#B03DA9FC"/>
+
             <!-- Size readout chip. -->
             <Border x:Name="SizeReadout" Visibility="Collapsed" IsHitTestVisible="False"
                     Background="#CC1E1E1E" CornerRadius="3" Padding="8,3">

@@ -189,7 +189,8 @@ public sealed class OverlayKeyRouterTests
     [Fact]
     public void AnAltTap_IsNotTheColourFormatToggle()
     {
-        Assert.Equal(OverlayCommand.None, Router.RouteTap(Alt, Selecting(Key.LeftAlt)));
+        Assert.NotEqual(OverlayCommand.CycleLoupeFormat, Router.RouteTap(Alt, Selecting(Key.LeftAlt)));
+        Assert.Equal(OverlayCommand.None, Router.RouteTap(Alt, Editing(Key.LeftAlt)));
     }
 
     // ---------------------------------------------------------------- editing keys ---
@@ -244,6 +245,175 @@ public sealed class OverlayKeyRouterTests
         var ctx = Selecting(key, modifiers) with { HasSelection = true };
 
         Assert.Equal(OverlayCommand.None, Router.Route(ctx));
+    }
+
+    // ---------------------------------------------------------------- selecting phase ---
+
+    [Fact]
+    public void Tab_WhileSelecting_TogglesTheDetectionMode()
+    {
+        Assert.Equal(OverlayCommand.ToggleDetectMode, Router.Route(Selecting(Key.Tab)));
+    }
+
+    [Fact]
+    public void Tab_MidDrag_DoesNothing()
+    {
+        var ctx = Selecting(Key.Tab) with { Dragging = true };
+
+        Assert.Equal(OverlayCommand.None, Router.Route(ctx));
+    }
+
+    [Fact]
+    public void Tab_WhileEditing_IsNotTheDetectionToggle()
+    {
+        Assert.NotEqual(OverlayCommand.ToggleDetectMode, Router.Route(Editing(Key.Tab)));
+    }
+
+    [Fact]
+    public void CtrlA_CyclesTheScreenArea_InBothPhases()
+    {
+        Assert.Equal(OverlayCommand.CycleScreenArea, Router.Route(Selecting(Key.A, Ctrl)));
+        Assert.Equal(OverlayCommand.CycleScreenArea, Router.Route(Editing(Key.A, Ctrl)));
+    }
+
+    [Fact]
+    public void CtrlA_MidDrag_DoesNothing()
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(Selecting(Key.A, Ctrl) with { Dragging = true }));
+        Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.A, Ctrl) with { Dragging = true }));
+    }
+
+    [Fact]
+    public void CtrlA_WhileTyping_SelectsTheText()
+    {
+        Assert.Equal(OverlayCommand.PassThrough, Router.Route(Typing(Key.A, Ctrl)));
+    }
+
+    [Fact]
+    public void AGestureBoundToCtrlA_WinsOverTheScreenCycle_WhileEditing()
+    {
+        var bindings = OverlayKeyBindings.FromSettings(new AppSettings()) with { Copy = new KeyChord(Key.A, Ctrl) };
+
+        Assert.Equal(OverlayCommand.Copy, new OverlayKeyRouter(bindings).Route(Editing(Key.A, Ctrl)));
+    }
+
+    [Theory]
+    [InlineData(Key.W)]
+    [InlineData(Key.A)]
+    [InlineData(Key.S)]
+    [InlineData(Key.D)]
+    public void Wasd_NudgesTheCursor_InBothPhases(Key key)
+    {
+        Assert.Equal(OverlayCommand.NudgeCursor, Router.Route(Selecting(key)));
+        Assert.Equal(OverlayCommand.NudgeCursor, Router.Route(Editing(key)));
+    }
+
+    [Theory]
+    [InlineData(Key.W)]
+    [InlineData(Key.D)]
+    public void Wasd_WithTheLeftButtonHeld_NudgesTheDrag(Key key)
+    {
+        // Snipaste's LMB+WASD: the drag follows the cursor, a pixel at a time.
+        Assert.Equal(OverlayCommand.NudgeCursor, Router.Route(Selecting(key) with { Dragging = true }));
+        Assert.Equal(OverlayCommand.NudgeCursor, Router.Route(Editing(key) with { Dragging = true }));
+    }
+
+    [Fact]
+    public void ShiftWasd_NudgesOnlyMidDrag()
+    {
+        // A Shift+drag square can be fine-tuned; on its own Shift+W is not a nudge.
+        Assert.Equal(OverlayCommand.NudgeCursor, Router.Route(Selecting(Key.W, Shift) with { Dragging = true }));
+        Assert.Equal(OverlayCommand.None, Router.Route(Selecting(Key.W, Shift)));
+    }
+
+    [Theory]
+    [InlineData(Key.W, Ctrl)]
+    [InlineData(Key.D, Alt)]
+    public void ChordedWasd_IsNotANudge(Key key, ModifierKeys modifiers)
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(Selecting(key, modifiers)));
+        Assert.NotEqual(OverlayCommand.NudgeCursor, Router.Route(Editing(key, modifiers)));
+    }
+
+    [Fact]
+    public void CtrlS_WhileEditing_StillSaves_NotNudges()
+    {
+        Assert.Equal(OverlayCommand.Save, Router.Route(Editing(Key.S, Ctrl)));
+    }
+
+    [Theory]
+    [InlineData(Key.W)]
+    [InlineData(Key.S)]
+    public void Wasd_WhileTyping_IsTyping(Key key)
+    {
+        Assert.Equal(OverlayCommand.PassThrough, Router.Route(Typing(key)));
+        Assert.Equal(OverlayCommand.PassThrough, Router.Route(Typing(key) with { TextBoxDeclined = true }));
+    }
+
+    [Theory]
+    [InlineData(Key.Up)]
+    [InlineData(Key.Down)]
+    [InlineData(Key.Left)]
+    [InlineData(Key.Right)]
+    public void Arrows_WhileSelecting_NudgeTheCursor(Key key)
+    {
+        Assert.Equal(OverlayCommand.NudgeCursor, Router.Route(Selecting(key)));
+        Assert.Equal(OverlayCommand.NudgeCursor, Router.Route(Selecting(key) with { Dragging = true }));
+    }
+
+    [Theory]
+    [InlineData(Key.Up)]
+    [InlineData(Key.Left)]
+    public void Arrows_WhileEditing_AreNotTheCursorNudge(Key key)
+    {
+        // Once a region is chosen the arrows move it (or the selected annotation) instead.
+        Assert.NotEqual(OverlayCommand.NudgeCursor, Router.Route(Editing(key)));
+    }
+
+    [Fact]
+    public void Space_WhileSelecting_AcceptsTheDetectedArea()
+    {
+        var ctx = Selecting(Key.Space) with { HasDetectedArea = true };
+
+        Assert.Equal(OverlayCommand.AcceptDetected, Router.Route(ctx));
+    }
+
+    [Fact]
+    public void Space_WhileSelecting_WithNothingDetected_DoesNothing()
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(Selecting(Key.Space)));
+    }
+
+    [Fact]
+    public void Space_MidDrag_HoldsTheAreaToMoveIt_InBothPhases()
+    {
+        var selecting = Selecting(Key.Space) with { Dragging = true, HasDetectedArea = true };
+        var squareDrag = Selecting(Key.Space, Shift) with { Dragging = true };
+        var resizing = Editing(Key.Space) with { Dragging = true };
+
+        Assert.Equal(OverlayCommand.HoldToMove, Router.Route(selecting));
+        Assert.Equal(OverlayCommand.HoldToMove, Router.Route(squareDrag));
+        Assert.Equal(OverlayCommand.HoldToMove, Router.Route(resizing));
+    }
+
+    [Fact]
+    public void Space_WhileTyping_IsASpace()
+    {
+        Assert.Equal(OverlayCommand.PassThrough, Router.Route(Typing(Key.Space) with { Dragging = true }));
+    }
+
+    [Fact]
+    public void AnAltTap_WhileSelecting_TogglesTheGuideLines()
+    {
+        Assert.Equal(OverlayCommand.ToggleGuideLines, Router.RouteTap(Alt, Selecting(Key.LeftAlt)));
+        Assert.Equal(OverlayCommand.ToggleGuideLines,
+            Router.RouteTap(Alt, Selecting(Key.RightAlt) with { LoupeVisible = false }));
+    }
+
+    [Fact]
+    public void ACtrlTap_DoesNothing()
+    {
+        Assert.Equal(OverlayCommand.None, Router.RouteTap(Ctrl, Selecting(Key.LeftCtrl)));
     }
 
     // ---------------------------------------------------------------- bindings ---

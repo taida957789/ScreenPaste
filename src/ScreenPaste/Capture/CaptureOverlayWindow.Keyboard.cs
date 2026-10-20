@@ -44,7 +44,8 @@ public partial class CaptureOverlayWindow
     {
         var key = KeyInputNormalizer.Effective(e);
         _modifierTaps.KeyDown(key, Keyboard.Modifiers, AnyMouseButtonDown());
-        if (RunKeyCommand(_keyRouter.Route(KeyContext(key, e)))) e.Handled = true;
+        var ctx = KeyContext(key, e);
+        if (RunKeyCommand(_keyRouter.Route(ctx), ctx)) e.Handled = true;
     }
 
     /// <summary>Reached only by keys nobody handled on the way down; that matters solely
@@ -53,15 +54,17 @@ public partial class CaptureOverlayWindow
     {
         if (_editingText == null) return;   // everything else was routed on the way down
         var ctx = KeyContext(KeyInputNormalizer.Effective(e), e) with { TextBoxDeclined = true };
-        if (RunKeyCommand(_keyRouter.Route(ctx))) e.Handled = true;
+        if (RunKeyCommand(_keyRouter.Route(ctx), ctx)) e.Handled = true;
     }
 
     private void Overlay_PreviewKeyUp(object sender, KeyEventArgs e)
     {
         var key = KeyInputNormalizer.Effective(e);
+        if (key == Key.Space) EndHoldToMove();
         var tapped = _modifierTaps.KeyUp(key);
         if (tapped == ModifierKeys.None) return;
-        if (RunKeyCommand(_keyRouter.RouteTap(tapped, KeyContext(key, e)))) e.Handled = true;
+        var ctx = KeyContext(key, e);
+        if (RunKeyCommand(_keyRouter.RouteTap(tapped, ctx), ctx)) e.Handled = true;
     }
 
     private OverlayKeyContext KeyContext(Key key, KeyEventArgs e) => new()
@@ -69,12 +72,15 @@ public partial class CaptureOverlayWindow
         Phase = _phase == Phase.Editing ? OverlayPhase.Editing : OverlayPhase.Selecting,
         Key = key,
         Modifiers = Keyboard.Modifiers,
+        IsRepeat = e.IsRepeat,
         ImeProcessed = e.Key == Key.ImeProcessed,
         TextBoxActive = _editingText != null,
         DropDownOpen = _fontCombo?.IsDropDownOpen == true,   // built with the toolbar
         LoupeVisible = Magnifier.Visibility == Visibility.Visible,
         HasSelection = _selected != null,
         FramedSourceDragging = _magnifySourceDrag != null || _magnifySourceResize != null,
+        Dragging = Mouse.LeftButton == MouseButtonState.Pressed,
+        HasDetectedArea = _phase == Phase.Selecting && _detectRect != null,
     };
 
     private static bool AnyMouseButtonDown() =>
@@ -82,11 +88,18 @@ public partial class CaptureOverlayWindow
         Mouse.RightButton == MouseButtonState.Pressed ||
         Mouse.MiddleButton == MouseButtonState.Pressed;
 
-    /// <summary>Execute a routed command; false leaves the key unhandled.</summary>
-    private bool RunKeyCommand(OverlayCommand command)
+    /// <summary>Execute a routed command; false leaves the key unhandled. Commands that
+    /// depend on the key itself (direction, auto-repeat) read it from <paramref name="ctx"/>.</summary>
+    private bool RunKeyCommand(OverlayCommand command, OverlayKeyContext ctx)
     {
         switch (command)
         {
+            case OverlayCommand.ToggleDetectMode: ToggleDetectMode(); return true;
+            case OverlayCommand.CycleScreenArea: CycleScreenArea(); return true;
+            case OverlayCommand.NudgeCursor: NudgeCursor(ctx.Key, ctx.IsRepeat); return true;
+            case OverlayCommand.AcceptDetected: AcceptDetected(); return true;
+            case OverlayCommand.HoldToMove: BeginHoldToMove(); return true;
+            case OverlayCommand.ToggleGuideLines: ToggleGuideLines(); return true;
             case OverlayCommand.CommitText: CommitActiveText(discardIfEmpty: true); return true;
             case OverlayCommand.CancelFramedDrag: CancelMagnifySourceDrag(); return true;
             case OverlayCommand.Deselect: Deselect(); return true;

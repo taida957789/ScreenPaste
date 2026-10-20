@@ -76,6 +76,8 @@ public sealed class AppSettings
     // ---- Behavior ----
     // Esc 離開編輯模式時，若有標註先跳確認對話框（可於對話框勾選「不再詢問」關閉）
     public bool ConfirmDiscardEdits { get; set; } = true;
+    // 框選時顯示貫穿全螢幕的十字輔助線（Alt 單按切換，會記住上次的狀態）
+    public bool SnipGuideLines { get; set; }
 
     // ---- Startup ----
     public bool RunAtStartup { get; set; }

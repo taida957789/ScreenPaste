@@ -26,15 +26,7 @@ public partial class CaptureOverlayWindow : Window
     private double _dpiScale = 1.0;
     private Phase _phase = Phase.Selecting;
 
-    // Selection-phase state
-    private List<DetectedWindow> _windows = new();
-    private ElementDetector? _elements;           // UIA element rects, scanned in background
-    private int _detectLevel;                     // 0 = deepest element … N = whole window
-    private int _detectCandidates = 1;            // chain length at the current hover point
-    private IntPtr _hoverWindow;
-    private Point _dragStart;
-    private bool _dragging;
-    private Rect? _detectRect;
+    // The chosen region (selection-phase state: CaptureOverlayWindow.Selecting.cs)
     private Int32Rect _selection;                 // physical px, screenshot/local coords
 
     // Editing state
@@ -172,10 +164,7 @@ public partial class CaptureOverlayWindow : Window
         SourceInitialized += OnSourceInitialized;
         Loaded += (_, _) => { Activate(); Focus(); };
 
-        RootCanvas.MouseLeftButtonDown += RootCanvas_MouseDown;
-        RootCanvas.MouseMove += RootCanvas_MouseMove;
-        RootCanvas.MouseLeftButtonUp += RootCanvas_MouseUp;
-        MouseWheel += OnDetectLevelWheel;
+        InitSelecting();
         InitKeyboard();
         // A resolution / monitor change (common over RDP) invalidates the frozen
         // screenshot and every cached physical coordinate, so the selection would drift
@@ -259,195 +248,6 @@ public partial class CaptureOverlayWindow : Window
         _elements = new ElementDetector();
         _elements.StartScan(_windows);
     }
-
-    // ------------------------------------------------------- selection phase ---
-
-    private void RootCanvas_MouseDown(object sender, MouseButtonEventArgs e)
-    {
-        if (_phase != Phase.Selecting) return;
-        _dragStart = e.GetPosition(RootCanvas);
-        _dragging = false;
-        RootCanvas.CaptureMouse();
-    }
-
-    private void RootCanvas_MouseMove(object sender, MouseEventArgs e)
-    {
-        if (_phase != Phase.Selecting) return;
-        var p = e.GetPosition(RootCanvas);
-        UpdateMagnifier(p);
-
-        if (e.LeftButton == MouseButtonState.Pressed)
-        {
-            if (!_dragging && (Math.Abs(p.X - _dragStart.X) > 3 || Math.Abs(p.Y - _dragStart.Y) > 3))
-                _dragging = true;
-
-            if (_dragging)
-            {
-                DetectBorder.Visibility = Visibility.Collapsed;
-                var r = MakeRect(_dragStart, p);
-                ShowSelectionRect(r);
-            }
-        }
-        else
-        {
-            UpdateDetect(p);
-        }
-    }
-
-    /// <summary>
-    /// Hover auto-detect: snap to the deepest cached UI element under the cursor
-    /// (Snipaste-style), falling back to the whole window until its UIA scan lands.
-    /// <see cref="_detectLevel"/> (mouse wheel) walks outward toward the window.
-    /// </summary>
-    private void UpdateDetect(Point p)
-    {
-        int sx = _vs.X + (int)Math.Round(p.X);
-        int sy = _vs.Y + (int)Math.Round(p.Y);
-
-        var win = WindowEnumerator.HitTestWindow(_windows, sx, sy);
-        if (win is { } w)
-        {
-            if (w.Handle != _hoverWindow)
-            {
-                _hoverWindow = w.Handle;
-                _detectLevel = 0;   // new window: restart at the deepest element
-            }
-
-            Rect chosen;
-            if (_elements != null)
-            {
-                var chain = _elements.CandidatesAt(w, sx, sy);
-                _detectCandidates = chain.Count;
-                chosen = chain[Math.Clamp(_detectLevel, 0, chain.Count - 1)];
-            }
-            else
-            {
-                _detectCandidates = 1;
-                chosen = new Rect(w.Bounds.Left, w.Bounds.Top, w.Bounds.Width, w.Bounds.Height);
-            }
-            _detectRect = new Rect(chosen.X - _vs.X, chosen.Y - _vs.Y, chosen.Width, chosen.Height);
-        }
-        else
-        {
-            _hoverWindow = IntPtr.Zero;
-            _detectCandidates = 1;
-            _detectRect = null;
-        }
-
-        if (_detectRect is { } dr)
-        {
-            Canvas.SetLeft(DetectBorder, dr.X);
-            Canvas.SetTop(DetectBorder, dr.Y);
-            DetectBorder.Width = dr.Width;
-            DetectBorder.Height = dr.Height;
-            DetectBorder.Visibility = Visibility.Visible;
-            ShowSizeReadout(dr);
-        }
-        else
-        {
-            DetectBorder.Visibility = Visibility.Collapsed;
-            SizeReadout.Visibility = Visibility.Collapsed;
-        }
-    }
-
-    /// <summary>Mouse wheel while framing: cycle the detection level (element ⇄ window).
-    /// While editing, it re-zooms the selected magnifier instead.</summary>
-    private void OnDetectLevelWheel(object sender, MouseWheelEventArgs e)
-    {
-        if (_phase == Phase.Editing)
-        {
-            if (_selected?.Parent == MagnifyHost && MagnifyEffects.SpecOf(_selected) is { } spec &&
-                MagnifyEffects.SetZoom(_selected, spec.Zoom + (e.Delta > 0 ? 0.5 : -0.5)))
-            {
-                MagnifyEffects.ClampViewInto(_selected, RegionBounds());
-                ResampleMagnifier(_selected);
-                MagnifyHost.UpdateLayout();   // the view just resized; re-fit the marching box
-                UpdateSelectionBox();
-                e.Handled = true;
-            }
-            return;
-        }
-        if (_phase != Phase.Selecting || _dragging || _detectRect == null) return;
-        _detectLevel = Math.Clamp(_detectLevel + (e.Delta > 0 ? 1 : -1), 0, Math.Max(0, _detectCandidates - 1));
-        UpdateDetect(Mouse.GetPosition(RootCanvas));
-        e.Handled = true;
-    }
-
-    /// <summary>
-    /// Display geometry changed (resolution/monitor swap, e.g. an RDP resize). While still
-    /// framing the shot, bail out — the frozen backdrop and coordinates no longer match the
-    /// screen. Once editing, the annotations live on a fixed self-contained canvas, so the
-    /// user's work is left intact.
-    /// </summary>
-    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
-    {
-        Dispatcher.BeginInvoke(() => { if (_phase == Phase.Selecting) Close(); });
-    }
-
-    private void RootCanvas_MouseUp(object sender, MouseButtonEventArgs e)
-    {
-        if (_phase != Phase.Selecting) return;
-        RootCanvas.ReleaseMouseCapture();
-
-        Rect finalRect;
-        if (_dragging)
-        {
-            finalRect = MakeRect(_dragStart, e.GetPosition(RootCanvas));
-        }
-        else if (_detectRect is { } dr)
-        {
-            finalRect = dr;                       // click on auto-detected window
-        }
-        else
-        {
-            return;                               // nothing selected
-        }
-
-        if (finalRect.Width < 4 || finalRect.Height < 4) return;
-        EnterEditing(finalRect);
-    }
-
-    private void ShowSelectionRect(Rect r)
-    {
-        Canvas.SetLeft(SelectionBorder, r.X);
-        Canvas.SetTop(SelectionBorder, r.Y);
-        SelectionBorder.Width = r.Width;
-        SelectionBorder.Height = r.Height;
-        SelectionBorder.Visibility = Visibility.Visible;
-        UpdateMask(r);
-        ShowSizeReadout(r);
-    }
-
-    private void ShowSizeReadout(Rect r)
-    {
-        SizeText.Text = $"{(int)r.Width} × {(int)r.Height}";
-        double chipH = 30 * _dpiScale;   // physical footprint (chip is counter-scaled)
-        double x = r.X;
-        double y = r.Y - chipH;
-        if (y < 2) y = r.Y + 4;
-        Canvas.SetLeft(SizeReadout, Math.Round(x));
-        Canvas.SetTop(SizeReadout, Math.Round(y));
-        SizeReadout.Visibility = Visibility.Visible;
-    }
-
-    private void UpdateMask(Rect? selection)
-    {
-        var outer = new RectangleGeometry(new Rect(0, 0, _vs.Width, _vs.Height));
-        if (selection is { } s)
-        {
-            var group = new GeometryGroup { FillRule = FillRule.EvenOdd };
-            group.Children.Add(outer);
-            group.Children.Add(new RectangleGeometry(s));
-            MaskPath.Data = group;
-        }
-        else
-        {
-            MaskPath.Data = outer;
-        }
-    }
-
-    private static Rect MakeRect(Point a, Point b) =>
-        new(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y), Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
 
     // ---------------------------------------------------------- edit phase ---
 
@@ -1450,6 +1250,7 @@ public partial class CaptureOverlayWindow : Window
         MagPos.Text = $"({_vs.X + px}, {_vs.Y + py})";
         RefreshMagColorText();
 
+        UpdateGuideLines(px, py);
         PositionMagnifier(px, py);
         Magnifier.Visibility = Visibility.Visible;
     }
@@ -1554,6 +1355,7 @@ public partial class CaptureOverlayWindow : Window
         if (_resizeHandle < 0) return;
         var p = e.GetPosition(RootCanvas);
         UpdateMagnifier(p);
+        if (TryHoldMoveRegion(p)) return;   // Space held: move rather than resize
         var r = HandleGeometry.DragEdges(
             new Rect(_regionStart.X, _regionStart.Y, _regionStart.Width, _regionStart.Height),
             _resizeHandle, p.X - _regionGrab.X, p.Y - _regionGrab.Y,
@@ -2216,6 +2018,9 @@ public partial class CaptureOverlayWindow : Window
     }
 
     // ----------------------------------------------------------- helpers ---
+
+    private static Rect MakeRect(Point a, Point b) =>
+        new(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y), Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
 
     private static Color ParseColor(string hex, Color fallback)
     {

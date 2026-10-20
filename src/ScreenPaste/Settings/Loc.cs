@@ -207,6 +207,10 @@ public static class Loc
         Add("mag.copy",      "C: copy color",        "C 複製色彩值",   "C でカラー値をコピー", "C: 색상 값 복사",  "C : copier la couleur","C: Farbwert kopieren","C: copiar color");
         Add("mag.format",    "Shift: HEX / RGB / HSV", "Shift 切換 HEX / RGB / HSV", "Shift で HEX / RGB / HSV 切替", "Shift: HEX / RGB / HSV 전환", "Maj : HEX / RGB / HSV","Umschalt: HEX/RGB/HSV","Mayús: HEX / RGB / HSV");
 
+        // Detection mode on the size chip while framing (Tab switches)
+        Add("detect.element","Element",              "元素",          "要素",              "요소",            "Élément",           "Element",           "Elemento");
+        Add("detect.window", "Window",               "視窗",          "ウィンドウ",         "창",              "Fenêtre",           "Fenster",           "Ventana");
+
         // Discard-capture confirmation
         Add("dlg.discardTitle","Cancel capture",     "取消截圖",       "キャプチャを中止",     "캡처 취소",        "Annuler la capture","Aufnahme abbrechen","Cancelar captura");
         Add("dlg.discardMsg","Discard this capture? Your annotations will be lost.", "要取消這次截圖嗎？未儲存的標註將會遺失。", "このキャプチャを破棄しますか？注釈は失われます。", "이 캡처를 취소할까요? 주석이 사라집니다.", "Abandonner cette capture ? Vos annotations seront perdues.", "Diese Aufnahme verwerfen? Ihre Anmerkungen gehen verloren.", "¿Descartar esta captura? Se perderán tus anotaciones.");
