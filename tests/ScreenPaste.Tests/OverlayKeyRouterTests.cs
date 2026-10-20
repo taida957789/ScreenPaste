@@ -1234,4 +1234,30 @@ public sealed class OverlayKeyRouterTests
         Assert.Equal(OverlayCommand.PenSizeDown, Router.Route(Editing(Key.D1)));
         Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.D1, Shift)));   // types "!" instead
     }
+
+    // ---------------------------------------------------------------- fixed chords ---
+
+    /// <summary>The settings window warns when a gesture lands on one of these, so the list
+    /// must stay true to the table.</summary>
+    [Fact]
+    public void FixedChords_EachRouteToACommandWhileEditing()
+    {
+        foreach (var chord in OverlayKeyRouter.FixedChords)
+        {
+            var ctx = Editing(chord.Key, chord.Modifiers) with { HasSelection = true };
+
+            Assert.NotEqual(OverlayCommand.None, Router.Route(ctx));
+        }
+    }
+
+    [Fact]
+    public void FixedChords_ListTheChordsAGestureCouldShadow()
+    {
+        Assert.Contains(new KeyChord(Key.A, Ctrl), OverlayKeyRouter.FixedChords);
+        Assert.Contains(new KeyChord(Key.Insert, Ctrl), OverlayKeyRouter.FixedChords);
+        Assert.Contains(new KeyChord(Key.C, Ctrl | Alt), OverlayKeyRouter.FixedChords);
+        Assert.Contains(new KeyChord(Key.D5, Ctrl), OverlayKeyRouter.FixedChords);
+        Assert.Contains(new KeyChord(Key.F5, None), OverlayKeyRouter.FixedChords);
+        Assert.DoesNotContain(new KeyChord(Key.Z, Ctrl), OverlayKeyRouter.FixedChords);   // Undo: a gesture
+    }
 }

@@ -18,8 +18,10 @@ namespace ScreenPaste.Output;
 /// <summary>
 /// A frameless, always-on-top window that pins a composed image onto the screen.
 /// Drag to move, mouse-wheel to zoom at the cursor (Ctrl: opacity), middle-click to reset to
-/// 100% and back, right-click or the Menu key for actions; the keys are PinWindow.Keyboard.cs's,
-/// and closing, destroying, a double-click and dropped files PinWindow.Lifecycle.cs's.
+/// 100% and back, right-click or the Menu key for actions; the keys are PinWindow.Keyboard.cs's
+/// (Ctrl+V shows the clipboard instead, Ctrl+Shift+C copies a text pin's text), and closing,
+/// destroying, a double-click and dropped files PinWindow.Lifecycle.cs's. The click-through
+/// hotkey can make the pin let clicks through to the window beneath (<see cref="SetClickThrough"/>).
 ///
 /// The pin shows its image through a <see cref="PinTransformState"/> (zoom, quarter turns,
 /// flips, opacity, grayscale, invert). Content is authored in physical px and the window is
@@ -37,7 +39,8 @@ public sealed partial class PinWindow : Window
     private const double MenuKeysOpacity = 0.6;
     private const string MenuCheckMark = "✓";
     private static readonly Duration SaveFlashDuration = new(TimeSpan.FromMilliseconds(400));
-    private static readonly SolidColorBrush FrameBrush = CreateFrameBrush();
+    private static readonly SolidColorBrush FrameBrush = CreateFrameBrush(0xAA);
+    private static readonly SolidColorBrush ClickThroughFrameBrush = CreateFrameBrush(0x40);
 
     private readonly AppSettings _settings;
     private readonly int _startX, _startY;     // physical px: where the image goes when first shown
@@ -52,6 +55,7 @@ public sealed partial class PinWindow : Window
     private double _dpi = 1.0;
     private bool _placed;                      // the window has been put on screen
     private bool _closed;
+    private bool _clickThrough;                // clicks go to the window beneath
 
     public PinWindow(BitmapSource image, int screenX, int screenY, AppSettings settings)
         : this(new PinContent(image), screenX, screenY, settings, PinTransformState.Identity)
@@ -115,9 +119,9 @@ public sealed partial class PinWindow : Window
         PinManager.Add(this);
     }
 
-    private static SolidColorBrush CreateFrameBrush()
+    private static SolidColorBrush CreateFrameBrush(byte alpha)
     {
-        var brush = new SolidColorBrush(Color.FromArgb(0xAA, 0x3D, 0xA9, 0xFC));
+        var brush = new SolidColorBrush(Color.FromArgb(alpha, 0x3D, 0xA9, 0xFC));
         brush.Freeze();
         return brush;
     }
@@ -228,6 +232,28 @@ public sealed partial class PinWindow : Window
 
     /// <summary>What copy, save and print take: the image as the pin shows it, at its own resolution.</summary>
     private BitmapSource RenderedImage() => PinRenderer.Orient(Effected(_state), _state);
+
+    /// <summary>Where the window is on screen now (physical px), frame included; empty before it is.</summary>
+    internal Rect ScreenRect() =>
+        _placed && NativeMethods.GetWindowRect(Handle, out var r) ? new Rect(r.Left, r.Top, r.Width, r.Height) : Rect.Empty;
+
+    // ------------------------------------------------------- click-through ---
+
+    /// <summary>Whether clicks go through the pin to the window beneath (the click-through hotkey).</summary>
+    public bool IsClickThrough => _clickThrough;
+
+    /// <summary>Let clicks through to the window beneath, or take them again. The frame dims
+    /// while they go through, as the pin can then be neither dragged nor right-clicked.</summary>
+    public void SetClickThrough(bool on)
+    {
+        var hwnd = Handle;
+        if (_closed || hwnd == IntPtr.Zero || on == _clickThrough) return;
+        _clickThrough = on;
+        // The window is already layered (AllowsTransparency); transparent makes it click-through.
+        if (on) NativeMethods.AddExStyle(hwnd, NativeMethods.WS_EX_TRANSPARENT);
+        else NativeMethods.RemoveExStyle(hwnd, NativeMethods.WS_EX_TRANSPARENT);
+        _frame.BorderBrush = on ? ClickThroughFrameBrush : FrameBrush;
+    }
 
     // ------------------------------------------------------------- mouse ---
 
@@ -364,9 +390,11 @@ public sealed partial class PinWindow : Window
         menu.Items.Clear();
         menu.Items.Add(MenuEntry("pin.copy", Gesture(_settings.CopyHotkey), PinCommand.Copy));
         menu.Items.Add(FixedEntry("pin.copyFile", PinCommand.CopyAsFile));
+        if (_content.SourceText != null) menu.Items.Add(FixedEntry("pin.copyText", PinCommand.CopyText));
         menu.Items.Add(MenuEntry("pin.save", Gesture(_settings.SaveHotkey), PinCommand.Save));
         menu.Items.Add(MenuEntry("pin.quickSave", Gesture(_settings.QuickSaveHotkey), PinCommand.QuickSave));
         menu.Items.Add(MenuEntry("pin.print", Gesture(_settings.PrintHotkey), PinCommand.Print));
+        menu.Items.Add(FixedEntry("pin.paste", PinCommand.PasteClipboard));
         menu.Items.Add(new Separator());
         menu.Items.Add(FixedEntry("pin.rotateCw", PinCommand.RotateClockwise));
         menu.Items.Add(FixedEntry("pin.rotateCcw", PinCommand.RotateCounterClockwise));

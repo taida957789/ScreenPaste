@@ -173,6 +173,29 @@ internal static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     public static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
 
+    /// <summary>Turn on <paramref name="styles"/> (WS_EX_*) for the window, keeping the rest.</summary>
+    public static void AddExStyle(IntPtr hWnd, long styles) =>
+        SetWindowLong(hWnd, GWL_EXSTYLE, GetWindowLong(hWnd, GWL_EXSTYLE) | (int)styles);
+
+    /// <summary>Turn off <paramref name="styles"/> (WS_EX_*) for the window, keeping the rest.</summary>
+    public static void RemoveExStyle(IntPtr hWnd, long styles) =>
+        SetWindowLong(hWnd, GWL_EXSTYLE, GetWindowLong(hWnd, GWL_EXSTYLE) & ~(int)styles);
+
+    // ---- Clipboard (the paste hotkey tells a new clipboard from the one it pasted last) ----
+    /// <summary>Changes whenever the clipboard does; 0 without access to the clipboard.</summary>
+    [DllImport("user32.dll")]
+    public static extern uint GetClipboardSequenceNumber();
+
+    // ---- Monitor DPI (a text pin is drawn at the scale of the monitor it opens on) ----
+    public const uint MONITOR_DEFAULTTONEAREST = 2;
+    public const int MDT_EFFECTIVE_DPI = 0;
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr MonitorFromPoint(POINT pt, uint dwFlags);
+
+    [DllImport("shcore.dll")]
+    public static extern int GetDpiForMonitor(IntPtr hmonitor, int dpiType, out uint dpiX, out uint dpiY);
+
     // ---- Cursor capture (drawing the pointer into recorded frames) ----
     public const int CURSOR_SHOWING = 0x0001;
     public const int DI_NORMAL = 0x0003;

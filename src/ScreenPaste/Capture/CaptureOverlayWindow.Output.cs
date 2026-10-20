@@ -17,7 +17,9 @@ namespace ScreenPaste.Capture;
 /// (CaptureOverlayWindow.History.cs); V only copies the area's size. Enter, a
 /// double-click on the area with no tool and a middle-click inside it run the configurable
 /// <see cref="OutputAction"/>s (Snipaste: copy, copy, pin), Shift+click on Save quick-saves,
-/// and Space shows or hides the toolbar.
+/// and Space shows or hides the toolbar. A snip mode (<see cref="CaptureRequest.Mode"/>: Ctrl+F1
+/// and the extra hotkeys) can choose the area as the overlay comes up and run its output as
+/// soon as the area is chosen, however it was chosen.
 ///
 /// Split out of the main code-behind; which key does what is <see cref="OverlayKeyRouter"/>'s.
 /// </summary>
@@ -30,6 +32,25 @@ public partial class CaptureOverlayWindow
     {
         PreviewMouseDown += Overlay_PreviewMiddleDown;
         Closed += (_, _) => _sizeFlash?.Stop();
+        // After the Loaded handlers (activation, focus), with the layout in place.
+        if (_request.PresetRegion is { } preset)
+            Loaded += (_, _) => Dispatcher.BeginInvoke(DispatcherPriority.Input, () => ApplyPresetRegion(preset));
+    }
+
+    /// <summary>A custom snip, the last area, the active window or screen: choose it straight
+    /// away, kept on this screen, as if it had been framed by hand.</summary>
+    private void ApplyPresetRegion(Rect screenRect)
+    {
+        if (_phase != Phase.Selecting || !IsLoaded) return;
+        AcceptRegion(SnipRegionHistory.FitInto(screenRect, _vs));
+    }
+
+    /// <summary>The area was just chosen: a snip mode that ends in an output (snip and copy,
+    /// snip and pin ...) runs it now and leaves the capture.</summary>
+    private void FinishForMode()
+    {
+        var action = CaptureModes.FinishAction(_request.Mode);
+        if (action != OutputAction.None) RunOutputAction(action);
     }
 
     private OutputAction EnterAction => OutputActions.Parse(_settings.EnterAction, OutputAction.Copy);

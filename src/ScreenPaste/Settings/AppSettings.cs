@@ -12,6 +12,24 @@ public sealed class AppSettings
     public string CaptureHotkey { get; set; } = "F1";
     // 全域區域錄影熱鍵（再按一次停止）
     public string RecordHotkey { get; set; } = "F2";
+    // 其他全域熱鍵（Snipaste 預設；留空即停用）：截圖並複製、自訂截圖、貼上剪貼簿／叫回關閉的貼圖、
+    // 隱藏／顯示所有貼圖、切換游標下貼圖的滑鼠穿透（預設未指定）
+    public string SnipAndCopyHotkey { get; set; } = "Ctrl+F1";
+    public string CustomSnipHotkey { get; set; } = "Shift+F1";
+    public string PasteHotkey { get; set; } = "F3";
+    public string HidePinsHotkey { get; set; } = "Shift+F3";
+    public string ClickThroughHotkey { get; set; } = "";
+    // 更多截圖模式（預設皆未指定）
+    public string SnipAndPinHotkey { get; set; } = "";
+    public string SnipCopyAndPinHotkey { get; set; } = "";
+    public string LastAreaCopyHotkey { get; set; } = "";
+    public string FullScreenCopyHotkey { get; set; } = "";
+    public string ActiveWindowHotkey { get; set; } = "";
+    public string ActiveScreenHotkey { get; set; } = "";
+    public string DelayedSnipHotkey { get; set; } = "";
+    public string ClearSnipHistoryHotkey { get; set; } = "";
+    // 延遲截圖與自訂截圖的等待秒數（0–60，自訂截圖對話框會記住上次的值）
+    public double SnipDelaySeconds { get; set; } = 3;
     // 編輯器內快捷鍵（皆可自訂）
     public string UndoHotkey { get; set; } = "Ctrl+Z";
     public string RedoHotkey { get; set; } = "Ctrl+Y";

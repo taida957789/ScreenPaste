@@ -215,8 +215,9 @@ public partial class CaptureOverlayWindow
         UpdateDetect(CursorLocal());
     }
 
-    /// <summary>Every way of choosing the area ends here: a click or drag, Space, Ctrl+A.
-    /// A key can take the area with the button still down, so the capture goes too.</summary>
+    /// <summary>Every way of choosing the area ends here: a click or drag, Space, Ctrl+A, R,
+    /// a replayed snip, a preset area. A key can take the area with the button still down, so
+    /// the capture goes too. A snip mode that ends in an output runs it at once (Output.cs).</summary>
     private void AcceptRegion(Rect r)
     {
         if (RootCanvas.IsMouseCaptured) RootCanvas.ReleaseMouseCapture();
@@ -224,6 +225,7 @@ public partial class CaptureOverlayWindow
         _spaceHeld = false;
         HideGuideLines();
         EnterEditing(r);
+        FinishForMode();
     }
 
     private void ShowSelectionRect(Rect r)

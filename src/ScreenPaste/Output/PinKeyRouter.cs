@@ -30,6 +30,8 @@ public enum PinCommand
     Move,                    // arrows: the pin, a pixel at a time
     NudgeCursor,             // W/A/S/D: the cursor, a pixel at a time
     OpenMenu,                // the Menu (Apps) key
+    PasteClipboard,          // Ctrl+V: show what the clipboard holds instead
+    CopyText,                // Ctrl+Shift+C: the text a text pin was made from
 }
 
 /// <summary>A key press on a pin, as <see cref="PinKeyRouter"/> sees it.</summary>
@@ -72,10 +74,19 @@ public sealed class PinKeyRouter
     private static readonly KeyChord OpenSettingsChord = new(Key.P, CtrlShift);
     private static readonly KeyChord CloseChord = new(Key.W, ModifierKeys.Control);
     private static readonly KeyChord DestroyChord = new(Key.Escape, ModifierKeys.Shift);
+    private static readonly KeyChord PasteChord = new(Key.V, ModifierKeys.Control);
+    private static readonly KeyChord CopyTextChord = new(Key.C, CtrlShift);
 
     private readonly PinKeyBindings _bindings;
 
     public PinKeyRouter(PinKeyBindings bindings) => _bindings = bindings;
+
+    /// <summary>The fixed chords a configurable gesture or a global hotkey could take over;
+    /// the settings window warns about a gesture on one of them.</summary>
+    public static IReadOnlyList<KeyChord> FixedChords { get; } = new[]
+    {
+        CopyAliasChord, CopyAsFileChord, OpenSettingsChord, CloseChord, DestroyChord, PasteChord, CopyTextChord,
+    };
 
     public PinCommand Route(PinKeyContext ctx)
     {
@@ -120,6 +131,8 @@ public sealed class PinKeyRouter
         PinCommand.OpacityDown => "Ctrl+-",
         PinCommand.CopyAsFile => CopyAsFileChord.ToString(),
         PinCommand.OpenSettings => OpenSettingsChord.ToString(),
+        PinCommand.PasteClipboard => PasteChord.ToString(),
+        PinCommand.CopyText => CopyTextChord.ToString(),
         _ => null,
     };
 
@@ -134,13 +147,16 @@ public sealed class PinKeyRouter
     }
 
     /// <summary>The fixed chords: Ctrl+Insert copies (an alias that does not follow the Copy
-    /// gesture), Ctrl+Alt+C copies as a file, Ctrl+Shift+P opens the settings, Ctrl+W closes.</summary>
+    /// gesture), Ctrl+Alt+C copies as a file, Ctrl+Shift+P opens the settings, Ctrl+W closes,
+    /// Ctrl+V shows the clipboard instead and Ctrl+Shift+C copies a text pin's text.</summary>
     private static PinCommand RouteChord(PinKeyContext ctx)
     {
         if (CopyAliasChord.Matches(ctx.Key, ctx.Modifiers)) return PinCommand.Copy;
         if (CopyAsFileChord.Matches(ctx.Key, ctx.Modifiers)) return PinCommand.CopyAsFile;
         if (OpenSettingsChord.Matches(ctx.Key, ctx.Modifiers)) return PinCommand.OpenSettings;
         if (CloseChord.Matches(ctx.Key, ctx.Modifiers)) return PinCommand.Close;
+        if (PasteChord.Matches(ctx.Key, ctx.Modifiers)) return PinCommand.PasteClipboard;
+        if (CopyTextChord.Matches(ctx.Key, ctx.Modifiers)) return PinCommand.CopyText;
         return PinCommand.None;
     }
 

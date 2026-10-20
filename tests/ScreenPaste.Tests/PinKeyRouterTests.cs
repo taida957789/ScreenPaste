@@ -300,6 +300,8 @@ public sealed class PinKeyRouterTests
     [InlineData(PinCommand.ToggleInvert)]
     [InlineData(PinCommand.CopyAsFile)]
     [InlineData(PinCommand.OpenSettings)]
+    [InlineData(PinCommand.PasteClipboard)]
+    [InlineData(PinCommand.CopyText)]
     public void FixedKeys_RouteBackToTheirCommand(PinCommand command)
     {
         var chord = KeyChord.Parse(PinKeyRouter.FixedKeys(command));
@@ -333,5 +335,48 @@ public sealed class PinKeyRouterTests
     public void FixedKeys_ForAGestureFromTheSettingsOrNoMenuRow_IsNull(PinCommand command)
     {
         Assert.Null(PinKeyRouter.FixedKeys(command));
+    }
+
+    // ---------------------------------------------------------------- clipboard ---
+
+    [Fact]
+    public void CtrlV_ReplacesThePinWithTheClipboard()
+    {
+        Assert.Equal(PinCommand.PasteClipboard, Router.Route(Press(Key.V, Ctrl)));
+    }
+
+    [Fact]
+    public void CtrlShiftC_CopiesTheTextThePinWasMadeFrom()
+    {
+        Assert.Equal(PinCommand.CopyText, Router.Route(Press(Key.C, Ctrl | Shift)));
+    }
+
+    [Fact]
+    public void CtrlC_StillFollowsTheCopyGesture()
+    {
+        Assert.Equal(PinCommand.Copy, Router.Route(Press(Key.C, Ctrl)));
+    }
+
+    [Theory]
+    [InlineData(PinCommand.PasteClipboard)]
+    [InlineData(PinCommand.CopyText)]
+    public void ClipboardCommands_RunOncePerPress(PinCommand command)
+    {
+        Assert.False(PinKeyRouter.RunsOnRepeat(command));
+    }
+
+    [Fact]
+    public void FixedChords_EachRouteToACommand()
+    {
+        foreach (var chord in PinKeyRouter.FixedChords)
+            Assert.NotEqual(PinCommand.None, Router.Route(Press(chord.Key, chord.Modifiers)));
+    }
+
+    [Fact]
+    public void FixedChords_ListTheClipboardKeys()
+    {
+        Assert.Contains(new KeyChord(Key.V, Ctrl), PinKeyRouter.FixedChords);
+        Assert.Contains(new KeyChord(Key.C, Ctrl | Shift), PinKeyRouter.FixedChords);
+        Assert.Contains(new KeyChord(Key.W, Ctrl), PinKeyRouter.FixedChords);
     }
 }

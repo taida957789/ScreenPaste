@@ -70,6 +70,16 @@ public static class PinGeometry
         return quarterTurn ? Recentre(zoomed, width, height).TopLeft : zoomed.TopLeft;
     }
 
+    /// <summary>Where a pasted pin's image goes: its top-left at <paramref name="cursor"/>,
+    /// moved back onto <paramref name="monitor"/> where it would run off the right or bottom;
+    /// one larger than the monitor starts at its top-left.</summary>
+    public static Point PasteAt(Point cursor, int width, int height, Rect monitor)
+    {
+        double x = Math.Max(monitor.Left, Math.Min(cursor.X, monitor.Right - width));
+        double y = Math.Max(monitor.Top, Math.Min(cursor.Y, monitor.Bottom - height));
+        return new Point(x, y);
+    }
+
     private static (int Width, int Height) Turned(int width, int height, int rotation) =>
         rotation % 180 == 0 ? (width, height) : (height, width);
 }

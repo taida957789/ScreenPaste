@@ -16,11 +16,16 @@ namespace ScreenPaste.Output;
 /// Snipaste's close-versus-destroy model: a pin closed any way but Destroy (Esc, Ctrl+W, a
 /// double-click, the menu, the global Esc, Alt+F4) goes to <see cref="ClosedPins"/>, and
 /// <see cref="RestoreLastClosed"/> opens the newest one again where it was.
+///
+/// The global hotkeys act on all pins here: <see cref="ToggleAllVisible"/> hides them all and
+/// shows them again (hiding is not closing), <see cref="ToggleClickThroughAt"/> lets clicks
+/// through the pin under the cursor.
 /// </summary>
 public static class PinManager
 {
     private static readonly List<PinWindow> Pins = new();
     private static readonly ClosedPinHistory<ClosedPin> ClosedPins = new(0);   // sized on each close
+    private static readonly HashSet<PinWindow> HiddenPins = new();              // put away by ToggleAllVisible
     private static IntPtr _hook = IntPtr.Zero;
     private static NativeMethods.HookProc? _proc;   // kept alive to avoid GC of the callback
 
@@ -57,8 +62,77 @@ public static class PinManager
     public static bool RestoreLastClosed()
     {
         if (ClosedPins.Pop() is not { } closed) return false;
-        PinWindow.Reopen(closed).Show();
+        Show(PinWindow.Reopen(closed));
         return true;
+    }
+
+    /// <summary>Show a new or restored pin. While a capture is up the pin does not take the
+    /// focus, so the overlay keeps the keyboard (Snipaste pastes while snipping).</summary>
+    public static void Show(PinWindow pin)
+    {
+        pin.ShowActivated = !CaptureActive;
+        pin.Show();
+    }
+
+    /// <summary>Shift+F3: hide every shown pin, or, with none shown, show the ones hidden this
+    /// way again where they were. A hidden pin is not closed, and the global Esc leaves it be.</summary>
+    public static void ToggleAllVisible()
+    {
+        var shown = Pins.Where(p => p.IsVisible).ToList();
+        if (shown.Count > 0)
+        {
+            foreach (var pin in shown)
+            {
+                HiddenPins.Add(pin);
+                pin.Hide();
+            }
+            return;
+        }
+        foreach (var pin in HiddenPins.ToList())
+        {
+            pin.ShowActivated = false;
+            pin.Show();
+        }
+        HiddenPins.Clear();
+    }
+
+    /// <summary>
+    /// The click-through hotkey: the shown pin under <paramref name="cursor"/> (physical
+    /// screen px; the topmost, should several overlap) lets clicks through to the window
+    /// beneath, or takes them again. With no pin there, every pin takes clicks again, so a
+    /// pin made click-through can always be got back.
+    /// </summary>
+    public static void ToggleClickThroughAt(Point cursor)
+    {
+        var shown = PinsInZOrder().Where(p => p.IsVisible).ToList();
+        if (PinHitTest.Find(shown.Select(p => p.ScreenRect()).ToList(), cursor) is int hit)
+            shown[hit].SetClickThrough(!shown[hit].IsClickThrough);
+        else
+            MakeAllClickable();
+    }
+
+    /// <summary>The tray's escape hatch: every pin takes clicks again.</summary>
+    public static void MakeAllClickable()
+    {
+        foreach (var pin in Pins) pin.SetClickThrough(false);
+    }
+
+    /// <summary>The open pins, topmost first (EnumWindows walks the top-level windows in Z order).</summary>
+    private static List<PinWindow> PinsInZOrder()
+    {
+        var byHandle = new Dictionary<IntPtr, PinWindow>();
+        foreach (var pin in Pins)
+        {
+            var handle = new WindowInteropHelper(pin).Handle;
+            if (handle != IntPtr.Zero) byHandle[handle] = pin;   // not shown yet: not on screen either
+        }
+        var ordered = new List<PinWindow>();
+        NativeMethods.EnumWindows((hwnd, _) =>
+        {
+            if (byHandle.TryGetValue(hwnd, out var pin)) ordered.Add(pin);
+            return true;
+        }, IntPtr.Zero);
+        return ordered;
     }
 
     /// <summary>A pin is closing (the pin calls this while its window still exists): keep it
@@ -79,6 +153,7 @@ public static class PinManager
     private static void Remove(PinWindow pin)
     {
         Pins.Remove(pin);
+        HiddenPins.Remove(pin);
         if (Pins.Count == 0) UninstallHook();
     }
 

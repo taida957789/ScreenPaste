@@ -109,7 +109,7 @@ public sealed class RecordingHud
 
             // Tool window (out of Alt+Tab), no focus stealing — but NOT click-through:
             // the border ring must receive the drag.
-            AddExStyle(hwnd, (int)(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE));
+            AddExStyle(hwnd, WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
 
             PositionFrame();
         };
@@ -214,7 +214,7 @@ public sealed class RecordingHud
         _bar.SourceInitialized += (_, _) =>
         {
             var hwnd = new WindowInteropHelper(_bar).Handle;
-            AddExStyle(hwnd, (int)(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE));
+            AddExStyle(hwnd, WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
         };
 
         // Position once laid out (need ActualWidth/Height for physical placement).
@@ -240,11 +240,5 @@ public sealed class RecordingHud
         y = Math.Clamp(y, _vs.Y, _vs.Y + _vs.Height - h);
 
         SetWindowPos(hwnd, HWND_TOPMOST, x, y, w, h, SWP_NOACTIVATE | SWP_SHOWWINDOW);
-    }
-
-    private static void AddExStyle(IntPtr hwnd, int extra)
-    {
-        int cur = GetWindowLong(hwnd, GWL_EXSTYLE);
-        SetWindowLong(hwnd, GWL_EXSTYLE, cur | extra);
     }
 }

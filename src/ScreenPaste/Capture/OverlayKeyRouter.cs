@@ -151,6 +151,38 @@ public sealed class OverlayKeyRouter
 
     public OverlayKeyRouter(OverlayKeyBindings bindings) => _bindings = bindings;
 
+    /// <summary>
+    /// The fixed rows' chords that a configurable gesture or a global hotkey could take
+    /// over: those with a modifier, and F5 (a global hotkey may be a bare function key). The
+    /// settings window warns about a gesture on one of them; a test keeps the list true to
+    /// the table.
+    /// </summary>
+    public static IReadOnlyList<KeyChord> FixedChords { get; } = BuildFixedChords();
+
+    private static List<KeyChord> BuildFixedChords()
+    {
+        var chords = new List<KeyChord>
+        {
+            new(Key.A, ModifierKeys.Control),             // the screen area
+            new(Key.Insert, ModifierKeys.Control),        // copy
+            new(Key.C, CopyAsFileModifiers),              // copy as a file
+            new(Key.C, ModifierKeys.Alt),                 // pick the colour
+            new(Key.Tab, ModifierKeys.Control),           // next tool
+            new(Key.Tab, CtrlShiftModifiers),             // previous tool
+            new(Key.C, CtrlShiftModifiers),               // copy the annotation
+            new(Key.V, CtrlShiftModifiers),               // paste it
+            new(Key.R, ModifierKeys.Shift),               // the next newer area
+            new(Key.F5, ModifierKeys.None),               // a fresh screenshot
+        };
+        for (var key = Key.D0; key <= Key.D9; key++) chords.Add(new(key, ModifierKeys.Control));   // tools by number
+        foreach (var arrow in new[] { Key.Left, Key.Up, Key.Right, Key.Down })
+        {
+            chords.Add(new(arrow, ModifierKeys.Control));   // grow the region
+            chords.Add(new(arrow, ModifierKeys.Shift));     // shrink it
+        }
+        return chords;
+    }
+
     public OverlayCommand Route(OverlayKeyContext ctx)
     {
         if (ctx.DropDownOpen) return OverlayCommand.PassThrough;

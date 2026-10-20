@@ -164,4 +164,34 @@ public sealed class PinGeometryTests
 
         Assert.Equal(Window.TopLeft, topLeft);
     }
+
+    // ---------------------------------------------------------------- pasted pin ---
+
+    private static readonly Rect Monitor = new(0, 0, 1920, 1080);
+
+    [Fact]
+    public void PasteAt_PutsTheImagesTopLeftAtTheCursor()
+    {
+        Assert.Equal(new Point(500, 300), PinGeometry.PasteAt(new Point(500, 300), 200, 100, Monitor));
+    }
+
+    [Fact]
+    public void PasteAt_NearTheRightAndBottom_MovesTheImageBackOnTheMonitor()
+    {
+        Assert.Equal(new Point(1720, 980), PinGeometry.PasteAt(new Point(1900, 1050), 200, 100, Monitor));
+    }
+
+    [Fact]
+    public void PasteAt_AnImageLargerThanTheMonitor_StartsAtItsTopLeft()
+    {
+        Assert.Equal(new Point(0, 0), PinGeometry.PasteAt(new Point(800, 600), 4000, 3000, Monitor));
+    }
+
+    [Fact]
+    public void PasteAt_KeepsToAMonitorLeftOfThePrimary()
+    {
+        var left = new Rect(-1920, 0, 1920, 1080);
+
+        Assert.Equal(new Point(-200, 50), PinGeometry.PasteAt(new Point(-10, 50), 200, 100, left));
+    }
 }

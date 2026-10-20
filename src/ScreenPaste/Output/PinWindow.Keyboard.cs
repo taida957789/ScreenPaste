@@ -1,6 +1,7 @@
 using System.Windows.Input;
 using ScreenPaste.Input;
 using ScreenPaste.Native;
+using ScreenPaste.Settings;
 
 namespace ScreenPaste.Output;
 
@@ -89,7 +90,23 @@ public sealed partial class PinWindow
             case PinCommand.Move: MoveBy(ctx.Key, ctx.IsRepeat); break;
             case PinCommand.NudgeCursor: NudgeCursor(ctx.Key, ctx.IsRepeat); break;
             case PinCommand.OpenMenu: OpenMenu(); break;
+            case PinCommand.PasteClipboard: PasteClipboard(); break;
+            case PinCommand.CopyText: CopyText(); break;
         }
+    }
+
+    /// <summary>Ctrl+V: show what the clipboard holds instead, keeping the turn, zoom and place
+    /// (a text pin is drawn for this pin's monitor).</summary>
+    private void PasteClipboard()
+    {
+        if (ClipboardPinSource.FromClipboard(_dpi) is { } content) ReplaceContent(content);
+        else Warn(Loc.T("paste.nothing"));
+    }
+
+    /// <summary>Ctrl+Shift+C: the text a text or colour pin was made from, as plain text.</summary>
+    private void CopyText()
+    {
+        if (_content.SourceText is { } text) ClipboardService.CopyText(text);
     }
 
     /// <summary>An arrow: move the pin a pixel, faster while the key is held.</summary>

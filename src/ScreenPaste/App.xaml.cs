@@ -15,8 +15,6 @@ namespace ScreenPaste;
 public partial class App : Application
 {
     private const string MutexName = "ScreenPaste_SingleInstance_Mutex";
-    private const int HkCapture = 0xB001;
-    private const int HkRecord = 0xB002;
 
     private Mutex? _mutex;
     private Forms.NotifyIcon? _tray;
@@ -129,17 +127,22 @@ public partial class App : Application
         RefreshTray();
     }
 
-    /// <summary>(Re)build the tray menu — reflects the current hotkey label and theme.</summary>
+    /// <summary>(Re)build the tray menu — reflects the current hotkey labels and theme.</summary>
     private void RefreshTray()
     {
         if (_tray == null) return;
         var menu = new Forms.ContextMenuStrip();
-        menu.Items.Add(Loc.T("tray.capture") + " (" + _settings.CaptureHotkey + ")", null, (_, _) => StartCapture());
+        menu.Items.Add(WithHotkey(Loc.T("tray.capture"), _settings.CaptureHotkey), null, (_, _) => StartCapture());
+        menu.Items.Add(WithHotkey(Loc.T("tray.customSnip"), _settings.CustomSnipHotkey), null, (_, _) => OpenCustomSnip());
         menu.Items.Add(
             _recorder != null
                 ? Loc.T("tray.recordStop")
-                : Loc.T("tray.record") + " (" + _settings.RecordHotkey + ")",
+                : WithHotkey(Loc.T("tray.record"), _settings.RecordHotkey),
             null, (_, _) => ToggleRecord());
+        menu.Items.Add(new Forms.ToolStripSeparator());
+        menu.Items.Add(WithHotkey(Loc.T("tray.paste"), _settings.PasteHotkey), null, (_, _) => PasteOrRestore());
+        menu.Items.Add(WithHotkey(Loc.T("tray.hidePins"), _settings.HidePinsHotkey), null, (_, _) => PinManager.ToggleAllVisible());
+        menu.Items.Add(Loc.T("tray.pinsClickable"), null, (_, _) => PinManager.MakeAllClickable());
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(Loc.T("tray.settings"), null, (_, _) => OpenSettings());
         menu.Items.Add(Loc.T("tray.openFolder"), null, (_, _) => OpenSaveFolder());
@@ -151,10 +154,14 @@ public partial class App : Application
         _tray.Text = Loc.T("tray.tip", _settings.CaptureHotkey);
     }
 
+    /// <summary>"Paste (F3)", or the label alone when the hotkey is unassigned.</summary>
+    private static string WithHotkey(string label, string? hotkey) =>
+        string.IsNullOrWhiteSpace(hotkey) ? label : $"{label} ({hotkey.Trim()})";
+
     private void OpenSettings()
     {
         if (_settingsWindow is { IsVisible: true }) { _settingsWindow.Activate(); return; }
-        _settingsWindow = new SettingsWindow(_settings, ApplySettingsChanged, () => CheckForUpdates(silentIfNone: false));
+        _settingsWindow = new SettingsWindow(_settings, ApplySettingsChanged, () => CheckForUpdates(silentIfNone: false), HoldHotkeys);
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
         _settingsWindow.Activate();
@@ -175,7 +182,7 @@ public partial class App : Application
         Loc.Init(_settings.Language);
         Theme.Apply(_settings.Theme);
         StartupManager.Sync(_settings.RunAtStartup);
-        RegisterHotkeys(warn: false);
+        RegisterHotkeys(warnAll: false);   // still warns about a hotkey just changed that failed
         RefreshTray();
     }
 
@@ -230,40 +237,11 @@ public partial class App : Application
         }
     }
 
-    private void SetupHotkey()
-    {
-        _hotkey = new HotkeyManager();
-        _hotkey.Pressed += OnHotkeyPressed;
-        RegisterHotkeys(warn: true);
-    }
+    private void StartCapture() => StartCapture(CaptureMode.Normal, null);
 
-    /// <summary>(Re)register the capture and record global hotkeys from settings.</summary>
-    private void RegisterHotkeys(bool warn)
-    {
-        if (_hotkey == null) return;
-
-        var cap = HotkeyGesture.ToWin32(_settings.CaptureHotkey);
-        bool capOk = cap is { } c && _hotkey.Register(HkCapture, c.modifiers, c.virtualKey);
-        if (!capOk && warn)
-            _tray?.ShowBalloonTip(3000, "ScreenPaste",
-                Loc.T("msg.hotkeyFail", _settings.CaptureHotkey), Forms.ToolTipIcon.Warning);
-
-        var rec = HotkeyGesture.ToWin32(_settings.RecordHotkey);
-        bool recWanted = !string.IsNullOrWhiteSpace(_settings.RecordHotkey);
-        bool recOk = rec is { } r && _hotkey.Register(HkRecord, r.modifiers, r.virtualKey);
-        if (!recOk) _hotkey.Unregister(HkRecord);
-        if (recWanted && !recOk && warn)
-            _tray?.ShowBalloonTip(3000, "ScreenPaste",
-                Loc.T("msg.hotkeyFail", _settings.RecordHotkey), Forms.ToolTipIcon.Warning);
-    }
-
-    private void OnHotkeyPressed(int id)
-    {
-        if (id == HkCapture) StartCapture();
-        else if (id == HkRecord) ToggleRecord();
-    }
-
-    private void StartCapture()
+    /// <summary>Start a capture in <paramref name="mode"/>; <paramref name="presetRegion"/>
+    /// (physical screen px) is chosen as soon as the overlay is up.</summary>
+    private void StartCapture(CaptureMode mode, Rect? presetRegion)
     {
         // A capture is already in progress: surface it (it may be hidden behind its own
         // modal dialog) instead of silently swallowing the hotkey. While it stands aside
@@ -287,6 +265,8 @@ public partial class App : Application
                 Cursor = cursor,
                 Regions = _snipRegions,
                 Records = _snipRecords,
+                Mode = mode,
+                PresetRegion = presetRegion,
             }, _settings);
             PinManager.CaptureActive = true;
             _overlay.Closed += (_, _) => { _overlay = null; PinManager.CaptureActive = false; };
@@ -448,6 +428,8 @@ public partial class App : Application
 
     private void ExitApp()
     {
+        _pendingSnip?.Stop();
+        _customSnip?.Close();
         _overlay?.Close();
         _hud?.Close();
         Shutdown();
