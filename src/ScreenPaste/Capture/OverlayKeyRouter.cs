@@ -44,7 +44,7 @@ public enum OverlayCommand
     ShrinkRegion,        // Shift+arrows
 
     // ---- Outputs
-    Copy,
+    Copy,                // the Copy gesture, or Ctrl+Insert
     Save,
     QuickSave,
     Pin,                 // Ctrl+T
@@ -113,14 +113,17 @@ public readonly record struct OverlayKeyContext
 /// <summary>The user-configurable gestures (settings.json); null means unbound. Read with
 /// <see cref="KeyChord.ParseGesture"/>, so a bare letter or digit stays unbound.</summary>
 public sealed record OverlayKeyBindings(
-    KeyChord? Undo, KeyChord? Redo, KeyChord? Copy, KeyChord? Save, KeyChord? QuickSave)
+    KeyChord? Undo, KeyChord? Redo, KeyChord? Copy, KeyChord? Save, KeyChord? QuickSave,
+    KeyChord? Pin, KeyChord? Print)
 {
     public static OverlayKeyBindings FromSettings(AppSettings s) => new(
         KeyChord.ParseGesture(s.UndoHotkey),
         KeyChord.ParseGesture(s.RedoHotkey),
         KeyChord.ParseGesture(s.CopyHotkey),
         KeyChord.ParseGesture(s.SaveHotkey),
-        KeyChord.ParseGesture(s.QuickSaveHotkey));
+        KeyChord.ParseGesture(s.QuickSaveHotkey),
+        KeyChord.ParseGesture(s.PinHotkey),
+        KeyChord.ParseGesture(s.PrintHotkey));
 }
 
 /// <summary>
@@ -134,6 +137,7 @@ public sealed class OverlayKeyRouter
     // static readonly, not const: coverlet cannot resolve WindowsBase enums in constants
     // and would skip instrumenting the whole app.
     private static readonly ModifierKeys ChordModifiers = ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Windows;
+    private static readonly ModifierKeys CopyAsFileModifiers = ModifierKeys.Control | ModifierKeys.Alt;
 
     private readonly OverlayKeyBindings _bindings;
 
@@ -187,14 +191,39 @@ public sealed class OverlayKeyRouter
     }
 
     /// <summary>Snipaste's fixed editing keys, tried after the configurable gestures so a
-    /// gesture the user bound to the same chord wins.</summary>
+    /// gesture the user bound to the same chord wins. Only W/A/S/D and Space work while the
+    /// left button is held.</summary>
     private static OverlayCommand RouteEditing(OverlayKeyContext ctx)
     {
-        if (ctx.Key == Key.Space && ctx.Dragging && (ctx.Modifiers & ChordModifiers) == 0)
-            return OverlayCommand.HoldToMove;
+        if (ctx.Key == Key.Space) return RouteEditingSpace(ctx);
         if (IsSelectAll(ctx) && !ctx.Dragging) return OverlayCommand.CycleScreenArea;
         if (CursorNudge.IsWasd(ctx.Key) && IsNudge(ctx)) return OverlayCommand.NudgeCursor;
-        if (CursorNudge.IsArrow(ctx.Key) && !ctx.Dragging) return RouteRegionArrow(ctx);
+        if (ctx.Dragging) return OverlayCommand.None;
+        if (CursorNudge.IsArrow(ctx.Key)) return RouteRegionArrow(ctx);
+        return RouteOutput(ctx);
+    }
+
+    /// <summary>Space shows or hides the toolbar; mid-drag it holds the area to move it.</summary>
+    private static OverlayCommand RouteEditingSpace(OverlayKeyContext ctx)
+    {
+        if (ctx.Dragging)
+            return (ctx.Modifiers & ChordModifiers) == 0 ? OverlayCommand.HoldToMove : OverlayCommand.None;
+        return ctx.Modifiers == ModifierKeys.None ? OverlayCommand.ToggleToolbar : OverlayCommand.None;
+    }
+
+    /// <summary>The fixed output keys: Enter runs the configurable Enter action, V copies the
+    /// area's size, Ctrl+Insert copies (an alias that does not follow the Copy gesture) and
+    /// Ctrl+Alt+C copies the capture as a file.</summary>
+    private static OverlayCommand RouteOutput(OverlayKeyContext ctx)
+    {
+        if (ctx.Modifiers == ModifierKeys.None)
+        {
+            if (ctx.Key == Key.Enter) return OverlayCommand.RunEnterAction;
+            if (ctx.Key == Key.V) return OverlayCommand.CopySize;
+            return OverlayCommand.None;
+        }
+        if (ctx.Key == Key.Insert && ctx.Modifiers == ModifierKeys.Control) return OverlayCommand.Copy;
+        if (ctx.Key == Key.C && ctx.Modifiers == CopyAsFileModifiers) return OverlayCommand.CopyAsFile;
         return OverlayCommand.None;
     }
 
@@ -261,6 +290,8 @@ public sealed class OverlayKeyRouter
         if (Is(_bindings.Redo, ctx)) return OverlayCommand.Redo;
         if (Is(_bindings.Copy, ctx)) return OverlayCommand.Copy;
         if (Is(_bindings.Save, ctx)) return OverlayCommand.Save;
+        if (Is(_bindings.Pin, ctx)) return OverlayCommand.Pin;
+        if (Is(_bindings.Print, ctx)) return OverlayCommand.Print;
         return OverlayCommand.None;
     }
 

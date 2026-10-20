@@ -35,7 +35,8 @@ public static class FileSaveService
 
     private static string SuggestName() => "ScreenPaste_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
 
-    private static void Encode(BitmapSource image, string path)
+    /// <summary>Write PNG, or JPEG for a .jpg/.jpeg path.</summary>
+    internal static void Encode(BitmapSource image, string path)
     {
         BitmapEncoder encoder = Path.GetExtension(path).ToLowerInvariant() switch
         {

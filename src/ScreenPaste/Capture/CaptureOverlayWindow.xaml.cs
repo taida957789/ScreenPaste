@@ -9,7 +9,6 @@ using System.Windows.Shapes;
 using Microsoft.Win32;
 using ScreenPaste.Editor;
 using ScreenPaste.Native;
-using ScreenPaste.Output;
 using ScreenPaste.Rendering;
 using ScreenPaste.Settings;
 
@@ -158,6 +157,7 @@ public partial class CaptureOverlayWindow : Window
         InitSelecting();
         InitRegion();
         InitKeyboard();
+        InitOutput();
         // A resolution / monitor change (common over RDP) invalidates the frozen
         // screenshot and every cached physical coordinate, so the selection would drift
         // against a screen that no longer matches.
@@ -337,10 +337,7 @@ public partial class CaptureOverlayWindow : Window
         toolsRow.Children.Add(_undoButton);
         toolsRow.Children.Add(_redoButton);
         toolsRow.Children.Add(MakeSeparator());
-        toolsRow.Children.Add(MakeActionButton(GlyphCopy, Loc.T("action.copy") + " (" + _settings.CopyHotkey + ")", DoCopy));
-        toolsRow.Children.Add(MakeActionButton(GlyphSave, Loc.T("action.save") + " (" + _settings.SaveHotkey + ")", DoSave));
-        toolsRow.Children.Add(MakeActionButton(GlyphPin, Loc.T("action.pin"), DoPin));
-        toolsRow.Children.Add(MakeActionButton(GlyphClose, Loc.T("action.close") + " (Esc)", Cancel));
+        AddOutputButtons(toolsRow);
         ToolbarStack.Children.Add(toolsRow);
 
         // ---- Pen options (width / opacity / colours) ----
@@ -1032,7 +1029,7 @@ public partial class CaptureOverlayWindow : Window
 
     private void Blur_MouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (_tool == ToolKind.None) { Region_MoveStart(e.GetPosition(RootCanvas)); return; }
+        if (_tool == ToolKind.None) { Interior_MouseDown(e); return; }
         if (_tool == ToolKind.Text) { PlaceText(e.GetPosition(InteractionLayer)); return; }
         if (_tool == ToolKind.Shape) { Shape_MouseDown(e.GetPosition(InteractionLayer)); return; }
         if (_tool == ToolKind.Line) { Line_MouseDown(e.GetPosition(InteractionLayer)); return; }
@@ -1735,103 +1732,6 @@ public partial class CaptureOverlayWindow : Window
 
         // Re-arm click-to-place for the next text (if still on the text tool).
         InteractionLayer.IsHitTestVisible = _tool is ToolKind.Text or ToolKind.Blur or ToolKind.Magnify;
-    }
-
-    // ----------------------------------------------------------- outputs ---
-
-    private BitmapSource Flatten()
-    {
-        CommitActiveText(discardIfEmpty: true);
-        InvalidateSampledLayers();   // make sure every region reflects the final annotation stack
-        // Re-sampling assigns new bitmaps to the blur/magnifier images, which invalidates
-        // their layout; RenderTargetBitmap draws whatever was last *arranged*, so flush the
-        // pending pass or a freshly sampled image would export at a stale (or zero) size.
-        EditLayer.UpdateLayout();
-        return Compositor.Compose(_screenshot, _selection, Ink.Strokes, BlurHost, MagnifyHost,
-            ShapeHost, StickerHost, TextHost);
-    }
-
-    private void DoCopy()
-    {
-        var img = Flatten();
-        ClipboardService.CopyImage(img);
-        PersistSettings();
-        Close();
-    }
-
-    private void DoSave()
-    {
-        var img = Flatten();
-        var path = FileSaveService.SaveAs(img, _settings.SaveDirectory);
-        if (path != null) { PersistSettings(); Close(); }
-        else { SelectionBorder.Visibility = Visibility.Visible; }
-    }
-
-    private void DoQuickSave()
-    {
-        var img = Flatten();
-        FileSaveService.QuickSave(img, _settings.SaveDirectory);
-        PersistSettings();
-        Close();
-    }
-
-    private void DoPin()
-    {
-        var img = Flatten();
-        int screenX = _vs.X + _selection.X;
-        int screenY = _vs.Y + _selection.Y;
-        var pin = new PinWindow(img, screenX, screenY, _settings.SaveDirectory);
-        pin.Show();
-        PersistSettings();
-        Close();
-    }
-
-    /// <summary>
-    /// Leave the capture from the editing phase: always ask first (a selected region
-    /// counts as work too), with a "don't ask again" option persisted to settings.
-    /// </summary>
-    private void ConfirmCancel()
-    {
-        CommitActiveText(discardIfEmpty: true);
-        if (ConfirmDiscard()) Cancel();
-    }
-
-    private void Cancel() => Close();
-
-    private void PersistSettings()
-    {
-        _settings.PenWidth = _penWidth;
-        _settings.PenOpacity = _penOpacity;
-        _settings.PenColor = ToHex(_penColor);
-        _settings.HighlighterWidth = _hlWidth;
-        _settings.HighlighterOpacity = _hlOpacity;
-        _settings.HighlighterColor = ToHex(_hlColor);
-        _settings.BlurKind = _blurKind.ToString();
-        _settings.GaussianStrength = _blurStrength;
-        _settings.TextFont = _textFont;
-        _settings.TextSize = _textSize;
-        _settings.TextColor = ToHex(_textColor);
-        _settings.TextBold = _textBold;
-        _settings.TextItalic = _textItalic;
-        _settings.TextStrikethrough = _textStrike;
-        _settings.ShapeKind = _shapeKind.ToString();
-        _settings.ShapeFilled = _shapeFilled;
-        _settings.ShapeColor = ToHex(_shapeColor);
-        _settings.ShapeWidth = _shapeWidth;
-        _settings.LineWidth = _lineWidth;
-        _settings.LineColor = ToHex(_lineColor);
-        _settings.LineArrowStart = _lineArrowStart;
-        _settings.LineArrowEnd = _lineArrowEnd;
-        _settings.MagnifyShape = _magnifyShape.ToString();
-        _settings.MagnifyZoom = _magnifyZoom;
-        _settings.MagnifyBorderWidth = _magnifyBorderWidth;
-        _settings.MagnifyBorderColor = ToHex(_magnifyBorderColor);
-        _settings.MagnifyConnector = _magnifyConnector;
-        _settings.MagnifyShadow = _magnifyShadow;
-        _settings.MagnifySmooth = _magnifySmooth;
-        _settings.MagnifyIncludeAnnotations = _magnifyWithAnnotations;
-        _settings.CustomColors = _customColors.Select(ToHex).ToList();
-        _settings.Save();
     }
 
     // ---------------------------------------------------------- history ---

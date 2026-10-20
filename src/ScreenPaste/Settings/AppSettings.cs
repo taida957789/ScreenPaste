@@ -18,6 +18,13 @@ public sealed class AppSettings
     public string CopyHotkey { get; set; } = "Ctrl+C";
     public string SaveHotkey { get; set; } = "Ctrl+S";
     public string QuickSaveHotkey { get; set; } = "Ctrl+Shift+S";
+    public string PinHotkey { get; set; } = "Ctrl+T";
+    public string PrintHotkey { get; set; } = "Ctrl+P";
+
+    // 框選完成後在範圍內按 Enter／雙擊／中鍵的動作：Copy | Pin | Save | QuickSave | CopyAndPin | None
+    public string EnterAction { get; set; } = "Copy";
+    public string DoubleClickAction { get; set; } = "Copy";
+    public string MiddleClickAction { get; set; } = "Pin";
 
     // ---- Marker pen defaults ----
     public double PenWidth { get; set; } = 4;

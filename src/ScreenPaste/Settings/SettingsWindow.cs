@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using ScreenPaste.Editor;
 using ScreenPaste.Native;
 using ScreenPaste.Recording;
 using Forms = System.Windows.Forms;
@@ -19,6 +20,8 @@ public sealed class SettingsWindow : Window
     private readonly Action _onCheckUpdates;
 
     private TextBox _capture = null!, _record = null!, _undo = null!, _redo = null!, _copy = null!, _save = null!, _quickSave = null!;
+    private TextBox _pin = null!, _print = null!;
+    private ComboBox _enterAction = null!, _doubleClickAction = null!, _middleClickAction = null!;
     private ComboBox _language = null!;
     private ComboBox _theme = null!;
     private ComboBox _blurKind = null!;
@@ -100,6 +103,17 @@ public sealed class SettingsWindow : Window
         _copy = HotkeyBox(_s.CopyHotkey); body.Children.Add(Row(Loc.T("action.copy"), _copy));
         _save = HotkeyBox(_s.SaveHotkey); body.Children.Add(Row(Loc.T("action.save"), _save));
         _quickSave = HotkeyBox(_s.QuickSaveHotkey); body.Children.Add(Row(Loc.T("set.quickSave"), _quickSave));
+        _pin = HotkeyBox(_s.PinHotkey); body.Children.Add(Row(Loc.T("action.pin"), _pin));
+        _print = HotkeyBox(_s.PrintHotkey); body.Children.Add(Row(Loc.T("set.print"), _print));
+
+        body.Children.Add(Header(Loc.T("set.outputActions")));
+        body.Children.Add(Hint(Loc.T("set.outputActionsHint")));
+        _enterAction = OutputActionCombo(_s.EnterAction, OutputAction.Copy);
+        body.Children.Add(Row(Loc.T("set.enterAction"), _enterAction));
+        _doubleClickAction = OutputActionCombo(_s.DoubleClickAction, OutputAction.Copy);
+        body.Children.Add(Row(Loc.T("set.dblClickAction"), _doubleClickAction));
+        _middleClickAction = OutputActionCombo(_s.MiddleClickAction, OutputAction.Pin);
+        body.Children.Add(Row(Loc.T("set.middleClickAction"), _middleClickAction));
 
         body.Children.Add(Header(Loc.T("set.recording")));
         _recordFormat = ValueCombo(new()
@@ -167,6 +181,11 @@ public sealed class SettingsWindow : Window
         _s.CopyHotkey = _copy.Text.Trim();
         _s.SaveHotkey = _save.Text.Trim();
         _s.QuickSaveHotkey = _quickSave.Text.Trim();
+        _s.PinHotkey = _pin.Text.Trim();
+        _s.PrintHotkey = _print.Text.Trim();
+        _s.EnterAction = ComboValue(_enterAction);
+        _s.DoubleClickAction = ComboValue(_doubleClickAction);
+        _s.MiddleClickAction = ComboValue(_middleClickAction);
 
         _s.BlurKind = ComboValue(_blurKind);
         _s.RecordFormat = ComboValue(_recordFormat);
@@ -297,6 +316,21 @@ public sealed class SettingsWindow : Window
     }
 
     private static string ComboValue(ComboBox cb) => (string)((ComboBoxItem)cb.SelectedItem).Tag!;
+
+    /// <summary>Every <see cref="OutputAction"/>, showing the one the setting holds.</summary>
+    private static ComboBox OutputActionCombo(string? setting, OutputAction fallback) => ValueCombo(
+        OutputActions.All.Select(a => (a.ToToken(), OutputActionLabel(a), (string?)null)).ToList(),
+        OutputActions.Parse(setting, fallback).ToToken());
+
+    private static string OutputActionLabel(OutputAction action) => action switch
+    {
+        OutputAction.Copy => Loc.T("out.copy"),
+        OutputAction.Pin => Loc.T("action.pin"),
+        OutputAction.Save => Loc.T("out.save"),
+        OutputAction.QuickSave => Loc.T("set.quickSave"),
+        OutputAction.CopyAndPin => Loc.T("out.copyAndPin"),
+        _ => Loc.T("out.none"),
+    };
 
     private static Button TextButton(string text, Action onClick, bool isDefault = false)
     {

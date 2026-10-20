@@ -179,6 +179,11 @@ public static class Loc
         Add("action.save",   "Save",                 "儲存",          "保存",              "저장",            "Enregistrer",       "Speichern",         "Guardar");
         Add("action.pin",    "Pin to screen",        "釘選到螢幕",     "画面に固定",         "화면에 고정",      "Épingler à l'écran","Am Bildschirm anheften","Fijar en pantalla");
         Add("action.close",  "Close",                "關閉",          "閉じる",             "닫기",            "Fermer",            "Schließen",         "Cerrar");
+        Add("action.shiftQuickSave","Shift+click: quick save", "Shift+點擊：快速儲存", "Shift+クリックでクイック保存", "Shift+클릭: 빠른 저장", "Maj+clic : enregistrement rapide", "Umschalt+Klick: Schnellspeichern", "Mayús+clic: guardado rápido");
+        Add("size.copied",   "size copied",          "已複製尺寸",     "サイズをコピーしました", "크기 복사됨",     "taille copiée",     "Größe kopiert",     "tamaño copiado");
+        Add("size.copyFailed","size not copied",     "無法複製尺寸",   "サイズをコピーできませんでした", "크기를 복사하지 못함", "taille non copiée", "Größe nicht kopiert", "tamaño no copiado");
+        Add("print.failed",  "Could not print: {0}", "無法列印：{0}",   "印刷できませんでした：{0}", "인쇄하지 못했습니다: {0}", "Impossible d'imprimer : {0}", "Drucken fehlgeschlagen: {0}", "No se pudo imprimir: {0}");
+        Add("copyFile.failed","Could not copy the capture as a file.", "無法將截圖複製為檔案。", "キャプチャをファイルとしてコピーできませんでした。", "캡처를 파일로 복사하지 못했습니다.", "Impossible de copier la capture en tant que fichier.", "Die Aufnahme konnte nicht als Datei kopiert werden.", "No se pudo copiar la captura como archivo.");
 
         // Option labels
         Add("lbl.width",     "Width",                "粗細",          "太さ",              "굵기",            "Épaisseur",         "Stärke",            "Grosor");
@@ -242,6 +247,17 @@ public static class Loc
         Add("set.hotkeyHint","Click a field and press the desired key combo; Delete clears it.", "點選欄位後直接按下想要的按鍵組合；Delete 可清除。", "欄をクリックして希望のキーを押します。Delete で消去。", "칸을 클릭하고 원하는 키 조합을 누르세요. Delete로 지웁니다.", "Cliquez puis appuyez sur la combinaison ; Suppr pour effacer.", "Feld anklicken und Tastenkombination drücken; Entf löscht.", "Haz clic y pulsa la combinación; Supr para borrar.");
         Add("set.capture",   "Capture",              "截圖",          "キャプチャ",         "캡처",            "Capture",           "Aufnehmen",         "Capturar");
         Add("set.quickSave", "Quick save",           "快速儲存",       "クイック保存",        "빠른 저장",        "Enreg. rapide",     "Schnellspeichern",  "Guardado rápido");
+        Add("set.print",     "Print",                "列印",          "印刷",              "인쇄",            "Imprimer",          "Drucken",           "Imprimir");
+        // What Enter / a double-click / a middle-click inside the chosen area does
+        Add("set.outputActions","Enter & mouse actions", "Enter 與滑鼠動作", "Enter とマウスの動作", "Enter 및 마우스 동작", "Entrée et souris", "Eingabetaste & Maus", "Intro y ratón");
+        Add("set.outputActionsHint","What each does inside the chosen area while annotating; a double-click counts only with no tool selected.", "標註時在已選取範圍內的動作；按兩下僅在未選擇工具時有效。", "注釈中に選択範囲内で行う動作です。ダブルクリックはツール未選択時のみ有効です。", "주석 중 선택 영역 안에서의 동작입니다. 더블 클릭은 도구를 선택하지 않았을 때만 적용됩니다.", "Action dans la zone choisie pendant l'annotation ; le double-clic ne compte que sans outil sélectionné.", "Aktion im gewählten Bereich beim Beschriften; der Doppelklick gilt nur ohne gewähltes Werkzeug.", "Acción dentro del área elegida al anotar; el doble clic solo cuenta sin herramienta seleccionada.");
+        Add("set.enterAction","Enter key",           "Enter 鍵",      "Enter キー",         "Enter 키",        "Touche Entrée",     "Eingabetaste",      "Tecla Intro");
+        Add("set.dblClickAction","Double-click",     "按兩下",        "ダブルクリック",      "더블 클릭",        "Double-clic",       "Doppelklick",       "Doble clic");
+        Add("set.middleClickAction","Middle-click",  "滑鼠中鍵",       "中クリック",         "가운데 클릭",      "Clic milieu",       "Mittelklick",       "Clic central");
+        Add("out.none",      "Do nothing",           "不執行動作",     "何もしない",         "동작 없음",        "Ne rien faire",     "Nichts tun",        "No hacer nada");
+        Add("out.copy",      "Copy to clipboard",    "複製到剪貼簿",   "クリップボードにコピー", "클립보드에 복사", "Copier dans le presse-papiers", "In die Zwischenablage kopieren", "Copiar al portapapeles");
+        Add("out.save",      "Save as…",             "另存新檔…",      "名前を付けて保存…",   "다른 이름으로 저장…", "Enregistrer sous…", "Speichern unter…",  "Guardar como…");
+        Add("out.copyAndPin","Copy and pin",         "複製並釘選",     "コピーして固定",      "복사 후 고정",     "Copier et épingler","Kopieren und anheften","Copiar y fijar");
         Add("set.appearance","Appearance & startup", "外觀與啟動",     "外観と起動",         "모양 및 시작",     "Apparence & démarrage","Aussehen & Start", "Apariencia e inicio");
         Add("set.language",  "Language",             "語言",          "言語",              "언어",            "Langue",            "Sprache",           "Idioma");
         Add("set.theme",     "Theme",                "主題",          "テーマ",             "테마",            "Thème",             "Design",            "Tema");

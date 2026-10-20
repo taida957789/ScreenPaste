@@ -119,6 +119,17 @@ public partial class CaptureOverlayWindow
             case OverlayCommand.Copy: DoCopy(); return true;
             case OverlayCommand.Save: DoSave(); return true;
             case OverlayCommand.QuickSave: DoQuickSave(); return true;
+            case OverlayCommand.Pin: DoPin(); return true;
+            case OverlayCommand.Print: DoPrint(); return true;
+            case OverlayCommand.CopyAsFile: DoCopyAsFile(); return true;
+            case OverlayCommand.CopySize:
+                if (!ctx.IsRepeat) CopySize();   // a held V copies once
+                return true;
+            // Taken even when the action is off, so Enter never clicks a focused button.
+            case OverlayCommand.RunEnterAction: RunOutputAction(EnterAction); return true;
+            case OverlayCommand.ToggleToolbar:
+                if (!ctx.IsRepeat) ToggleToolbar();   // a held Space must not make it flicker
+                return true;
             default: return false;   // None, PassThrough, and rows not wired up yet
         }
     }

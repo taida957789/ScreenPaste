@@ -77,6 +77,8 @@ public partial class App : Application
         Loc.Init(_settings.Language);
         Theme.Apply(_settings.Theme);
         StartupManager.Sync(_settings.RunAtStartup);
+        // Copy-as-file PNGs (Ctrl+Alt+C) only have to outlive the paste.
+        Task.Run(ClipboardService.DeleteStaleClips);
 
         SetupTray();
         SetupHotkey();
@@ -256,10 +258,11 @@ public partial class App : Application
     private void StartCapture()
     {
         // A capture is already in progress: surface it (it may be hidden behind its own
-        // modal dialog) instead of silently swallowing the hotkey.
-        if (_overlay is { IsVisible: true })
+        // modal dialog) instead of silently swallowing the hotkey. While it stands aside
+        // for a printer's own dialog it is hidden, and a second capture must not start.
+        if (_overlay != null)
         {
-            _overlay.Activate();
+            if (_overlay.IsVisible) _overlay.Activate();
             return;
         }
 

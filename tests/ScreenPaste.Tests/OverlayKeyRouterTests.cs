@@ -105,6 +105,8 @@ public sealed class OverlayKeyRouterTests
     [InlineData(Key.S, Ctrl | Shift, OverlayCommand.QuickSave)]
     [InlineData(Key.Z, Ctrl, OverlayCommand.Undo)]
     [InlineData(Key.C, Ctrl, OverlayCommand.Copy)]
+    [InlineData(Key.T, Ctrl, OverlayCommand.Pin)]
+    [InlineData(Key.P, Ctrl, OverlayCommand.Print)]
     public void Gestures_TheTextBoxLeftUnhandled_StillRun(Key key, ModifierKeys modifiers, OverlayCommand expected)
     {
         var ctx = Typing(key, modifiers) with { TextBoxDeclined = true };
@@ -215,6 +217,8 @@ public sealed class OverlayKeyRouterTests
     [InlineData(Key.C, Ctrl, OverlayCommand.Copy)]
     [InlineData(Key.S, Ctrl, OverlayCommand.Save)]
     [InlineData(Key.S, Ctrl | Shift, OverlayCommand.QuickSave)]
+    [InlineData(Key.T, Ctrl, OverlayCommand.Pin)]
+    [InlineData(Key.P, Ctrl, OverlayCommand.Print)]
     public void DefaultGestures_WhileEditing_RunTheirCommand(Key key, ModifierKeys modifiers, OverlayCommand expected)
     {
         Assert.Equal(expected, Router.Route(Editing(key, modifiers)));
@@ -501,6 +505,143 @@ public sealed class OverlayKeyRouterTests
         Assert.Equal(OverlayCommand.None, Router.RouteTap(Ctrl, Selecting(Key.LeftCtrl)));
     }
 
+    // ---------------------------------------------------------------- outputs ---
+
+    [Fact]
+    public void Enter_WhileEditing_RunsTheEnterAction()
+    {
+        Assert.Equal(OverlayCommand.RunEnterAction, Router.Route(Editing(Key.Enter)));
+        Assert.Equal(OverlayCommand.RunEnterAction, Router.Route(Editing(Key.Enter) with { HasSelection = true }));
+    }
+
+    [Fact]
+    public void Enter_WhileTyping_CommitsTheText_NeverTheEnterAction()
+    {
+        Assert.Equal(OverlayCommand.CommitText, Router.Route(Typing(Key.Enter)));
+        Assert.Equal(OverlayCommand.PassThrough, Router.Route(Typing(Key.Enter) with { TextBoxDeclined = true }));
+        Assert.Equal(OverlayCommand.PassThrough, Router.Route(Typing(Key.Enter) with { ImeProcessed = true }));
+    }
+
+    [Theory]
+    [InlineData(Shift)]
+    [InlineData(Ctrl)]
+    [InlineData(Alt)]
+    public void ChordedEnter_WhileEditing_IsNotTheEnterAction(ModifierKeys modifiers)
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.Enter, modifiers)));
+    }
+
+    [Fact]
+    public void Enter_MidDragOrWhileSelecting_DoesNothing()
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.Enter) with { Dragging = true }));
+        Assert.Equal(OverlayCommand.None, Router.Route(Selecting(Key.Enter)));
+    }
+
+    [Fact]
+    public void Enter_WithTheFontListOpen_PicksTheFont()
+    {
+        Assert.Equal(OverlayCommand.PassThrough, Router.Route(Editing(Key.Enter) with { DropDownOpen = true }));
+    }
+
+    [Fact]
+    public void CtrlInsert_WhileEditing_Copies()
+    {
+        Assert.Equal(OverlayCommand.Copy, Router.Route(Editing(Key.Insert, Ctrl)));
+    }
+
+    [Fact]
+    public void CtrlInsert_StillCopies_WhenTheCopyGestureIsRebound()
+    {
+        // A fixed alias, as in Snipaste: it does not follow CopyHotkey.
+        var router = new OverlayKeyRouter(OverlayKeyBindings.FromSettings(new AppSettings { CopyHotkey = "" }));
+
+        Assert.Equal(OverlayCommand.Copy, router.Route(Editing(Key.Insert, Ctrl)));
+    }
+
+    [Fact]
+    public void Insert_WithoutCtrl_OrWhileSelecting_DoesNothing()
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.Insert)));
+        Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.Insert, Shift)));
+        Assert.Equal(OverlayCommand.None, Router.Route(Selecting(Key.Insert, Ctrl)));
+    }
+
+    [Fact]
+    public void CtrlAltC_WhileEditing_CopiesAsAFile()
+    {
+        Assert.Equal(OverlayCommand.CopyAsFile, Router.Route(Editing(Key.C, Ctrl | Alt)));
+    }
+
+    [Fact]
+    public void CtrlAltC_WhileSelectingOrTyping_DoesNotCopyAFile()
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(Selecting(Key.C, Ctrl | Alt)));
+        // AltGr is Ctrl+Alt: on some layouts it types a letter, so it stays the box's.
+        Assert.Equal(OverlayCommand.PassThrough, Router.Route(Typing(Key.C, Ctrl | Alt) with { TextBoxDeclined = true }));
+    }
+
+    [Fact]
+    public void V_WhileEditing_CopiesTheSize()
+    {
+        Assert.Equal(OverlayCommand.CopySize, Router.Route(Editing(Key.V)));
+        Assert.Equal(OverlayCommand.CopySize, Router.Route(Editing(Key.V) with { LoupeVisible = false }));
+    }
+
+    [Fact]
+    public void V_WhileSelectingTypingOrDragging_IsNotTheSizeCopy()
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(Selecting(Key.V)));
+        Assert.Equal(OverlayCommand.PassThrough, Router.Route(Typing(Key.V)));
+        Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.V) with { Dragging = true }));
+    }
+
+    [Theory]
+    [InlineData(Ctrl)]
+    [InlineData(Shift)]
+    public void ChordedV_IsNotTheSizeCopy(ModifierKeys modifiers)
+    {
+        Assert.NotEqual(OverlayCommand.CopySize, Router.Route(Editing(Key.V, modifiers)));
+    }
+
+    [Fact]
+    public void Space_WhileEditing_TogglesTheToolbar()
+    {
+        Assert.Equal(OverlayCommand.ToggleToolbar, Router.Route(Editing(Key.Space)));
+        Assert.Equal(OverlayCommand.ToggleToolbar, Router.Route(Editing(Key.Space) with { HasSelection = true }));
+        Assert.Equal(OverlayCommand.ToggleToolbar, Router.Route(Editing(Key.Space) with { IsRepeat = true }));
+    }
+
+    [Fact]
+    public void Space_MidDrag_IsNotTheToolbarToggle()
+    {
+        // The held button owns Space: it moves the area instead.
+        Assert.Equal(OverlayCommand.HoldToMove, Router.Route(Editing(Key.Space) with { Dragging = true }));
+    }
+
+    [Fact]
+    public void Space_WhileSelectingOrTyping_IsNotTheToolbarToggle()
+    {
+        Assert.NotEqual(OverlayCommand.ToggleToolbar, Router.Route(Selecting(Key.Space)));
+        Assert.Equal(OverlayCommand.PassThrough, Router.Route(Typing(Key.Space)));
+    }
+
+    [Theory]
+    [InlineData(Shift)]
+    [InlineData(Ctrl)]
+    public void ChordedSpace_WhileEditing_DoesNothing(ModifierKeys modifiers)
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.Space, modifiers)));
+    }
+
+    [Fact]
+    public void AGestureBoundToCtrlInsert_WinsOverTheCopyAlias()
+    {
+        var bindings = OverlayKeyBindings.FromSettings(new AppSettings()) with { Pin = new KeyChord(Key.Insert, Ctrl) };
+
+        Assert.Equal(OverlayCommand.Pin, new OverlayKeyRouter(bindings).Route(Editing(Key.Insert, Ctrl)));
+    }
+
     // ---------------------------------------------------------------- bindings ---
 
     [Fact]
@@ -538,6 +679,19 @@ public sealed class OverlayKeyRouterTests
         Assert.Equal(new KeyChord(Key.C, Ctrl), bindings.Copy);
         Assert.Equal(new KeyChord(Key.S, Ctrl), bindings.Save);
         Assert.Equal(new KeyChord(Key.S, Ctrl | Shift), bindings.QuickSave);
+        Assert.Equal(new KeyChord(Key.T, Ctrl), bindings.Pin);
+        Assert.Equal(new KeyChord(Key.P, Ctrl), bindings.Print);
+    }
+
+    [Fact]
+    public void FromSettings_FollowsThePinAndPrintGestures()
+    {
+        var settings = new AppSettings { PinHotkey = "Ctrl+Shift+T", PrintHotkey = "" };
+        var router = new OverlayKeyRouter(OverlayKeyBindings.FromSettings(settings));
+
+        Assert.Equal(OverlayCommand.Pin, router.Route(Editing(Key.T, Ctrl | Shift)));
+        Assert.Equal(OverlayCommand.None, router.Route(Editing(Key.T, Ctrl)));
+        Assert.Equal(OverlayCommand.None, router.Route(Editing(Key.P, Ctrl)));
     }
 
     [Fact]
