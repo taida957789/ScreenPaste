@@ -72,25 +72,42 @@ public sealed partial class PinWindow
     }
 
     // ------------------------------------------------------- double-click ---
-    // A press is dispatched in PinWindow.Drag.cs: a plain double-click lands here; with Shift
-    // it toggles the thumbnail, with Ctrl each click picks the pin or drops it, and with any
-    // other modifier it is two drags, as it always was.
+    // A press is dispatched in PinWindow.Drag.cs and a double-click lands here: a plain one
+    // does what PinDoubleClickAction says, with Shift it toggles the thumbnail, with Ctrl each
+    // click picks the pin or drops it, and with any other modifier it is two drags, as it
+    // always was (PinDoubleClickActions.ForClick).
 
-    private bool DoubleClickCloses =>
-        PinDoubleClickActions.Parse(_settings.PinDoubleClickAction) == PinDoubleClickAction.Close;
+    private PinDoubleClickAction DoubleClickSetting => PinDoubleClickActions.Parse(_settings.PinDoubleClickAction);
 
-    /// <summary>Close recoverably, with every pin picked with this one as Esc does, or false
-    /// when a double-click does nothing. The first time it says so and asks, once this click is over.</summary>
-    private bool OnDoubleClick()
+    private bool DoubleClickCloses => DoubleClickSetting == PinDoubleClickAction.Close;
+
+    /// <summary>Run what a double-click with <paramref name="modifiers"/> does, or false when
+    /// it does nothing, so the press goes on as a single one.</summary>
+    private bool OnDoubleClick(ModifierKeys modifiers)
     {
-        if (!DoubleClickCloses) return false;
+        switch (PinDoubleClickActions.ForClick(DoubleClickSetting, modifiers))
+        {
+            case PinDoubleClickAction.Close:
+                CloseOnDoubleClick();
+                return true;
+            case PinDoubleClickAction.Thumbnail:
+                ToggleThumbnail();
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>Close recoverably, with every pin picked with this one as Esc does. The first
+    /// time it says so and asks, once this click is over.</summary>
+    private void CloseOnDoubleClick()
+    {
         if (_settings.PinDoubleClickTipShown) ForGroup(PinManager.CloseRecoverable);
         else if (!_askingDoubleClick)
         {
             _askingDoubleClick = true;
             Dispatcher.BeginInvoke(AskFirstDoubleClick);
         }
-        return true;
     }
 
     /// <summary>The one-time tip: a double-click closes the pin, it can be brought back, and
@@ -107,7 +124,8 @@ public sealed partial class PinWindow
         if (answer == MessageBoxResult.Yes) ForGroup(PinManager.CloseRecoverable);
     }
 
-    /// <summary>The menu's "Close on double-click": saved at once, and no tip is needed after.</summary>
+    /// <summary>The menu's "Close on double-click": saved at once, and no tip is needed after.
+    /// Unticked it does nothing; ticked again (from nothing or the thumbnail) it closes.</summary>
     private void ToggleDoubleClickClose()
     {
         var next = DoubleClickCloses ? PinDoubleClickAction.None : PinDoubleClickAction.Close;

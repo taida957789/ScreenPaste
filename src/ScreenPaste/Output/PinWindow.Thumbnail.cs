@@ -43,7 +43,8 @@ public sealed partial class PinWindow
         LostMouseCapture += (_, _) => DropRightDrag();
     }
 
-    /// <summary>Shift+double-click and the menu: into thumbnail mode, or back out of it.</summary>
+    /// <summary>Shift+double-click (a plain one too when PinDoubleClickAction says so) and the
+    /// menu: into thumbnail mode, or back out of it.</summary>
     private void ToggleThumbnail()
     {
         if (_thumbnail != null)

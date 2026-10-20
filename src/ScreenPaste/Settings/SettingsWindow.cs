@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using ScreenPaste.Editor;
+using ScreenPaste.Output;
 using ScreenPaste.Recording;
 using Forms = System.Windows.Forms;
 
@@ -25,6 +26,8 @@ public sealed class SettingsWindow : Window
     private ComboBox _language = null!;
     private ComboBox _theme = null!;
     private ComboBox _blurKind = null!;
+    private ComboBox _pinDoubleClick = null!;
+    private CheckBox _pinZoomAtCursor = null!;
     private ComboBox _recordFormat = null!;
     private ComboBox _recordFps = null!;
     private ComboBox _recordAudio = null!;
@@ -84,6 +87,15 @@ public sealed class SettingsWindow : Window
         }, _s.BlurKind);
         body.Children.Add(Row(Loc.T("set.blurKind"), _blurKind));
         body.Children.Add(Hint(Loc.T("set.blurKindHint")));
+
+        body.Children.Add(Header(Loc.T("set.pins")));
+        _pinZoomAtCursor = new CheckBox { IsChecked = _s.PinZoomAtCursor, Content = Loc.T("set.pinZoomAtCursor"), Foreground = Theme.ForegroundBrush, VerticalAlignment = VerticalAlignment.Center };
+        body.Children.Add(Row("", _pinZoomAtCursor));
+        _pinDoubleClick = ValueCombo(
+            PinDoubleClickActions.All.Select(a => (a.ToToken(), PinDoubleClickLabel(a), (string?)null)).ToList(),
+            PinDoubleClickActions.Parse(_s.PinDoubleClickAction).ToToken());
+        body.Children.Add(Row(Loc.T("set.pinDblClick"), _pinDoubleClick));
+        body.Children.Add(Hint(Loc.T("set.pinDblClickHint")));
 
         body.Children.Add(Header(Loc.T("set.updates")));
         _checkUpdate = new CheckBox { IsChecked = _s.CheckUpdateOnStartup, Content = Loc.T("set.checkStartup"), Foreground = Theme.ForegroundBrush, VerticalAlignment = VerticalAlignment.Center };
@@ -169,6 +181,7 @@ public sealed class SettingsWindow : Window
         _s.MiddleClickAction = ComboValue(_middleClickAction);
 
         _s.BlurKind = ComboValue(_blurKind);
+        SavePinOptions();
         _s.RecordFormat = ComboValue(_recordFormat);
         _s.RecordAudioSource = ComboValue(_recordAudio);
         _s.RecordCaptureCursor = _recordCursor.IsChecked == true;
@@ -178,6 +191,16 @@ public sealed class SettingsWindow : Window
         _s.Save();
         _onApplied();
         Close();
+    }
+
+    /// <summary>A double-click chosen here was chosen knowingly, so the pin's one-time tip is
+    /// not needed after; saving the same choice again leaves the tip as it was.</summary>
+    private void SavePinOptions()
+    {
+        _s.PinZoomAtCursor = _pinZoomAtCursor.IsChecked == true;
+        var doubleClick = PinDoubleClickActions.Parse(ComboValue(_pinDoubleClick));
+        if (doubleClick != PinDoubleClickActions.Parse(_s.PinDoubleClickAction)) _s.PinDoubleClickTipShown = true;
+        _s.PinDoubleClickAction = doubleClick.ToToken();
     }
 
     private void BrowseFolder()
@@ -282,6 +305,13 @@ public sealed class SettingsWindow : Window
         OutputAction.Save => Loc.T("out.save"),
         OutputAction.QuickSave => Loc.T("set.quickSave"),
         OutputAction.CopyAndPin => Loc.T("out.copyAndPin"),
+        _ => Loc.T("out.none"),
+    };
+
+    private static string PinDoubleClickLabel(PinDoubleClickAction action) => action switch
+    {
+        PinDoubleClickAction.Close => Loc.T("pin.close"),
+        PinDoubleClickAction.Thumbnail => Loc.T("pin.thumbnail"),
         _ => Loc.T("out.none"),
     };
 

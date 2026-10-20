@@ -47,10 +47,11 @@ public sealed partial class PinWindow
     }
 
     /// <summary>
-    /// A left press: a plain double-click closes the pin (when the settings say so), a Shift
-    /// double-click toggles the thumbnail and a Ctrl+click picks the pin or drops it from the
-    /// selection. Any other press drags the pin (a plain one on a pin not picked ends the
-    /// selection), or resizes it on the border band. A press during a right-drag cancels it.
+    /// A left press: a plain double-click closes the pin or toggles its thumbnail (as the
+    /// settings say), a Shift double-click toggles the thumbnail and a Ctrl+click picks the pin
+    /// or drops it from the selection. Any other press drags the pin (a plain one on a pin not
+    /// picked ends the selection), or resizes it on the border band. A press during a
+    /// right-drag cancels it.
     /// WPF counts clicks by where they land in the window, which a dragged pin keeps under the
     /// cursor, so a quick press after a drag is a new press rather than a double-click.
     /// </summary>
@@ -63,12 +64,7 @@ public sealed partial class PinWindow
         if (CancelRightDrag()) return;
 
         var modifiers = Keyboard.Modifiers;
-        if (doubleClick && modifiers == ModifierKeys.None && OnDoubleClick()) return;
-        if (doubleClick && modifiers == ModifierKeys.Shift)
-        {
-            ToggleThumbnail();
-            return;
-        }
+        if (doubleClick && OnDoubleClick(modifiers)) return;
         if (modifiers == ModifierKeys.Control)
         {
             PinManager.ToggleSelected(this);
