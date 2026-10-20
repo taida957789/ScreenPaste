@@ -13,7 +13,7 @@ Ein leichtgewichtiges Windows-Tool für Screenshots, Anmerkungen und Bildschirma
 ### Aufnahme
 - Der gesamte Bildschirm (Multi-Monitor-Unterstützung)
 - **Automatische Fenster- und UI-Element-Erkennung**: Fahren Sie über ein Fenster oder ein Interface-Element (Schaltflächen, Panels, Webseiten-Blöcke), um es automatisch zu umranden, und klicken Sie zum Aufnehmen; das **Mausrad** wechselt die Erkennungsebene (Element ⇄ Fenster)
-- Ziehen zum Auswählen eines eigenen Bereichs, mit Größenanzeige; eine **Pixel-Lupe** folgt dem Cursor durchgehend (Auswahl- und Bearbeitungsmodus) mit Fadenkreuz, Koordinaten und Pixelfarbe — `C` kopiert den Farbwert, `Umschalt` wechselt Hex/Dezimal
+- Ziehen zum Auswählen eines eigenen Bereichs, mit Größenanzeige; eine **Pixel-Lupe** folgt dem Cursor durchgehend (Auswahl- und Bearbeitungsmodus) mit Fadenkreuz, Koordinaten und Pixelfarbe — `C` kopiert den Farbwert, kurzes Antippen von `Umschalt` schaltet HEX / RGB / HSV durch
 - **Nach der Auswahl anpassbar**: Ziehen Sie die Griffe an Ecken und Kantenmitten zum Ändern der Größe; ohne aktives Werkzeug verschiebt Ziehen im Inneren den Bereich — vorhandene Anmerkungen bleiben am Inhalt verankert
 
 ### Anmerkungen
@@ -34,7 +34,7 @@ Nach der Aufnahme erscheint neben dem Cursor eine **Symbol-Werkzeugleiste** (ver
 ### Ausgabe
 - In die Zwischenablage kopieren
 - Als PNG / JPG speichern (Speichern unter oder Schnellspeichern in einen Standardordner)
-- **Am Bildschirm anheften**: Das Bild schwebt im Vordergrund; ziehen zum Verschieben, Mausrad zum Zoomen, Rechtsklick für das Menü; bei mehreren Pins schließt Esc zuerst den fokussierten, ohne Fokus alle
+- **Am Bildschirm anheften**: Das Bild schwebt im Vordergrund; ziehen zum Verschieben, Mausrad zum Zoomen um den Mauszeiger, Rechtsklick für das Menü; Doppelklick, `Esc` oder `Strg+W` schließen es, `F3` kann es zurückholen (`Umschalt+Esc` vernichtet es); bei mehreren Pins schließt Esc zuerst den fokussierten, ohne Fokus alle. `F3` heftet auch den Inhalt der Zwischenablage an
 
 ### Bereichsaufnahme
 - Ein eigener globaler Hotkey (standardmäßig **F2**): Bereich per Ziehen auswählen oder **ein Fenster anklicken zur automatischen Erkennung** (Rad wechselt Fenster-/Element-Ebenen, wie beim Screenshot), erneut drücken (oder Stopp klicken) zum Beenden
@@ -48,7 +48,7 @@ Nach der Aufnahme erscheint neben dem Cursor eine **Symbol-Werkzeugleiste** (ver
 - Kodierung durch das mitgelieferte `ffmpeg` — keine separate Installation nötig
 
 ### Sonstiges
-- Globale Hotkeys (**F1** Aufnahme, **F2** Aufzeichnung, beide konfigurierbar) und Start über das **Infobereich**-Symbol
+- Globale Hotkeys (**F1** Aufnahme, **Strg+F1** aufnehmen und kopieren, **Umschalt+F1** benutzerdefinierte Aufnahme, **F2** Aufzeichnung, **F3** einfügen / Bild zurückholen, **Umschalt+F3** angeheftete Bilder aus-/einblenden, alle konfigurierbar) und Start über das **Infobereich**-Symbol
 - **Mehrsprachig**: 繁體中文 / English / 日本語 / 한국어 / Français / Deutsch / Español (folgt standardmäßig dem System)
 - **Hell / Dunkel / System**-Design, moderne abgerundete Oberfläche und dunkle Titelleisten
 - Zentrales **Einstellungsfenster**: Sprache, Hotkeys, Design, Autostart, Speicherordner, Anmerkungs-Standards (Weichzeichner-Typ), Aufnahmeformat / Bildrate (Hotkey-Felder werden durch einfaches Drücken der Kombination gesetzt)
@@ -77,26 +77,139 @@ Aufzeichnung: **F2** drücken und den Bereich per Ziehen wählen; erneut **F2** 
 
 ## Tastenkürzel
 
-| Kontext | Tasten | Aktion |
-|---|---|---|
-| Global | `F1` | Aufnahme starten (konfigurierbar) |
-| Global | `F2` | Bereichsaufnahme starten / stoppen (konfigurierbar) |
-| Auswahl | Mausrad | Erkennungsebene wechseln (UI-Element ⇄ Fenster) |
-| Auswahl / Anmerkung | `C` | Farbwert des Pixels unter der Lupe kopieren |
-| Auswahl / Anmerkung | `Umschalt` | Farbanzeige Hex / Dezimal umschalten |
-| Anmerkung | `Strg+Z` / `Strg+Y` | Rückgängig / wiederholen (konfigurierbar) |
-| Anmerkung | `Strg+C` | In die Zwischenablage kopieren (konfigurierbar) |
-| Anmerkung | `Strg+S` / `Strg+Umschalt+S` | Speichern unter / Schnellspeichern (konfigurierbar) |
-| Anmerkung | `Entf` | Ausgewählte Anmerkung löschen |
-| Anmerkung | `Umschalt` + Ziehen (Linie) | An 45°-Winkeln einrasten |
-| Anmerkung | `Eingabe` oder Klick außerhalb | Text bestätigen (`Umschalt+Eingabe` für Zeilenumbruch) |
-| Anmerkung | `Esc` | Auswahl aufheben → Aufnahme verlassen (mit Nachfrage, abschaltbar) |
-| Aufnahme-Editor | `Leertaste` | Wiedergabe / Pause |
-| Aufnahme-Editor | `←` / `→` | Einzelbild vor / zurück |
-| Aufnahme-Editor | `Pos1` / `Ende` | Zum Trimm-Anfang / -Ende springen |
-| Aufnahme-Editor | `I` / `O` | Trimm-Anfang / -Ende an der Wiedergabeposition setzen |
-| Aufnahme-Editor | `Strg+C` | Schnellexport und Datei in die Zwischenablage kopieren |
-| Angeheftetes Fenster | `Strg+C` / `Esc` | Kopieren / schließen |
+Die Kürzel folgen Snipaste, wo es dort eine Entsprechung gibt. Mit *(konfigurierbar)* markierte Tasten lassen sich unter Einstellungen → „Tastenkürzel“ / „Kürzel in der App“ ändern; die übrigen sind fest.
+
+> **Neu in dieser Version**
+> - Ein **Doppelklick auf ein angeheftetes Bild schließt es** (beim ersten Mal mit Nachfrage). Unter Einstellungen → „Angeheftete Bilder“ kann er stattdessen die Miniaturansicht umschalten oder nichts tun.
+> - `Esc` / `Strg+W` schließen ein angeheftetes Bild **wiederherstellbar**: `F3` holt es an seinen Platz zurück, solange sich die Zwischenablage seit dem letzten Einfügen nicht geändert hat. `Umschalt+Esc` **vernichtet** es endgültig.
+> - Das Mausrad zoomt ein angeheftetes Bild **um den Mauszeiger** (unter Einstellungen → „Angeheftete Bilder“ lässt sich die linke obere Ecke festhalten).
+> - Das Farbformat der Lupe (HEX → RGB → HSV) wechselt bei einem **kurzen Antippen von `Umschalt`** (allein gedrückt und losgelassen); `Umschalt`+Ziehen und `Umschalt`+Klick ändern es nicht mehr.
+
+### Global
+
+| Tasten | Aktion |
+|---|---|
+| `F1` | Aufnahme starten (konfigurierbar) |
+| `Strg+F1` | Aufnehmen und kopieren: der gewählte Bereich kommt direkt in die Zwischenablage (konfigurierbar) |
+| `Umschalt+F1` | Benutzerdefinierte Aufnahme: Bereich und Verzögerung in einem Dialog festlegen (konfigurierbar) |
+| `F2` | Bereichsaufnahme starten / stoppen (konfigurierbar) |
+| `F3` | Inhalt der Zwischenablage (Bild, Bilddatei, Farbwert oder Text) am Mauszeiger anheften; erneut gedrückt bei unveränderter Zwischenablage das zuletzt geschlossene Bild zurückholen (konfigurierbar) |
+| `Umschalt+F3` | Alle angehefteten Bilder aus- / einblenden (konfigurierbar) |
+| Nicht belegt | Bild klickdurchlässig (das Bild unter dem Mauszeiger lässt Klicks durch), aufnehmen und anheften, aufnehmen, kopieren und anheften, letzten Bereich erneut kopieren, ganzen Bildschirm kopieren, aktives Fenster aufnehmen, Bildschirm unter dem Mauszeiger aufnehmen, verzögerte Aufnahme, Aufnahmeverlauf löschen: unter Einstellungen → „Tastenkürzel“ / „Weitere Tastenkürzel“ belegen |
+| Infobereich-Symbol | Doppelklick startet eine Aufnahme; das Menü bietet außerdem benutzerdefinierte Aufnahme, aus Zwischenablage einfügen, angeheftete Bilder aus-/einblenden und „Alle angehefteten Bilder wieder anklickbar machen“ |
+
+### Aufnahme: Bereich auswählen
+
+| Tasten | Aktion |
+|---|---|
+| Klick / Ziehen | Hervorgehobenes Fenster oder UI-Element aufnehmen / eigenen Bereich aufziehen |
+| Mausrad | Erkennungsebene wechseln (UI-Element ⇄ Fenster) |
+| `Tab` | Zwischen UI-Element- und Fenstererkennung wechseln |
+| `Leertaste` | Hervorgehobenen Bereich übernehmen |
+| `Strg+A` | Bildschirm unter dem Mauszeiger, dann alle Bildschirme übernehmen |
+| `Umschalt` + Ziehen | Quadrat aufziehen |
+| `Leertaste` beim Ziehen gedrückt halten | Bereich verschieben statt die Größe zu ändern |
+| `W` `A` `S` `D` / Pfeiltasten | Mauszeiger um ein Pixel bewegen (gehalten schneller); ein Ziehen folgt ihm |
+| `Alt` antippen | Fadenkreuz-Hilfslinien ein- / ausblenden (wird gemerkt) |
+| `C` | Farbwert des Pixels unter der Lupe kopieren |
+| `Umschalt` antippen | Farbanzeige HEX → RGB → HSV durchschalten |
+| `R` / `Umschalt+R` | Bereiche früherer Aufnahmen zurück / vor durchgehen |
+| `,` / `.` | Aufnahmeverlauf zurück / vor durchgehen (frühere Aufnahmen, Anmerkungen ins Bild übernommen; nur im Speicher) |
+| `` ` `` oder `!` | Mauszeiger in der Aufnahme ein- / ausblenden (wird gemerkt) |
+| `F5` | Bildschirm unter dem Overlay neu aufnehmen |
+| Rechtsklick | Den gerade aufgezogenen Bereich verwerfen; sonst die Aufnahme verlassen |
+| `Esc` | Aufnahme verlassen |
+
+### Aufnahme: Bearbeiten und Anmerken
+
+| Tasten | Aktion |
+|---|---|
+| Griff ziehen | Bereichsgröße ändern (`Strg`: um die Mitte; `Leertaste` gehalten: stattdessen verschieben) |
+| Im Bereich ziehen (ohne Werkzeug) | Bereich verschieben (`Umschalt`: nur auf einer Achse) |
+| Pfeiltasten | Bereich um ein Pixel verschieben, oder die ausgewählte Anmerkung |
+| `Strg` / `Umschalt` + Pfeiltasten | Bereich auf dieser Seite vergrößern / verkleinern |
+| `Strg+A` | Bereich = Bildschirm unter dem Mauszeiger, dann alle Bildschirme |
+| `W` `A` `S` `D` | Mauszeiger um ein Pixel bewegen (auch beim Zeichnen) |
+| `C` / `Umschalt` antippen | Farbe der Lupe kopieren / Format wechseln, wie beim Auswählen |
+| `R` / `Umschalt+R`, `,` / `.`, `` ` `` / `!`, `F5` | Wie beim Auswählen; die Anmerkungen bleiben am Bildinhalt (`,` / `.` fragen vorher nach) |
+| `Leertaste` | Werkzeugleiste ein- / ausblenden |
+| `Strg+1` … `Strg+9`, `Strg+0` | Form, Linie / Pfeil, Marker, Textmarker, Weichzeichnen / Mosaik, Text, Nummernmarke, Lupe, Radierer, Bild einfügen |
+| `T` / `B` / `M` / `E` | Text / Marker / Weichzeichnen / Radierer |
+| `Strg+Tab` / `Strg+Umschalt+Tab` | Nächstes / vorheriges Werkzeug |
+| `Tab` | Variante des Werkzeugs wechseln: Rechteck → abgerundet → Ellipse, Linie ⇄ Pfeil, Gauß ⇄ Mosaik, Form der Lupe |
+| `1` / `2`, `[` / `]`, Mausrad | Dünner / dicker (beim Textwerkzeug die Schriftgröße) |
+| `Alt+C` | Farbe unter dem Mauszeiger aufnehmen |
+| `+` / `-` | Nummernmarke: nächste Nummer höher / niedriger |
+| Mausrad auf einem Farbfeld | Deckkraft des Werkzeugs ändern |
+| `Umschalt` + Ziehen beim Zeichnen | Quadratische Formen, Weichzeichner- und Lupenrahmen; gerade Stiftstriche; Linien in 45°-Schritten |
+| Klick (Linienwerkzeug) | Linienzug beginnen: jeder Klick fügt einen Punkt hinzu; Rechtsklick, `Esc`, `Eingabe` oder Doppelklick beendet ihn |
+| Anmerkung ziehen | Verschieben (`Umschalt`: nur auf einer Achse) |
+| `Strg` + Anmerkung ziehen | Eine Kopie herausziehen |
+| `Umschalt` + Mausrad | Ausgewähltes Rechteck / ausgewählte Ellipse skalieren |
+| Mausrad auf einer ausgewählten Lupe | Vergrößerung ändern |
+| `Entf` | Ausgewählte Anmerkung löschen |
+| `Strg+Umschalt+C` / `Strg+Umschalt+V` | Ausgewählte Anmerkung kopieren / eine Kopie einfügen |
+| `Strg+Z` / `Strg+Y` | Rückgängig / wiederholen (konfigurierbar) |
+| `Strg+Umschalt+Z` | Alle Anmerkungen entfernen, als ein Rückgängig-Schritt (konfigurierbar) |
+| `Eingabe` oder Klick außerhalb | Text bestätigen (`Umschalt+Eingabe` für Zeilenumbruch; `Esc` bestätigt ebenfalls) |
+| Mausrad über dem Textfeld | Schriftgröße |
+| Mittelklick im Textfeld | Text aus der Zwischenablage einfügen |
+| `Strg+C` / `Strg+Einfg` | In die Zwischenablage kopieren (`Strg+C` konfigurierbar) |
+| `Strg+S` / `Strg+Umschalt+S` | Speichern unter / Schnellspeichern (konfigurierbar; `Umschalt`+Klick auf Speichern speichert ebenfalls schnell) |
+| `Strg+T` | Am Bildschirm anheften (konfigurierbar) |
+| `Strg+P` | Drucken (konfigurierbar) |
+| `Strg+Alt+C` | Als PNG-Datei kopieren |
+| `V` | Bereichsgröße als Text kopieren (`800x600`) |
+| `Eingabe` | Kopieren und schließen (konfigurierbar unter Einstellungen → „Eingabetaste & Maus“) |
+| Doppelklick im Bereich (ohne Werkzeug) | Kopieren und schließen (konfigurierbar) |
+| Mittelklick im Bereich | Am Bildschirm anheften (konfigurierbar) |
+| Rechtsklick | Eine Ebene zurück: Linienzug oder Text beenden; mit Form-, Weichzeichner- oder Radierer-Werkzeug das UI-Element unter dem Mauszeiger markieren (außerhalb des Bereichs: den ganzen Bereich); Auswahl aufheben; Werkzeug ablegen; zuletzt den Bereich verwerfen und neu aufziehen (mit Nachfrage, wenn Anmerkungen verloren gingen) |
+| `Esc` | Ziehen eines Lupenrahmens abbrechen → Linienzug beenden → Auswahl aufheben → Aufnahme verlassen (mit Nachfrage, abschaltbar) |
+
+### Angeheftete Bilder
+
+| Tasten | Aktion |
+|---|---|
+| Ziehen | Bild verschieben (`W` `A` `S` `D` beim Ziehen: um ein Pixel) |
+| `Umschalt` + Ziehen | Kanten an anderen angehefteten Bildern, Fenstern und Bildschirmrändern einrasten |
+| Rand ziehen | Größe ändern, Seitenverhältnis bleibt |
+| Mausrad | Um den Mauszeiger zoomen (unter Einstellungen → „Angeheftete Bilder“ lässt sich die linke obere Ecke festhalten) |
+| `Strg` + Mausrad | Deckkraft |
+| Mittelklick | Auf 100 % Größe und Deckkraft zurücksetzen; erneut zum Zurückkehren |
+| Doppelklick | Schließen, wiederherstellbar (beim ersten Mal mit Nachfrage; änderbar unter Einstellungen → „Angeheftete Bilder“ oder im Bildmenü) |
+| `Umschalt` + Doppelklick | Miniaturansicht ein / aus |
+| Mit rechter Taste ziehen | Bild auf den überzogenen Teil verkleinern (eine Miniaturansicht) |
+| Rechtsklick / `Menütaste` | Bildmenü |
+| `Strg` + Klick | Bild zur Auswahl hinzufügen oder daraus entfernen; ausgewählte Bilder werden gemeinsam verschoben, ausgeblendet und geschlossen |
+| `Esc` / `Strg+W` | Schließen, wiederherstellbar (`F3` holt es zurück) |
+| `Umschalt+Esc` | Vernichten: es lässt sich nicht mehr zurückholen |
+| `Esc` ohne fokussiertes Bild | Alle angezeigten Bilder schließen, wiederherstellbar |
+| `1` / `2` | Im / gegen den Uhrzeigersinn drehen |
+| `3` / `4` | Horizontal / vertikal spiegeln |
+| `5` / `6` | Graustufen / Farben umkehren |
+| `+` / `-` | Vergrößern / verkleinern |
+| `Strg++` / `Strg+-` | Deckkraft erhöhen / verringern |
+| Pfeiltasten | Um ein Pixel verschieben (gehalten schneller) |
+| `Strg+C` / `Strg+Einfg` | Kopieren (`Strg+C` konfigurierbar) |
+| `Strg+Alt+C` | Als PNG-Datei kopieren |
+| `Strg+S` / `Strg+Umschalt+S` | Speichern unter / Schnellspeichern (konfigurierbar) |
+| `Strg+P` | Drucken (konfigurierbar) |
+| `Strg+V` | Stattdessen den Inhalt der Zwischenablage zeigen |
+| `Strg+Umschalt+C` | Den Text kopieren, aus dem ein Textbild erstellt wurde |
+| `Strg+A` | Alle angezeigten Bilder auswählen |
+| `Strg+Umschalt+P` | Einstellungen öffnen |
+| `Alt` antippen | Lupe ein / aus: `C` kopiert die Farbe unter dem Mauszeiger, `Umschalt` antippen schaltet HEX → RGB → HSV durch, `W` `A` `S` `D` bewegen den Mauszeiger um ein Pixel |
+| Bilddatei ablegen | Bild ersetzen (`Umschalt`: als neues angeheftetes Bild öffnen) |
+
+### Aufnahme-Editor
+
+| Tasten | Aktion |
+|---|---|
+| `Leertaste` | Wiedergabe / Pause |
+| `←` / `→` | Einzelbild vor / zurück |
+| `Pos1` / `Ende` | Zum Trimm-Anfang / -Ende springen |
+| `I` / `O` | Trimm-Anfang / -Ende an der Wiedergabeposition setzen |
+| `Strg+C` | Schnellexport und Datei in die Zwischenablage kopieren |
 
 Alle Einstellungen (Hotkeys, Werkzeug-Standardwerte, Design, Autostart, Aufnahmeformat / Bildrate usw.) lassen sich über das Infobereich-Menü → „Einstellungen…“ anpassen.
 
