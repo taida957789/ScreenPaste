@@ -205,7 +205,7 @@ public static class Loc
 
         // Magnifier readout
         Add("mag.copy",      "C: copy color",        "C 複製色彩值",   "C でカラー値をコピー", "C: 색상 값 복사",  "C : copier la couleur","C: Farbwert kopieren","C: copiar color");
-        Add("mag.format",    "Shift: hex / decimal", "Shift 切換 16/10 進制", "Shift で 16/10 進数切替", "Shift: 16/10진수 전환", "Maj : hex / décimal","Umschalt: Hex/Dezimal","Mayús: hex / decimal");
+        Add("mag.format",    "Shift: HEX / RGB / HSV", "Shift 切換 HEX / RGB / HSV", "Shift で HEX / RGB / HSV 切替", "Shift: HEX / RGB / HSV 전환", "Maj : HEX / RGB / HSV","Umschalt: HEX/RGB/HSV","Mayús: HEX / RGB / HSV");
 
         // Discard-capture confirmation
         Add("dlg.discardTitle","Cancel capture",     "取消截圖",       "キャプチャを中止",     "캡처 취소",        "Annuler la capture","Aufnahme abbrechen","Cancelar captura");

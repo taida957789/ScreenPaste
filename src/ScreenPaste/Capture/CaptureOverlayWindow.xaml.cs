@@ -43,9 +43,6 @@ public partial class CaptureOverlayWindow : Window
     private readonly EditHistory _history = new();
     private bool _suppressStrokeHistory;
 
-    // Configurable editor shortcuts (from settings.json).
-    private KeyGesture? _undoGesture, _redoGesture, _copyGesture, _saveGesture, _quickSaveGesture;
-
     // Blur-drag state
     private bool _blurDragging;
     private Point _blurStart;
@@ -87,7 +84,7 @@ public partial class CaptureOverlayWindow : Window
     private const int MagSrcW = 30, MagSrcH = 22, MagZoom = 6;   // 30×22 px shown at 180×132
     private byte[]? _pixels;                  // cached BGRA snapshot for pixel lookups
     private int _pixStride;
-    private bool _magHex = true;              // Shift toggles hex ⇄ decimal
+    private ColorFormatKind _magFormat = ColorFormatKind.Hex;   // a Shift tap cycles HEX → RGB → HSV
     private Color _magColor;
 
     // Selection-adjust state (editing phase): 8 resize handles + drag-to-move.
@@ -168,12 +165,6 @@ public partial class CaptureOverlayWindow : Window
             if (_customColors.Count >= MaxCustomColors) break;
         }
 
-        _undoGesture = HotkeyGesture.Parse(settings.UndoHotkey);
-        _redoGesture = HotkeyGesture.Parse(settings.RedoHotkey);
-        _copyGesture = HotkeyGesture.Parse(settings.CopyHotkey);
-        _saveGesture = HotkeyGesture.Parse(settings.SaveHotkey);
-        _quickSaveGesture = HotkeyGesture.Parse(settings.QuickSaveHotkey);
-
         ScreenImage.Source = _screenshot;
         ScreenImage.Width = vs.Width;
         ScreenImage.Height = vs.Height;
@@ -185,7 +176,7 @@ public partial class CaptureOverlayWindow : Window
         RootCanvas.MouseMove += RootCanvas_MouseMove;
         RootCanvas.MouseLeftButtonUp += RootCanvas_MouseUp;
         MouseWheel += OnDetectLevelWheel;
-        KeyDown += OnKeyDown;
+        InitKeyboard();
         // A resolution / monitor change (common over RDP) invalidates the frozen
         // screenshot and every cached physical coordinate, so the selection would drift
         // against a screen that no longer matches.
@@ -1407,7 +1398,7 @@ public partial class CaptureOverlayWindow : Window
     // Follows the cursor while framing and while dragging the region handles: a 6×
     // pixel view with a translucent crosshair and a white box on the hovered pixel,
     // plus a readout panel (position, colour, copy/format hints). C copies the colour,
-    // Shift toggles hex ⇄ decimal.
+    // a Shift tap cycles its notation (keys: CaptureOverlayWindow.Keyboard.cs).
 
     private void EnsurePixelCache()
     {
@@ -1463,10 +1454,7 @@ public partial class CaptureOverlayWindow : Window
         Magnifier.Visibility = Visibility.Visible;
     }
 
-    private void RefreshMagColorText() =>
-        MagColor.Text = _magHex
-            ? $"#{_magColor.R:X2}{_magColor.G:X2}{_magColor.B:X2}"
-            : $"RGB({_magColor.R}, {_magColor.G}, {_magColor.B})";
+    private void RefreshMagColorText() => MagColor.Text = ColorFormat.Format(_magColor, _magFormat);
 
     /// <summary>Bottom-right of the cursor by default; flips left/up near screen edges.</summary>
     private void PositionMagnifier(int px, int py)
@@ -1489,7 +1477,7 @@ public partial class CaptureOverlayWindow : Window
     {
         try
         {
-            Clipboard.SetText(MagColor.Text);
+            Clipboard.SetText(ColorFormat.Format(_magColor, _magFormat));
         }
         catch (Exception ex)
         {
@@ -2040,13 +2028,11 @@ public partial class CaptureOverlayWindow : Window
 
         // Let the box receive typing (InteractionLayer would otherwise eat clicks).
         InteractionLayer.IsHitTestVisible = false;
+        // The overlay turns the IME off so shortcut letters arrive as keys; typing a
+        // Chinese/Japanese annotation needs it back on here.
+        InputMethod.SetIsInputMethodEnabled(box, true);
 
-        box.PreviewKeyDown += (_, e) =>
-        {
-            if (e.Key == Key.Escape) { CommitActiveText(discardIfEmpty: true); e.Handled = true; }
-            else if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Shift) == 0)
-            { CommitActiveText(discardIfEmpty: true); e.Handled = true; }
-        };
+        // Esc and Enter (not Shift+Enter) commit through the overlay's key router.
         // NOTE: no commit-on-focus-loss — clicking a toolbar style button must not
         // dismiss the box. It commits on Enter/Esc, a new placement, tool switch, or export.
 
@@ -2219,61 +2205,7 @@ public partial class CaptureOverlayWindow : Window
         _settings.Save();
     }
 
-    // --------------------------------------------------------- keyboard ---
-
-    private void OnKeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Escape)
-        {
-            // A framed-source drag owns the mouse and hides its handles on Deselect, so it
-            // has to be aborted explicitly or it would keep resizing invisibly.
-            if (_phase == Phase.Editing && CancelMagnifySourceDrag()) { e.Handled = true; return; }
-
-            // Snipaste-style: Esc clears the selection first, then LEAVES the capture
-            // (confirming when annotations would be lost) — no reselect step.
-            if (_phase == Phase.Editing && _selected != null) Deselect();
-            else if (_phase == Phase.Editing) ConfirmCancel();
-            else Cancel();
-            e.Handled = true;
-            return;
-        }
-
-        // Magnifier keys (framing, or mid-drag while adjusting the region).
-        if (Magnifier.Visibility == Visibility.Visible && _editingText == null)
-        {
-            if (e.Key == Key.C && Keyboard.Modifiers == ModifierKeys.None)
-            {
-                CopyMagColor();
-                e.Handled = true;
-                return;
-            }
-            if (e.Key is Key.LeftShift or Key.RightShift && !e.IsRepeat)
-            {
-                _magHex = !_magHex;
-                RefreshMagColorText();
-                e.Handled = true;
-                return;
-            }
-        }
-
-        if (_phase != Phase.Editing) return;
-
-        if (e.Key == Key.Delete && _selected != null && _editingText == null)
-        {
-            DeleteSelected();
-            e.Handled = true;
-            return;
-        }
-
-        // Shortcuts are user-configurable in settings.json (parsed into KeyGestures).
-        if (Matches(_quickSaveGesture, e)) { DoQuickSave(); e.Handled = true; }
-        else if (Matches(_undoGesture, e)) { _history.Undo(); e.Handled = true; }
-        else if (Matches(_redoGesture, e)) { _history.Redo(); e.Handled = true; }
-        else if (Matches(_copyGesture, e)) { DoCopy(); e.Handled = true; }
-        else if (Matches(_saveGesture, e)) { DoSave(); e.Handled = true; }
-    }
-
-    private bool Matches(KeyGesture? g, KeyEventArgs e) => g != null && g.Matches(this, e);
+    // ---------------------------------------------------------- history ---
 
     private void UpdateHistoryButtons()
     {
