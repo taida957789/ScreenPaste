@@ -5,8 +5,8 @@ public readonly record struct PenSizeRange(double Min, double Max, double Step);
 
 /// <summary>
 /// The wheel, 1 / 2 and [ / ] make the current tool thinner or thicker: the pen width, the
-/// font size for text, the strength for blur and the border for a magnifier, each within its
-/// toolbar slider's range. The wheel on a colour swatch steps the colour's opacity the same
+/// font size for text, the strength for blur, the border for a magnifier, the circle for a
+/// number marker and the eraser's size, each within its toolbar slider's range. The wheel on a colour swatch steps the colour's opacity the same
 /// way. A value the slider was dragged to lands on the step grid on its first step.
 /// </summary>
 public static class PenSizeStep
@@ -27,6 +27,8 @@ public static class PenSizeStep
         ToolKind.Text => new PenSizeRange(10, 96, 2),
         ToolKind.Blur => new PenSizeRange(2, 40, 2),
         ToolKind.Magnify => new PenSizeRange(0, 12, 1),
+        ToolKind.Number => new PenSizeRange(16, 64, 2),
+        ToolKind.Eraser => new PenSizeRange(4, 60, 2),
         _ => null,
     };
 

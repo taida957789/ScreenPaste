@@ -58,6 +58,14 @@ public sealed class AppSettings
     public string ShapeColor { get; set; } = "#FFFF3B30"; // red
     public double ShapeWidth { get; set; } = 3;
 
+    // ---- Number marker defaults ----
+    // 序號標記：圓的直徑（顏色沿用形狀顏色）
+    public double NumberSize { get; set; } = 28;
+
+    // ---- Eraser defaults ----
+    // 橡皮擦的大小（直徑）
+    public double EraserWidth { get; set; } = 16;
+
     // ---- Magnifier ("local zoom") defaults ----
     // 局部放大：框出來源區域，旁邊以放大鏡顯示放大後的內容
     public string MagnifyShape { get; set; } = "RoundedRectangle";  // Rectangle | RoundedRectangle | Ellipse

@@ -6,9 +6,10 @@ namespace ScreenPaste.Tests;
 
 /// <summary>
 /// The capture overlay's one right-click rule, Snipaste-style: each click undoes the
-/// innermost thing in progress. Framing: cancel the drag, else leave. Editing: end the
-/// text, deselect, drop the tool, then discard the area and frame again (asking first
-/// when annotations would be lost). A fill tool marks areas instead of finishing.
+/// innermost thing in progress. Framing: cancel the drag, else leave. Editing: finish the
+/// line strip, end the text, deselect, drop the tool, then discard the area and frame again
+/// (asking first when annotations would be lost). A fill tool (shape, blur, eraser) marks
+/// areas instead of finishing.
 /// </summary>
 public sealed class RightClickPolicyTests
 {
@@ -59,6 +60,34 @@ public sealed class RightClickPolicyTests
     }
 
     [Fact]
+    public void Editing_WhileDrawingALineStrip_FinishesIt()
+    {
+        var ctx = Editing() with
+        {
+            LineStripActive = true, Tool = ToolKind.Line, HasSelection = true, HasAnnotations = true,
+            AutoDetectAvailable = true,
+        };
+
+        Assert.Equal(RightClickAction.FinishLineStrip, RightClickPolicy.Decide(ctx));
+    }
+
+    [Fact]
+    public void Editing_WhileDrawingALineStrip_OutsideTheRegion_StillFinishesIt()
+    {
+        var ctx = Editing() with { LineStripActive = true, Tool = ToolKind.Line, InsideRegion = false };
+
+        Assert.Equal(RightClickAction.FinishLineStrip, RightClickPolicy.Decide(ctx));
+    }
+
+    [Fact]
+    public void Editing_MidDrag_LeavesALineStripToTheDrag()
+    {
+        var ctx = Editing() with { LineStripActive = true, Dragging = true };
+
+        Assert.Equal(RightClickAction.None, RightClickPolicy.Decide(ctx));
+    }
+
+    [Fact]
     public void Editing_WhileTyping_CommitsTheTextFirst()
     {
         var ctx = Editing() with
@@ -103,6 +132,7 @@ public sealed class RightClickPolicyTests
     [InlineData(ToolKind.Line)]
     [InlineData(ToolKind.Sticker)]
     [InlineData(ToolKind.Magnify)]
+    [InlineData(ToolKind.Number)]
     public void Editing_WithAToolActive_DropsBackToMoveMode(ToolKind tool)
     {
         var ctx = Editing() with { Tool = tool, HasAnnotations = true, AutoDetectAvailable = true };
@@ -137,6 +167,7 @@ public sealed class RightClickPolicyTests
     [Theory]
     [InlineData(ToolKind.Shape)]
     [InlineData(ToolKind.Blur)]
+    [InlineData(ToolKind.Eraser)]
     public void Editing_AFillToolOutsideTheRegion_MarksTheWholeArea(ToolKind tool)
     {
         var ctx = Editing() with { Tool = tool, InsideRegion = false, HasSelection = true };
@@ -147,6 +178,7 @@ public sealed class RightClickPolicyTests
     [Theory]
     [InlineData(ToolKind.Shape)]
     [InlineData(ToolKind.Blur)]
+    [InlineData(ToolKind.Eraser)]
     public void Editing_AFillToolInsideTheRegion_MarksTheElementUnderTheCursor(ToolKind tool)
     {
         var ctx = Editing() with { Tool = tool, AutoDetectAvailable = true, HasSelection = true };
@@ -175,6 +207,8 @@ public sealed class RightClickPolicyTests
     [Theory]
     [InlineData(ToolKind.Shape, true)]
     [InlineData(ToolKind.Blur, true)]
+    [InlineData(ToolKind.Eraser, true)]
+    [InlineData(ToolKind.Number, false)]
     [InlineData(ToolKind.None, false)]
     [InlineData(ToolKind.MarkerPen, false)]
     [InlineData(ToolKind.Line, false)]

@@ -121,6 +121,7 @@ public partial class CaptureOverlayWindow
     private BitmapSource Flatten()
     {
         CommitActiveText(discardIfEmpty: true);
+        FinishLineStrip();
         InvalidateSampledLayers();   // make sure every region reflects the final annotation stack
         // Re-sampling assigns new bitmaps to the blur/magnifier images, which invalidates
         // their layout; RenderTargetBitmap draws whatever was last *arranged*, so flush the
@@ -263,6 +264,8 @@ public partial class CaptureOverlayWindow
         _settings.ShapeFilled = _shapeFilled;
         _settings.ShapeColor = ToHex(_shapeColor);
         _settings.ShapeWidth = _shapeWidth;
+        _settings.NumberSize = _numberSize;
+        _settings.EraserWidth = _eraserWidth;
         _settings.LineWidth = _lineWidth;
         _settings.LineColor = ToHex(_lineColor);
         _settings.LineArrowStart = _lineArrowStart;

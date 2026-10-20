@@ -14,8 +14,8 @@ using ScreenPaste.Settings;
 namespace ScreenPaste.Capture;
 
 /// <summary>
-/// The annotation tools' state, and Snipaste's keys for them. T / B / M and Ctrl+0..9 pick a
-/// tool, Ctrl+Tab cycles through the toolbar, Tab flips the tool's variant (rectangle / rounded
+/// The annotation tools' state, and Snipaste's keys for them. T / B / M / E and Ctrl+0..9 pick
+/// a tool, Ctrl+Tab cycles through the toolbar, Tab flips the tool's variant (rectangle / rounded
 /// / ellipse, line / arrow, Gaussian / mosaic), and the wheel, 1 / 2 or [ / ] step its width,
 /// the font size for text (<see cref="ToolShortcuts"/>, <see cref="PenSizeStep"/>).
 ///
@@ -26,7 +26,8 @@ namespace ScreenPaste.Capture;
 /// the wheel on a colour swatch steps the colour's opacity, and a middle-click in the text box
 /// pastes the clipboard's text.
 ///
-/// Split out of the main code-behind, which still draws with each tool; which key does what is
+/// Split out of the main code-behind, which still draws with most tools (the line, number and
+/// eraser tools and annotation copies have partials of their own); which key does what is
 /// <see cref="OverlayKeyRouter"/>'s.
 /// </summary>
 public partial class CaptureOverlayWindow
@@ -54,6 +55,13 @@ public partial class CaptureOverlayWindow
         PreviewMouseDown += (_, _) => CommitAnnotationNudge();
         Deactivated += (_, _) => CommitAnnotationNudge();
         Closed += (_, _) => _loupeFlash?.Stop();
+
+        // Registered before the main code-behind's EditLayer handlers, so each of these can
+        // claim a press first: the eraser, an open line strip, a Ctrl+drag copy.
+        InitNumber();
+        InitEraser();
+        InitLineStrip();
+        InitClone();
     }
 
     // ---------------------------------------------------------- tool state ---
@@ -61,6 +69,7 @@ public partial class CaptureOverlayWindow
     private void SelectTool(ToolKind kind)
     {
         if (_editingText != null && kind != ToolKind.Text) CommitActiveText(discardIfEmpty: true);
+        FinishLineStrip();
         _tool = kind;
 
         foreach (var b in _toolButtons)
@@ -77,7 +86,9 @@ public partial class CaptureOverlayWindow
         bool isLine = kind is ToolKind.Line;
         bool isSticker = kind is ToolKind.Sticker;
         bool isMagnify = kind is ToolKind.Magnify;
-        // Selection survives tool switches — grabbing works with every tool.
+        bool isNumber = kind is ToolKind.Number;
+        bool isEraser = kind is ToolKind.Eraser;
+        // Selection survives tool switches — grabbing works with every tool but the eraser.
 
         _penOptionsPanel.Visibility = isPen ? Visibility.Visible : Visibility.Collapsed;
         _blurOptionsPanel.Visibility = isBlur ? Visibility.Visible : Visibility.Collapsed;
@@ -86,14 +97,18 @@ public partial class CaptureOverlayWindow
         _lineOptionsPanel.Visibility = isLine ? Visibility.Visible : Visibility.Collapsed;
         _stickerOptionsPanel.Visibility = isSticker ? Visibility.Visible : Visibility.Collapsed;
         _magnifyOptionsPanel.Visibility = isMagnify ? Visibility.Visible : Visibility.Collapsed;
+        _numberOptionsPanel.Visibility = isNumber ? Visibility.Visible : Visibility.Collapsed;
+        _eraserOptionsPanel.Visibility = isEraser ? Visibility.Visible : Visibility.Collapsed;
+        if (!isEraser) HideEraserRing();
 
         Ink.EditingMode = isPen ? InkCanvasEditingMode.Ink : InkCanvasEditingMode.None;
         Ink.IsHitTestVisible = isPen;
         // Region tools capture via InteractionLayer; with no tool it catches drags that
         // move the whole selection; sticker mode lets clicks reach the sticker images
         // below so they can be dragged/resized. (Annotation grabbing is handled earlier
-        // by the tunneling EditLayer handlers, for every tool.)
-        InteractionLayer.IsHitTestVisible = isBlur || isText || isShape || isLine || isNone || isMagnify;
+        // by the tunneling EditLayer handlers, for every tool; so is the eraser's drag, which
+        // needs the layer only so that a press on empty space reaches EditLayer.)
+        InteractionLayer.IsHitTestVisible = isBlur || isText || isShape || isLine || isNone || isMagnify || isNumber || isEraser;
         InteractionLayer.Cursor = DefaultInteractionCursor();
 
         if (isPen) LoadPenControls();
@@ -106,9 +121,14 @@ public partial class CaptureOverlayWindow
     }
 
     /// <summary>With no tool, dragging the interaction layer moves the whole selection; every
-    /// other tool draws with it. Hover feedback overrides this while something is grabbable.</summary>
-    private Cursor DefaultInteractionCursor() =>
-        _tool == ToolKind.None ? Cursors.SizeAll : Cursors.Arrow;
+    /// other tool draws with it (the eraser's ring sits on a cross). Hover feedback overrides
+    /// this while something is grabbable.</summary>
+    private Cursor DefaultInteractionCursor() => _tool switch
+    {
+        ToolKind.None => Cursors.SizeAll,
+        ToolKind.Eraser => Cursors.Cross,
+        _ => Cursors.Arrow,
+    };
 
     private void SelectBlurKind(BlurKind kind)
     {
@@ -164,7 +184,7 @@ public partial class CaptureOverlayWindow
     private void OnColorPicked(Color c)
     {
         if (_tool == ToolKind.Text) { _textColor = Color.FromArgb(_textColor.A, c.R, c.G, c.B); ApplyTextStyle(); RefocusText(); }
-        else if (_tool == ToolKind.Shape) { _shapeColor = Color.FromArgb(_shapeColor.A, c.R, c.G, c.B); }
+        else if (_tool is ToolKind.Shape or ToolKind.Number) { _shapeColor = Color.FromArgb(_shapeColor.A, c.R, c.G, c.B); }
         else if (_tool == ToolKind.Line) { _lineColor = Color.FromArgb(_lineColor.A, c.R, c.G, c.B); }
         else if (_tool == ToolKind.Magnify) { _magnifyBorderColor = Color.FromArgb(_magnifyBorderColor.A, c.R, c.G, c.B); }
         else
@@ -199,6 +219,11 @@ public partial class CaptureOverlayWindow
             case OverlayCommand.PenSizeUp: StepPenSize(1); return true;
             case OverlayCommand.PickColor: PickScreenColor(); return true;
             case OverlayCommand.ClearAll: ClearAllAnnotations(); return true;
+            case OverlayCommand.NumberDown: StepNextNumber(-1); return true;
+            case OverlayCommand.NumberUp: StepNextNumber(1); return true;
+            case OverlayCommand.CopyAnnotation: CopySelectedAnnotation(); return true;
+            case OverlayCommand.PasteAnnotation: PasteCopiedAnnotation(); return true;
+            case OverlayCommand.FinishLineStrip: FinishLineStrip(); return true;
             default: return false;   // None, PassThrough, and rows not wired up yet
         }
     }
@@ -220,6 +245,7 @@ public partial class CaptureOverlayWindow
             case ToolKind.Blur: SelectBlurKind(ToolShortcuts.NextBlurKind(_blurKind)); break;
             case ToolKind.Magnify: SelectMagnifyShape(ToolShortcuts.NextShapeKind(_magnifyShape)); break;
         }
+        RefreshLineStrip();   // an open strip shows its new arrowhead at once
     }
 
     /// <summary>"Marker (Ctrl+3, B)", plus the Tab hint for a tool with variants.</summary>
@@ -230,6 +256,8 @@ public partial class CaptureOverlayWindow
         if (keys.Length > 0) tip += " (" + keys + ")";
         if (ToolShortcuts.HasVariant(kind)) tip += " · " + Loc.T("tool.tabVariant");
         if (kind == ToolKind.Magnify) tip += " - " + Loc.T("magnify.hint");
+        if (kind == ToolKind.Line) tip += " - " + Loc.T("line.stripHint");
+        if (kind == ToolKind.Number) tip += " - " + Loc.T("number.hint");
         return tip;
     }
 
@@ -243,6 +271,8 @@ public partial class CaptureOverlayWindow
         ToolKind.Sticker => Loc.T("tool.sticker"),
         ToolKind.Blur => Loc.T("tool.blur"),
         ToolKind.Magnify => Loc.T("tool.magnify"),
+        ToolKind.Number => Loc.T("tool.number"),
+        ToolKind.Eraser => Loc.T("tool.eraser"),
         _ => kind.ToString(),
     };
 
@@ -256,6 +286,7 @@ public partial class CaptureOverlayWindow
         if (WidthControl(_tool) is not { } control) return;   // a tool without a width
         control.Slider.Value = PenSizeStep.Next(_tool, control.Slider.Value, direction);
         FlashSizeNote($"{control.Label} {control.Slider.Value:0}");
+        RefreshLineStrip();   // an open strip shows its new width at once
     }
 
     private (Slider Slider, string Label)? WidthControl(ToolKind tool) => tool switch
@@ -266,6 +297,8 @@ public partial class CaptureOverlayWindow
         ToolKind.Text => (_textSizeSlider, Loc.T("lbl.size")),
         ToolKind.Blur => (_blurSlider, Loc.T("lbl.blurStrength")),
         ToolKind.Magnify => (_magnifyBorderSlider, Loc.T("lbl.border")),
+        ToolKind.Number => (_numberSizeSlider, Loc.T("lbl.size")),
+        ToolKind.Eraser => (_eraserWidthSlider, Loc.T("lbl.width")),
         _ => null,
     };
 
@@ -340,7 +373,8 @@ public partial class CaptureOverlayWindow
                 ApplyTextStyle();
                 opacity = _textColor.A / 255.0;
                 break;
-            case ToolKind.Shape: _shapeColor = StepAlpha(_shapeColor, direction); opacity = _shapeColor.A / 255.0; break;
+            case ToolKind.Shape:
+            case ToolKind.Number: _shapeColor = StepAlpha(_shapeColor, direction); opacity = _shapeColor.A / 255.0; break;
             case ToolKind.Line: _lineColor = StepAlpha(_lineColor, direction); opacity = _lineColor.A / 255.0; break;
             case ToolKind.Magnify:
                 _magnifyBorderColor = StepAlpha(_magnifyBorderColor, direction);
@@ -518,8 +552,9 @@ public partial class CaptureOverlayWindow
 
     // ------------------------------------------------------- clear, paste ---
 
-    /// <summary>Ctrl+Shift+Z: remove every annotation and ink stroke as a single undo step, so
-    /// a slip costs one Ctrl+Z. Text being typed is finished first.</summary>
+    /// <summary>Ctrl+Shift+Z (or a right-click outside the region with the eraser): remove
+    /// every annotation and ink stroke as a single undo step, so a slip costs one Ctrl+Z. Text
+    /// being typed is finished first, and the number markers start again from 1.</summary>
     private void ClearAllAnnotations()
     {
         CommitActiveText(discardIfEmpty: true);
@@ -530,6 +565,7 @@ public partial class CaptureOverlayWindow
             .Select(host => (Host: host, Children: host.Children.Cast<UIElement>().ToArray()))
             .ToArray();
         var strokes = Ink.Strokes.ToArray();
+        var numbers = _numbers;
 
         void Clear()
         {
@@ -538,6 +574,7 @@ public partial class CaptureOverlayWindow
                 foreach (var child in children) host.Children.Remove(child);
             foreach (var stroke in strokes) Ink.Strokes.Remove(stroke);
             _suppressStrokeHistory = false;
+            SetNumbers(NumberSequence.Start);
         }
 
         void Restore()
@@ -549,11 +586,41 @@ public partial class CaptureOverlayWindow
             foreach (var stroke in strokes)
                 if (!Ink.Strokes.Contains(stroke)) Ink.Strokes.Add(stroke);
             _suppressStrokeHistory = false;
+            SetNumbers(numbers);
         }
 
         Clear();
         _history.Push(undo: Restore, redo: Clear);
     }
+
+    // ------------------------------------------------------------ shared helpers ---
+
+    /// <summary>Record an annotation just added to <paramref name="host"/> as one undo step;
+    /// redo puts it back at the same depth. <paramref name="undone"/> / <paramref name="redone"/>
+    /// run once it is taken out / put back (the number marker's counter).</summary>
+    private void RecordAdded(Canvas host, UIElement element, Action? undone = null, Action? redone = null)
+    {
+        int index = host.Children.IndexOf(element);
+        _history.Push(
+            undo: () =>
+            {
+                host.Children.Remove(element);
+                undone?.Invoke();
+            },
+            redo: () =>
+            {
+                if (!host.Children.Contains(element))
+                    host.Children.Insert(Math.Clamp(index, 0, host.Children.Count), element);
+                redone?.Invoke();
+            });
+    }
+
+    /// <summary>Every options row with colour swatches; the number marker's sets the shape colour.</summary>
+    private StackPanel[] SwatchPanels() => new[]
+    {
+        _penOptionsPanel, _textOptionsPanel, _shapeOptionsPanel, _lineOptionsPanel, _magnifyOptionsPanel,
+        _numberOptionsPanel,
+    };
 
     /// <summary>A middle-click in the text being typed pastes the clipboard's text at the caret
     /// (and is never the middle-click output action).</summary>

@@ -767,6 +767,7 @@ public sealed class OverlayKeyRouterTests
     [InlineData(Key.T)]
     [InlineData(Key.B)]
     [InlineData(Key.M)]
+    [InlineData(Key.E)]
     public void ToolLetters_WhileEditing_SwitchTheTool(Key key)
     {
         Assert.Equal(OverlayCommand.SelectToolByLetter, Router.Route(Editing(key)));
@@ -962,5 +963,138 @@ public sealed class OverlayKeyRouterTests
     public void OtherText_IsNotAShortcut(string text)
     {
         Assert.Equal(OverlayCommand.None, Router.RouteText(text, Editing(Key.None)));
+    }
+
+    // ---------------------------------------------------------------- number marker ---
+
+    private static OverlayKeyContext Numbering() => Editing(Key.None) with { Tool = ToolKind.Number };
+
+    [Theory]
+    [InlineData("+", OverlayCommand.NumberUp)]
+    [InlineData("=", OverlayCommand.NumberUp)]
+    [InlineData("-", OverlayCommand.NumberDown)]
+    public void PlusAndMinus_WithTheNumberTool_ChangeTheNextNumber(string text, OverlayCommand expected)
+    {
+        Assert.Equal(expected, Router.RouteText(text, Numbering()));
+    }
+
+    [Theory]
+    [InlineData(Shift)]       // + over = on a US keyboard
+    [InlineData(Ctrl | Alt)]  // AltGr
+    public void PlusAndMinus_MatchByCharacter_WhateverModifiersTypedThem(ModifierKeys modifiers)
+    {
+        Assert.Equal(OverlayCommand.NumberUp, Router.RouteText("+", Numbering() with { Modifiers = modifiers }));
+    }
+
+    [Theory]
+    [InlineData(ToolKind.Shape)]
+    [InlineData(ToolKind.None)]
+    public void PlusAndMinus_WithAnotherTool_DoNothing(ToolKind tool)
+    {
+        Assert.Equal(OverlayCommand.None, Router.RouteText("+", Editing(Key.None) with { Tool = tool }));
+    }
+
+    [Fact]
+    public void PlusAndMinus_WhileTypingSelectingOrMidDrag_AreNotTheNumberKeys()
+    {
+        Assert.Equal(OverlayCommand.PassThrough, Router.RouteText("+", Numbering() with { TextBoxActive = true }));
+        Assert.Equal(OverlayCommand.None, Router.RouteText("+", Numbering() with { Phase = OverlayPhase.Selecting }));
+        Assert.Equal(OverlayCommand.None, Router.RouteText("-", Numbering() with { Dragging = true }));
+    }
+
+    [Fact]
+    public void Brackets_WithTheNumberTool_StillStepItsSize()
+    {
+        Assert.Equal(OverlayCommand.PenSizeUp, Router.RouteText("]", Numbering()));
+    }
+
+    // ---------------------------------------------------------------- annotation copy ---
+
+    [Fact]
+    public void CtrlShiftC_WithAnAnnotationSelected_CopiesIt()
+    {
+        var ctx = Editing(Key.C, Ctrl | Shift) with { HasSelection = true };
+
+        Assert.Equal(OverlayCommand.CopyAnnotation, Router.Route(ctx));
+    }
+
+    [Fact]
+    public void CtrlShiftC_WithNothingSelected_DoesNothing()
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.C, Ctrl | Shift)));
+    }
+
+    [Fact]
+    public void CtrlShiftV_PastesTheCopiedAnnotation()
+    {
+        Assert.Equal(OverlayCommand.PasteAnnotation, Router.Route(Editing(Key.V, Ctrl | Shift)));
+    }
+
+    [Fact]
+    public void AnnotationCopyAndPaste_WhileSelectingTypingOrMidDrag_DoNothing()
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(Selecting(Key.V, Ctrl | Shift)));
+        Assert.Equal(OverlayCommand.PassThrough, Router.Route(Typing(Key.V, Ctrl | Shift)));
+        Assert.Equal(OverlayCommand.PassThrough, Router.Route(Typing(Key.C, Ctrl | Shift) with { TextBoxDeclined = true }));
+        Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.C, Ctrl | Shift) with { HasSelection = true, Dragging = true }));
+    }
+
+    [Fact]
+    public void CtrlC_AndCtrlV_AreNotTheAnnotationCopy()
+    {
+        var ctx = Editing(Key.C, Ctrl) with { HasSelection = true };
+
+        Assert.Equal(OverlayCommand.Copy, Router.Route(ctx));
+        Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.V, Ctrl)));
+    }
+
+    [Fact]
+    public void AGestureBoundToCtrlShiftC_WinsOverTheAnnotationCopy()
+    {
+        var bindings = OverlayKeyBindings.FromSettings(new AppSettings()) with { Copy = new KeyChord(Key.C, Ctrl | Shift) };
+        var ctx = Editing(Key.C, Ctrl | Shift) with { HasSelection = true };
+
+        Assert.Equal(OverlayCommand.Copy, new OverlayKeyRouter(bindings).Route(ctx));
+    }
+
+    // ---------------------------------------------------------------- line strip ---
+
+    private static OverlayKeyContext Stripping(Key key, ModifierKeys modifiers = None) =>
+        Editing(key, modifiers) with { Tool = ToolKind.Line, LineStripActive = true };
+
+    [Fact]
+    public void Esc_WhileDrawingALineStrip_FinishesIt_BeforeDeselecting()
+    {
+        var ctx = Stripping(Key.Escape) with { HasSelection = true };
+
+        Assert.Equal(OverlayCommand.FinishLineStrip, Router.Route(ctx));
+    }
+
+    [Fact]
+    public void Enter_WhileDrawingALineStrip_FinishesIt_NotTheEnterAction()
+    {
+        Assert.Equal(OverlayCommand.FinishLineStrip, Router.Route(Stripping(Key.Enter)));
+    }
+
+    [Fact]
+    public void ChordedEnter_WhileDrawingALineStrip_DoesNotFinishIt()
+    {
+        Assert.NotEqual(OverlayCommand.FinishLineStrip, Router.Route(Stripping(Key.Enter, Ctrl)));
+    }
+
+    [Fact]
+    public void OtherKeys_WhileDrawingALineStrip_KeepTheirMeaning()
+    {
+        Assert.Equal(OverlayCommand.Undo, Router.Route(Stripping(Key.Z, Ctrl)));
+        Assert.Equal(OverlayCommand.ToggleToolVariant, Router.Route(Stripping(Key.Tab)));
+    }
+
+    [Fact]
+    public void EscAndEnter_WithoutALineStrip_AreUnchanged()
+    {
+        var line = Editing(Key.Escape) with { Tool = ToolKind.Line };
+
+        Assert.Equal(OverlayCommand.ConfirmClose, Router.Route(line));
+        Assert.Equal(OverlayCommand.RunEnterAction, Router.Route(line with { Key = Key.Enter }));
     }
 }

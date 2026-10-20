@@ -73,6 +73,7 @@ public enum OverlayCommand
     NumberUp,            // + (number tool)
     CopyAnnotation,      // Ctrl+Shift+C
     PasteAnnotation,     // Ctrl+Shift+V
+    FinishLineStrip,     // Esc or Enter while clicking out a line strip
 
     // ---- Snip context
     ToggleCursor,        // ` or !
@@ -111,6 +112,8 @@ public readonly record struct OverlayKeyContext
     public bool HasDetectedArea { get; init; }
     /// <summary>Editing: the active annotation tool (None: moving the region).</summary>
     public ToolKind Tool { get; init; }
+    /// <summary>Editing: the line tool is clicking out a strip.</summary>
+    public bool LineStripActive { get; init; }
 }
 
 /// <summary>The user-configurable gestures (settings.json); null means unbound. Read with
@@ -142,7 +145,7 @@ public sealed class OverlayKeyRouter
     // and would skip instrumenting the whole app.
     private static readonly ModifierKeys ChordModifiers = ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Windows;
     private static readonly ModifierKeys CopyAsFileModifiers = ModifierKeys.Control | ModifierKeys.Alt;
-    private static readonly ModifierKeys TabBackModifiers = ModifierKeys.Control | ModifierKeys.Shift;
+    private static readonly ModifierKeys CtrlShiftModifiers = ModifierKeys.Control | ModifierKeys.Shift;
 
     private readonly OverlayKeyBindings _bindings;
 
@@ -159,6 +162,9 @@ public sealed class OverlayKeyRouter
 
         if (ctx.Phase != OverlayPhase.Editing) return RouteSelecting(ctx);
 
+        // Enter ends a line strip (as Esc does) before anything else it could mean.
+        if (ctx.LineStripActive && ctx.Key == Key.Enter && ctx.Modifiers == ModifierKeys.None)
+            return OverlayCommand.FinishLineStrip;
         if (ctx.Key == Key.Delete && ctx.HasSelection) return OverlayCommand.DeleteSelected;
         var gesture = RouteGesture(ctx);
         return gesture != OverlayCommand.None ? gesture : RouteEditing(ctx);
@@ -175,13 +181,19 @@ public sealed class OverlayKeyRouter
 
     /// <summary>
     /// A typed character (TextInput), for the keys whose place depends on the keyboard layout:
-    /// [ and ] step the pen size while editing, whatever modifiers typed them (AltGr on many
-    /// European layouts). Only characters no key-down claimed arrive here.
+    /// [ and ] step the pen size while editing, and + and - change the number marker's next
+    /// number, whatever modifiers typed them (Shift, or AltGr on many European layouts). Only
+    /// characters no key-down claimed arrive here.
     /// </summary>
     public OverlayCommand RouteText(string text, OverlayKeyContext ctx)
     {
         if (ctx.DropDownOpen || ctx.TextBoxActive) return OverlayCommand.PassThrough;
         if (ctx.Phase != OverlayPhase.Editing || ctx.Dragging) return OverlayCommand.None;
+        if (ctx.Tool == ToolKind.Number)
+        {
+            int step = ToolShortcuts.NumberStepDirection(text);
+            if (step != 0) return step > 0 ? OverlayCommand.NumberUp : OverlayCommand.NumberDown;
+        }
         return PenSize(ToolShortcuts.PenSizeDirection(text));
     }
 
@@ -222,10 +234,11 @@ public sealed class OverlayKeyRouter
     }
 
     /// <summary>
-    /// The annotation tool keys (<see cref="ToolShortcuts"/>): T/B/M pick a tool, Ctrl+digit
+    /// The annotation tool keys (<see cref="ToolShortcuts"/>): T/B/M/E pick a tool, Ctrl+digit
     /// picks one by Snipaste's meaning, Ctrl+Tab and Ctrl+Shift+Tab cycle, Tab flips the
-    /// current tool's variant (otherwise it still moves the focus), 1/2 step the width and
-    /// Alt+C picks the colour under the cursor.
+    /// current tool's variant (otherwise it still moves the focus), 1/2 step the width, Alt+C
+    /// picks the colour under the cursor, and Ctrl+Shift+C / Ctrl+Shift+V copy the selected
+    /// annotation and paste a copy of it.
     /// </summary>
     private static OverlayCommand RouteTool(OverlayKeyContext ctx)
     {
@@ -242,7 +255,13 @@ public sealed class OverlayKeyRouter
             if (ctx.Key == Key.Tab) return OverlayCommand.NextTool;
             return OverlayCommand.None;
         }
-        if (ctx.Key == Key.Tab && ctx.Modifiers == TabBackModifiers) return OverlayCommand.PreviousTool;
+        if (ctx.Modifiers == CtrlShiftModifiers)
+        {
+            if (ctx.Key == Key.Tab) return OverlayCommand.PreviousTool;
+            if (ctx.Key == Key.C) return ctx.HasSelection ? OverlayCommand.CopyAnnotation : OverlayCommand.None;
+            if (ctx.Key == Key.V) return OverlayCommand.PasteAnnotation;
+            return OverlayCommand.None;
+        }
         if (ctx.Key == Key.C && ctx.Modifiers == ModifierKeys.Alt) return OverlayCommand.PickColor;
         return OverlayCommand.None;
     }
@@ -320,14 +339,15 @@ public sealed class OverlayKeyRouter
         return gesture == OverlayCommand.None ? OverlayCommand.PassThrough : gesture;
     }
 
-    /// <summary>Snipaste-style: cancel a framed-source drag, then clear the selection, then
-    /// leave the capture (confirming when editing), with no reselect step. Selecting leaves
-    /// at once. The drag goes first because it owns the mouse and Deselect hides its
-    /// handles, so it would otherwise keep resizing invisibly.</summary>
+    /// <summary>Snipaste-style: cancel a framed-source drag, then finish a line strip, then
+    /// clear the selection, then leave the capture (confirming when editing), with no
+    /// reselect step. Selecting leaves at once. The drag goes first because it owns the mouse
+    /// and Deselect hides its handles, so it would otherwise keep resizing invisibly.</summary>
     private static OverlayCommand RouteEscape(OverlayKeyContext ctx)
     {
         if (ctx.Phase == OverlayPhase.Selecting) return OverlayCommand.Close;
         if (ctx.FramedSourceDragging) return OverlayCommand.CancelFramedDrag;
+        if (ctx.LineStripActive) return OverlayCommand.FinishLineStrip;
         if (ctx.HasSelection) return OverlayCommand.Deselect;
         return OverlayCommand.ConfirmClose;
     }

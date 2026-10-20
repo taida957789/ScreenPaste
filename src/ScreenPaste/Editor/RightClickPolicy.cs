@@ -13,9 +13,11 @@ public enum RightClickAction
     CommitText,
     /// <summary>Clear the annotation selection.</summary>
     Deselect,
+    /// <summary>Finish the line strip being clicked out.</summary>
+    FinishLineStrip,
     /// <summary>Finish the tool: back to move mode (no tool).</summary>
     DropTool,
-    /// <summary>A fill tool marks the UI element under the cursor.</summary>
+    /// <summary>A fill tool marks (the eraser: clears) the UI element under the cursor.</summary>
     AutoMarkElement,
     /// <summary>A fill tool, clicked outside the region, marks all of it.</summary>
     MarkWholeArea,
@@ -35,6 +37,8 @@ public readonly record struct RightClickContext
     public bool Dragging { get; init; }
     /// <summary>A text annotation is being typed.</summary>
     public bool TextActive { get; init; }
+    /// <summary>The line tool is clicking out a strip.</summary>
+    public bool LineStripActive { get; init; }
     /// <summary>An annotation is selected.</summary>
     public bool HasSelection { get; init; }
     public ToolKind Tool { get; init; }
@@ -48,9 +52,9 @@ public readonly record struct RightClickContext
 
 /// <summary>
 /// The capture overlay's one right-click rule, Snipaste-style: each click undoes the
-/// innermost thing in progress. Framing, it cancels the drag, else leaves. Editing, it ends
-/// the text, lets a fill tool mark an area, deselects, drops the tool, and finally discards
-/// the region to frame again (asking first when annotations would be lost), so the next
+/// innermost thing in progress. Framing, it cancels the drag, else leaves. Editing, it finishes
+/// a line strip, ends the text, lets a fill tool mark an area, deselects, drops the tool, and
+/// finally discards the region to frame again (asking first when annotations would be lost), so the next
 /// right-click leaves. Pure, so the precedence is unit tested; the window executes it.
 /// </summary>
 public static class RightClickPolicy
@@ -63,6 +67,7 @@ public static class RightClickPolicy
         // The held left button owns the gesture; tearing the region down under it would
         // leave the drag working on a phase that is gone.
         if (ctx.Dragging) return RightClickAction.None;
+        if (ctx.LineStripActive) return RightClickAction.FinishLineStrip;
         if (ctx.TextActive) return RightClickAction.CommitText;
         if (MarksAreas(ctx.Tool))
         {
@@ -75,6 +80,6 @@ public static class RightClickPolicy
     }
 
     /// <summary>The fill-type tools, which a right-click turns into a whole-area or
-    /// element mark rather than finishing.</summary>
-    public static bool MarksAreas(ToolKind tool) => tool is ToolKind.Shape or ToolKind.Blur;
+    /// element mark rather than finishing; the eraser clears that area instead.</summary>
+    public static bool MarksAreas(ToolKind tool) => tool is ToolKind.Shape or ToolKind.Blur or ToolKind.Eraser;
 }

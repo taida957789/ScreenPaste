@@ -4,16 +4,16 @@ using ScreenPaste.Input;
 namespace ScreenPaste.Editor;
 
 /// <summary>
-/// Snipaste's keys for picking and adjusting the annotation tools: T / B / M choose a tool,
-/// Ctrl+0..9 choose one by Snipaste's meaning (ScreenPaste's toolbar keeps its own order),
-/// Ctrl+Tab cycles through the toolbar, Tab flips the current tool's variant, and 1 / 2 or
-/// [ / ] step its width. Pure, so the maps are unit tested; which context a key works in
+/// Snipaste's keys for picking and adjusting the annotation tools: T / B / M / E choose a
+/// tool, Ctrl+0..9 choose one by Snipaste's meaning (ScreenPaste's toolbar keeps its own
+/// order), Ctrl+Tab cycles through the toolbar, Tab flips the current tool's variant, 1 / 2 or
+/// [ / ] step its width, and + / - change the number marker's next number. Pure, so the maps are unit tested; which context a key works in
 /// is <see cref="ScreenPaste.Capture.OverlayKeyRouter"/>'s.
 /// </summary>
 public static class ToolShortcuts
 {
-    /// <summary>Ctrl+digit, indexed by the digit. None marks a Snipaste tool ScreenPaste
-    /// does not have (7 is Snipaste's number tool, 9 its eraser).</summary>
+    /// <summary>Ctrl+digit, indexed by the digit. None would mark a Snipaste tool ScreenPaste
+    /// does not have.</summary>
     public static readonly IReadOnlyList<ToolKind> SnipasteLayout = new[]
     {
         ToolKind.Sticker,      // Ctrl+0: ScreenPaste's own, Snipaste has no tool here
@@ -23,9 +23,9 @@ public static class ToolShortcuts
         ToolKind.Highlighter,  // Ctrl+4: Snipaste's marker
         ToolKind.Blur,         // Ctrl+5: mosaic / blur
         ToolKind.Text,         // Ctrl+6
-        ToolKind.None,         // Ctrl+7: number
+        ToolKind.Number,       // Ctrl+7: number marker
         ToolKind.Magnify,      // Ctrl+8
-        ToolKind.None,         // Ctrl+9: eraser
+        ToolKind.Eraser,       // Ctrl+9
     };
 
     /// <summary>What Ctrl+Tab steps through: the toolbar order, without the sticker tool,
@@ -33,7 +33,7 @@ public static class ToolShortcuts
     public static readonly IReadOnlyList<ToolKind> CycleOrder = new[]
     {
         ToolKind.MarkerPen, ToolKind.Highlighter, ToolKind.Text, ToolKind.Shape,
-        ToolKind.Line, ToolKind.Blur, ToolKind.Magnify,
+        ToolKind.Line, ToolKind.Blur, ToolKind.Magnify, ToolKind.Number, ToolKind.Eraser,
     };
 
     private static readonly (Key Key, ToolKind Tool)[] Letters =
@@ -41,6 +41,7 @@ public static class ToolShortcuts
         (Key.T, ToolKind.Text),
         (Key.B, ToolKind.MarkerPen),
         (Key.M, ToolKind.Blur),
+        (Key.E, ToolKind.Eraser),
     };
 
     /// <summary>The tool a bare letter picks, or null.</summary>
@@ -111,6 +112,16 @@ public static class ToolShortcuts
     {
         "[" => -1,
         "]" => 1,
+        _ => 0,
+    };
+
+    /// <summary>+1 for a typed "+" (or "=", the same key unshifted on many layouts), -1 for
+    /// "-", else 0: the number marker's next number. Typed characters, since where these keys
+    /// sit depends on the keyboard layout.</summary>
+    public static int NumberStepDirection(string text) => text switch
+    {
+        "+" or "=" => 1,
+        "-" => -1,
         _ => 0,
     };
 

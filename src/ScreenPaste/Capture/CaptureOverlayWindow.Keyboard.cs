@@ -109,9 +109,19 @@ public partial class CaptureOverlayWindow
         Dragging = Mouse.LeftButton == MouseButtonState.Pressed,
         HasDetectedArea = _phase == Phase.Selecting && _detectRect != null,
         Tool = _tool,
+        LineStripActive = _strip != null,
     };
 
     private static bool IsAltKey(Key key) => key is Key.LeftAlt or Key.RightAlt;
+
+    /// <summary>The commands an open line strip survives: nothing at all, the cursor and
+    /// loupe keys, and the line's own width, arrowhead and colour keys and the toolbar toggle,
+    /// whose changes the strip then shows.</summary>
+    private static bool KeepsLineStrip(OverlayCommand command) => command is
+        OverlayCommand.None or OverlayCommand.PassThrough or OverlayCommand.NudgeCursor or
+        OverlayCommand.HoldToMove or OverlayCommand.CopyLoupeColor or OverlayCommand.CycleLoupeFormat or
+        OverlayCommand.PenSizeDown or OverlayCommand.PenSizeUp or OverlayCommand.ToggleToolVariant or
+        OverlayCommand.PickColor or OverlayCommand.ToggleToolbar;
 
     private static bool AnyMouseButtonDown() =>
         Mouse.LeftButton == MouseButtonState.Pressed ||
@@ -122,8 +132,10 @@ public partial class CaptureOverlayWindow
     /// depend on the key itself (direction, auto-repeat) read it from <paramref name="ctx"/>.</summary>
     private bool RunKeyCommand(OverlayCommand command, OverlayKeyContext ctx)
     {
-        // A held arrow's moves become one undo step before anything else can happen.
+        // A held arrow's moves become one undo step before anything else can happen, and an
+        // open line strip is finished before any command that could act on the annotations.
         if (command != OverlayCommand.MoveAnnotation) CommitAnnotationNudge();
+        if (!KeepsLineStrip(command)) FinishLineStrip();
         switch (command)
         {
             case OverlayCommand.ToggleDetectMode: ToggleDetectMode(); return true;

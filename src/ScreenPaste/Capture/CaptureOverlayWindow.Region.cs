@@ -18,8 +18,9 @@ namespace ScreenPaste.Capture;
 /// translate and the ink strokes are transformed by the inverse.
 ///
 /// A right-click undoes the innermost thing in progress (<see cref="RightClickPolicy"/>):
-/// framing, it cancels the drag or leaves; editing, it ends the text, deselects, drops the
-/// tool and finally discards the region to frame again (<see cref="ReturnToSelecting"/>).
+/// framing, it cancels the drag or leaves; editing, it finishes a line strip, ends the text,
+/// lets a fill tool mark an area (CaptureOverlayWindow.Clone.cs), deselects, drops the tool
+/// and finally discards the region to frame again (<see cref="ReturnToSelecting"/>).
 ///
 /// Split out of the main code-behind. The geometry lives in <see cref="HandleGeometry"/>,
 /// <see cref="RegionNudge"/> and <see cref="AxisLock"/>; which key does what is
@@ -157,6 +158,7 @@ public partial class CaptureOverlayWindow
     private void ApplyRegion(Int32Rect r)
     {
         if (r == _selection) return;
+        FinishLineStrip();   // its points are region-local: keep it where it was drawn
 
         int dx = r.X - _selection.X;
         int dy = r.Y - _selection.Y;
@@ -223,27 +225,28 @@ public partial class CaptureOverlayWindow
             Phase = _phase == Phase.Editing ? OverlayPhase.Editing : OverlayPhase.Selecting,
             Dragging = Mouse.LeftButton == MouseButtonState.Pressed,
             TextActive = _editingText != null,
+            LineStripActive = _strip != null,
             HasSelection = _selected != null,
             Tool = _tool,
             HasAnnotations = HasAnnotations(),
             InsideRegion = new Rect(_selection.X, _selection.Y, _selection.Width, _selection.Height).Contains(p),
             AutoDetectAvailable = _elements != null,
         });
-        if (RunRightClick(action)) e.Handled = true;
+        if (RunRightClick(action, p)) e.Handled = true;
     }
 
-    /// <summary>Execute a right-click decision; false leaves the click unhandled.</summary>
-    private bool RunRightClick(RightClickAction action)
+    /// <summary>Execute a right-click decision made at <paramref name="p"/> (RootCanvas px);
+    /// false leaves the click unhandled.</summary>
+    private bool RunRightClick(RightClickAction action, Point p)
     {
         switch (action)
         {
             case RightClickAction.CancelDrag: CancelSelectingDrag(); return true;
+            case RightClickAction.FinishLineStrip: FinishLineStrip(); return true;
             case RightClickAction.CommitText: CommitActiveText(discardIfEmpty: true); return true;
             case RightClickAction.Deselect: Deselect(); return true;
-            // Marking an area with a fill tool is not wired up yet; until it is, the click
-            // finishes the tool like any other.
-            case RightClickAction.AutoMarkElement:
-            case RightClickAction.MarkWholeArea:
+            case RightClickAction.AutoMarkElement: MarkElementAt(p); return true;
+            case RightClickAction.MarkWholeArea: MarkWholeArea(); return true;
             case RightClickAction.DropTool: SelectTool(ToolKind.None); return true;
             case RightClickAction.ConfirmThenReturn:
                 if (ConfirmDiscard(Loc.T("dlg.reselectTitle"), Loc.T("dlg.reselectMsg"), Loc.T("dlg.reselectYes")))
@@ -264,6 +267,8 @@ public partial class CaptureOverlayWindow
     {
         Deselect();
         _editingText = null;   // its box goes with TextHost below
+        DiscardLineStrip();    // and an open strip's preview with ShapeHost
+        SetNumbers(NumberSequence.Start);
         Ink.Strokes.Clear();
         foreach (var host in AnnotationHosts()) host.Children.Clear();
 

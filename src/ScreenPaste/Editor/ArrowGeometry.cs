@@ -38,6 +38,51 @@ public static class ArrowGeometry
         return group;
     }
 
+    /// <summary>
+    /// A line strip (<see cref="PolylineBuilder"/>) with optional filled arrowheads at its two
+    /// ends only, each sized and aimed by its end segment as <see cref="Build"/> sizes a single
+    /// line's. Two points draw exactly what <see cref="Build"/> draws.
+    /// </summary>
+    public static Geometry BuildPolyline(IReadOnlyList<Point> points, double width, bool arrowStart, bool arrowEnd)
+    {
+        if (points.Count == 0) return new GeometryGroup();
+        if (points.Count == 1) return Build(points[0], points[0], width, false, false);
+        if (points.Count == 2) return Build(points[0], points[1], width, arrowStart, arrowEnd);
+
+        var group = new GeometryGroup { FillRule = FillRule.Nonzero };
+        var start = points[0];
+        var end = points[^1];
+        var startHead = arrowStart ? Head(points[1], start, width) : null;
+        var endHead = arrowEnd ? Head(points[^2], end, width) : null;
+
+        // Not filled: the Path's Fill (there for the arrowheads) would otherwise fill the
+        // polygon the open strip implies.
+        var figure = new PathFigure { StartPoint = startHead?.LineEnd ?? start, IsClosed = false, IsFilled = false };
+        var segment = new PolyLineSegment();
+        for (int i = 1; i < points.Count - 1; i++) segment.Points.Add(points[i]);
+        segment.Points.Add(endHead?.LineEnd ?? end);
+        figure.Segments.Add(segment);
+        group.Children.Add(new PathGeometry(new[] { figure }));
+
+        if (startHead is { } sh) group.Children.Add(sh.Triangle);
+        if (endHead is { } eh) group.Children.Add(eh.Triangle);
+        return group;
+    }
+
+    /// <summary>The arrowhead at <paramref name="tip"/> of the segment arriving from
+    /// <paramref name="from"/>, and where the stroked line should stop under it; null for a
+    /// segment too short to aim.</summary>
+    private static (Geometry Triangle, Point LineEnd)? Head(Point from, Point tip, double width)
+    {
+        Vector d = tip - from;
+        double len = d.Length;
+        if (len < 0.01) return null;
+        d /= len;
+        var perp = new Vector(-d.Y, d.X);
+        double head = Math.Min(Math.Max(10, width * 3.5), len * 0.45);
+        return (Arrowhead(tip, -d, head, head * 0.45, perp), tip - d * (head * 0.8));
+    }
+
     /// <summary>Closed triangle with its apex at <paramref name="tip"/>, opening along
     /// <paramref name="inward"/> (unit vector pointing back along the line).</summary>
     private static Geometry Arrowhead(Point tip, Vector inward, double length, double halfWidth, Vector perp)

@@ -5,7 +5,8 @@ namespace ScreenPaste.Tests;
 
 /// <summary>
 /// The wheel, 1/2 and [/] step the current tool's width (font size for text, strength for
-/// blur, border for the magnifier) within its toolbar slider's range, and the wheel on a
+/// blur, border for the magnifier, circle size for the number marker) within its toolbar
+/// slider's range, and the wheel on a
 /// colour swatch steps the colour's opacity by 5%.
 /// </summary>
 public sealed class PenSizeStepTests
@@ -22,6 +23,8 @@ public sealed class PenSizeStepTests
     [InlineData(ToolKind.Text, 24, Down, 22)]
     [InlineData(ToolKind.Blur, 12, Up, 14)]
     [InlineData(ToolKind.Magnify, 3, Up, 4)]
+    [InlineData(ToolKind.Number, 28, Up, 30)]
+    [InlineData(ToolKind.Eraser, 16, Down, 14)]
     public void Next_StepsByTheToolsStep(ToolKind tool, double value, int direction, double expected)
     {
         Assert.Equal(expected, PenSizeStep.Next(tool, value, direction), Precision);
@@ -38,6 +41,10 @@ public sealed class PenSizeStepTests
     [InlineData(ToolKind.Blur, 2, Down, 2)]
     [InlineData(ToolKind.Magnify, 0, Down, 0)]
     [InlineData(ToolKind.Magnify, 12, Up, 12)]
+    [InlineData(ToolKind.Number, 64, Up, 64)]
+    [InlineData(ToolKind.Number, 16, Down, 16)]
+    [InlineData(ToolKind.Eraser, 4, Down, 4)]
+    [InlineData(ToolKind.Eraser, 60, Up, 60)]
     public void Next_StopsAtTheEndsOfTheRange(ToolKind tool, double value, int direction, double expected)
     {
         Assert.Equal(expected, PenSizeStep.Next(tool, value, direction), Precision);
@@ -94,6 +101,8 @@ public sealed class PenSizeStepTests
         Assert.Equal(new PenSizeRange(10, 96, 2), PenSizeStep.RangeOf(ToolKind.Text));
         Assert.Equal(new PenSizeRange(2, 40, 2), PenSizeStep.RangeOf(ToolKind.Blur));
         Assert.Equal(new PenSizeRange(0, 12, 1), PenSizeStep.RangeOf(ToolKind.Magnify));
+        Assert.Equal(new PenSizeRange(16, 64, 2), PenSizeStep.RangeOf(ToolKind.Number));
+        Assert.Equal(new PenSizeRange(4, 60, 2), PenSizeStep.RangeOf(ToolKind.Eraser));
     }
 
     // ---------------------------------------------------------------- opacity ---

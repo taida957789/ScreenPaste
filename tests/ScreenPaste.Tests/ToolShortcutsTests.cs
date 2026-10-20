@@ -5,9 +5,9 @@ using Xunit;
 namespace ScreenPaste.Tests;
 
 /// <summary>
-/// Snipaste's tool keys in the capture overlay: T/B/M pick a tool, Ctrl+0..9 pick one by
+/// Snipaste's tool keys in the capture overlay: T/B/M/E pick a tool, Ctrl+0..9 pick one by
 /// Snipaste's meaning (the toolbar order is ScreenPaste's own), Ctrl+Tab cycles, Tab flips the
-/// current tool's variant, and 1/2 or [/] step its width.
+/// current tool's variant, 1/2 or [/] step its width, and + / - the number marker's number.
 /// </summary>
 public sealed class ToolShortcutsTests
 {
@@ -17,6 +17,7 @@ public sealed class ToolShortcutsTests
     [InlineData(Key.T, ToolKind.Text)]
     [InlineData(Key.B, ToolKind.MarkerPen)]
     [InlineData(Key.M, ToolKind.Blur)]
+    [InlineData(Key.E, ToolKind.Eraser)]
     public void ToolForLetter_MapsSnipastesLetters(Key key, ToolKind expected)
     {
         Assert.Equal(expected, ToolShortcuts.ToolForLetter(key));
@@ -42,7 +43,9 @@ public sealed class ToolShortcutsTests
     [InlineData(4, ToolKind.Highlighter)]
     [InlineData(5, ToolKind.Blur)]
     [InlineData(6, ToolKind.Text)]
+    [InlineData(7, ToolKind.Number)]
     [InlineData(8, ToolKind.Magnify)]
+    [InlineData(9, ToolKind.Eraser)]
     [InlineData(0, ToolKind.Sticker)]
     public void ToolForIndex_FollowsSnipastesMeaning(int index, ToolKind expected)
     {
@@ -50,8 +53,6 @@ public sealed class ToolShortcutsTests
     }
 
     [Theory]
-    [InlineData(7)]    // Snipaste's number tool: no ScreenPaste tool there yet
-    [InlineData(9)]    // Snipaste's eraser: likewise
     [InlineData(-1)]
     [InlineData(10)]
     public void ToolForIndex_LeavesUnmappedIndicesEmpty(int index)
@@ -143,7 +144,7 @@ public sealed class ToolShortcutsTests
             new[]
             {
                 ToolKind.MarkerPen, ToolKind.Highlighter, ToolKind.Text, ToolKind.Shape,
-                ToolKind.Line, ToolKind.Blur, ToolKind.Magnify,
+                ToolKind.Line, ToolKind.Blur, ToolKind.Magnify, ToolKind.Number, ToolKind.Eraser,
             },
             ToolShortcuts.CycleOrder);
     }
@@ -176,6 +177,8 @@ public sealed class ToolShortcutsTests
     [InlineData(ToolKind.MarkerPen, false)]
     [InlineData(ToolKind.Text, false)]
     [InlineData(ToolKind.Sticker, false)]
+    [InlineData(ToolKind.Number, false)]
+    [InlineData(ToolKind.Eraser, false)]
     public void HasVariant_OnlyForToolsTabCanFlip(ToolKind tool, bool expected)
     {
         Assert.Equal(expected, ToolShortcuts.HasVariant(tool));
@@ -206,6 +209,20 @@ public sealed class ToolShortcutsTests
         Assert.Equal(expected, ToolShortcuts.PenSizeDirection(text));
     }
 
+    // ---------------------------------------------------------------- number keys ---
+
+    [Theory]
+    [InlineData("+", 1)]
+    [InlineData("=", 1)]   // the + key unshifted, on layouts that put + over =
+    [InlineData("-", -1)]
+    [InlineData("[", 0)]
+    [InlineData("++", 0)]
+    [InlineData("", 0)]
+    public void NumberStepDirection_OfTypedText(string text, int expected)
+    {
+        Assert.Equal(expected, ToolShortcuts.NumberStepDirection(text));
+    }
+
     // ---------------------------------------------------------------- tooltips ---
 
     [Theory]
@@ -214,6 +231,8 @@ public sealed class ToolShortcutsTests
     [InlineData(ToolKind.Blur, "Ctrl+5, M")]
     [InlineData(ToolKind.Shape, "Ctrl+1")]
     [InlineData(ToolKind.Sticker, "Ctrl+0")]
+    [InlineData(ToolKind.Number, "Ctrl+7")]
+    [InlineData(ToolKind.Eraser, "Ctrl+9, E")]
     [InlineData(ToolKind.None, "")]
     public void KeysLabel_ListsEveryKeyThatPicksTheTool(ToolKind tool, string expected)
     {
