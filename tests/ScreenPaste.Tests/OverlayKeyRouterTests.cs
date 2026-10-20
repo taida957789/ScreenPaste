@@ -370,6 +370,91 @@ public sealed class OverlayKeyRouterTests
         Assert.NotEqual(OverlayCommand.NudgeCursor, Router.Route(Editing(key)));
     }
 
+    // ---------------------------------------------------------------- region keys ---
+
+    [Theory]
+    [InlineData(Key.Up)]
+    [InlineData(Key.Down)]
+    [InlineData(Key.Left)]
+    [InlineData(Key.Right)]
+    public void Arrows_WhileEditing_MoveTheRegion(Key key)
+    {
+        Assert.Equal(OverlayCommand.MoveRegion, Router.Route(Editing(key)));
+        Assert.Equal(OverlayCommand.MoveRegion, Router.Route(Editing(key) with { IsRepeat = true }));
+    }
+
+    [Fact]
+    public void Arrows_WithAnAnnotationSelected_LeaveTheRegionAlone()
+    {
+        // The selected annotation owns the plain arrows.
+        var ctx = Editing(Key.Left) with { HasSelection = true };
+
+        Assert.NotEqual(OverlayCommand.MoveRegion, Router.Route(ctx));
+    }
+
+    [Theory]
+    [InlineData(Key.Up)]
+    [InlineData(Key.Right)]
+    public void CtrlArrows_WhileEditing_GrowTheRegion(Key key)
+    {
+        Assert.Equal(OverlayCommand.GrowRegion, Router.Route(Editing(key, Ctrl)));
+        Assert.Equal(OverlayCommand.GrowRegion, Router.Route(Editing(key, Ctrl) with { HasSelection = true }));
+    }
+
+    [Theory]
+    [InlineData(Key.Down)]
+    [InlineData(Key.Left)]
+    public void ShiftArrows_WhileEditing_ShrinkTheRegion(Key key)
+    {
+        Assert.Equal(OverlayCommand.ShrinkRegion, Router.Route(Editing(key, Shift)));
+        Assert.Equal(OverlayCommand.ShrinkRegion, Router.Route(Editing(key, Shift) with { HasSelection = true }));
+    }
+
+    [Theory]
+    [InlineData(None)]
+    [InlineData(Ctrl)]
+    [InlineData(Shift)]
+    public void RegionArrows_MidDrag_DoNothing(ModifierKeys modifiers)
+    {
+        // A handle resize or a drawing owns the region until the button is up.
+        var ctx = Editing(Key.Up, modifiers) with { Dragging = true };
+
+        Assert.Equal(OverlayCommand.None, Router.Route(ctx));
+    }
+
+    [Theory]
+    [InlineData(Ctrl | Shift)]
+    [InlineData(Alt)]
+    public void OtherChordedArrows_WhileEditing_DoNothing(ModifierKeys modifiers)
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.Right, modifiers)));
+    }
+
+    [Theory]
+    [InlineData(Key.Up, Ctrl)]
+    [InlineData(Key.Down, Shift)]
+    public void ChordedArrows_WhileSelecting_DoNotResizeAnything(Key key, ModifierKeys modifiers)
+    {
+        Assert.Equal(OverlayCommand.None, Router.Route(Selecting(key, modifiers)));
+    }
+
+    [Theory]
+    [InlineData(Key.Up, None)]
+    [InlineData(Key.Left, Ctrl)]
+    [InlineData(Key.Right, Shift)]
+    public void Arrows_WhileTyping_MoveTheCaret(Key key, ModifierKeys modifiers)
+    {
+        Assert.Equal(OverlayCommand.PassThrough, Router.Route(Typing(key, modifiers)));
+    }
+
+    [Fact]
+    public void AGestureBoundToCtrlArrow_WinsOverTheRegionGrow()
+    {
+        var bindings = OverlayKeyBindings.FromSettings(new AppSettings()) with { Save = new KeyChord(Key.Right, Ctrl) };
+
+        Assert.Equal(OverlayCommand.Save, new OverlayKeyRouter(bindings).Route(Editing(Key.Right, Ctrl)));
+    }
+
     [Fact]
     public void Space_WhileSelecting_AcceptsTheDetectedArea()
     {

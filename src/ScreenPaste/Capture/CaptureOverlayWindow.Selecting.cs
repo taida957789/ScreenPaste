@@ -14,7 +14,8 @@ namespace ScreenPaste.Capture;
 /// The selection phase: framing the capture region. Hovering highlights the UI element or
 /// window under the cursor (Tab switches element / window detection, the wheel walks the
 /// element levels) and a click takes it; a drag draws a rubber band (Shift: a square,
-/// Space held: the band moves instead of growing). Space takes the highlighted area and
+/// Space held: the band moves instead of growing; a right-click drops it, and with no drag a
+/// right-click leaves). Space takes the highlighted area and
 /// Ctrl+A the cursor's screen, then all screens. W/A/S/D and the arrows nudge the cursor a
 /// pixel at a time, which any drag follows, and an Alt tap toggles crosshair guide lines.
 ///
@@ -34,6 +35,7 @@ public partial class CaptureOverlayWindow
     private Point _dragStart;                     // the rubber band's anchor corner
     private Point _dragLast;                      // pointer at the previous drag move
     private bool _dragging;
+    private bool _dragAborted;                    // a right-click dropped the drag; wait for the button up
     private Rect? _detectRect;
 
     // Key-driven state. _spaceHeld also turns a region-handle resize into a move.
@@ -62,6 +64,7 @@ public partial class CaptureOverlayWindow
         if (_phase != Phase.Selecting) return;
         _dragStart = _dragLast = e.GetPosition(RootCanvas);
         _dragging = false;
+        _dragAborted = false;
         RootCanvas.CaptureMouse();
     }
 
@@ -71,7 +74,7 @@ public partial class CaptureOverlayWindow
         var p = e.GetPosition(RootCanvas);
         UpdateMagnifier(p);
 
-        if (e.LeftButton == MouseButtonState.Pressed)
+        if (e.LeftButton == MouseButtonState.Pressed && !_dragAborted)
         {
             if (!_dragging && (Math.Abs(p.X - _dragStart.X) > 3 || Math.Abs(p.Y - _dragStart.Y) > 3))
                 _dragging = true;
@@ -187,6 +190,11 @@ public partial class CaptureOverlayWindow
     private void RootCanvas_MouseUp(object sender, MouseButtonEventArgs e)
     {
         if (_phase != Phase.Selecting) return;
+        if (_dragAborted)
+        {
+            _dragAborted = false;   // the cancelled press ends here, taking nothing
+            return;
+        }
 
         // Read the drag before letting go of the capture: losing it ends the drag.
         Rect? finalRect = _dragging
@@ -198,6 +206,22 @@ public partial class CaptureOverlayWindow
         // Nothing selected, or a drag too small to be meant.
         if (finalRect is not { } r || r.Width < 4 || r.Height < 4) return;
         AcceptRegion(r);
+    }
+
+    /// <summary>
+    /// Right-click mid-drag: drop the rubber band and go back to hovering. The press that
+    /// started it is ignored until the button comes up, so neither moving on nor releasing it
+    /// frames or takes anything.
+    /// </summary>
+    private void CancelSelectingDrag()
+    {
+        _dragAborted = true;
+        _dragging = false;
+        _spaceHeld = false;
+        if (RootCanvas.IsMouseCaptured) RootCanvas.ReleaseMouseCapture();
+        SelectionBorder.Visibility = Visibility.Collapsed;
+        UpdateMask(null);
+        UpdateDetect(CursorLocal());
     }
 
     /// <summary>Every way of choosing the area ends here: a click or drag, Space, Ctrl+A.

@@ -59,6 +59,7 @@ public partial class CaptureOverlayWindow
     /// smoothing, and whether the enlarged content includes the other annotations.</summary>
     private void BuildMagnifyOptions()
     {
+        _magnifyShapeButtons.Clear();   // the toolbar is rebuilt each time a region is chosen
         _magnifyOptionsPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
         _magnifyOptionsPanel.Children.Add(Label(Loc.T("lbl.shape")));
         _magnifyOptionsPanel.Children.Add(MakeMagnifyShapeButton(Loc.T("shape.rect"), ShapeKind.Rectangle));

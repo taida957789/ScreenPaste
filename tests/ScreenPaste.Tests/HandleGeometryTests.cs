@@ -116,6 +116,108 @@ public sealed class HandleGeometryTests
         Assert.Equal(Min, result.Height);
     }
 
+    // ---------------------------------------------------------------- symmetric (Ctrl) ---
+
+    [Theory]
+    [MemberData(nameof(AllHandles))]
+    public void DragEdgesSymmetric_KeepsTheCentreFixed(int handle)
+    {
+        var start = new Rect(300, 200, 200, 150);
+
+        var result = HandleGeometry.DragEdgesSymmetric(start, handle, 30, -20, Min, Bounds);
+
+        Assert.Equal(start.X + start.Width / 2, result.X + result.Width / 2);
+        Assert.Equal(start.Y + start.Height / 2, result.Y + result.Height / 2);
+    }
+
+    [Theory]
+    [InlineData(4, 30, 0, 270, 200, 260, 150)]    // E dragged out: W follows the other way
+    [InlineData(3, 30, 0, 330, 200, 140, 150)]    // W dragged in: E follows inward
+    [InlineData(1, 0, -20, 300, 180, 200, 190)]   // N dragged up: S goes down
+    [InlineData(6, 0, -20, 300, 220, 200, 110)]   // S dragged up: N comes down
+    [InlineData(7, 10, 10, 290, 190, 220, 170)]   // SE: both axes
+    [InlineData(0, 10, 10, 310, 210, 180, 130)]   // NW dragged inward
+    public void DragEdgesSymmetric_MovesTheOppositeEdgeByTheMirroredDelta(
+        int handle, double dx, double dy, double x, double y, double w, double h)
+    {
+        var start = new Rect(300, 200, 200, 150);
+
+        var result = HandleGeometry.DragEdgesSymmetric(start, handle, dx, dy, Min, Bounds);
+
+        Assert.Equal(new Rect(x, y, w, h), result);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(6)]
+    public void DragEdgesSymmetric_LeavesTheAxesAHandleDoesNotOwn(int handle)
+    {
+        var start = new Rect(300, 200, 200, 150);
+
+        var result = HandleGeometry.DragEdgesSymmetric(start, handle, 999, 10, Min, Bounds);
+
+        Assert.Equal(start.X, result.X);
+        Assert.Equal(start.Width, result.Width);
+    }
+
+    [Theory]
+    [InlineData(0, -50, -50)]
+    [InlineData(1, 0, -50)]
+    [InlineData(2, 50, -50)]
+    [InlineData(3, -50, 0)]
+    [InlineData(4, 50, 0)]
+    [InlineData(5, -50, 50)]
+    [InlineData(6, 0, 50)]
+    [InlineData(7, 50, 50)]
+    public void DragEdgesSymmetric_CannotGrowARectFillingTheBounds(int handle, double dx, double dy)
+    {
+        // Every handle dragged outward: the mirrored edge already sits on the bounds too.
+        var result = HandleGeometry.DragEdgesSymmetric(Bounds, handle, dx, dy, Min, Bounds);
+
+        Assert.Equal(Bounds, result);
+    }
+
+    [Fact]
+    public void DragEdgesSymmetric_StopsBothEdges_WhenTheNearerOneReachesTheBounds()
+    {
+        // 100 px of room on the left, 700 on the right: the growth stops at 100 per side.
+        var start = new Rect(100, 100, 200, 150);
+
+        var result = HandleGeometry.DragEdgesSymmetric(start, 4, 500, 0, Min, Bounds);
+
+        Assert.Equal(new Rect(0, 100, 400, 150), result);
+    }
+
+    [Theory]
+    [MemberData(nameof(AllHandles))]
+    public void DragEdgesSymmetric_StopsAtMinimumSize_AroundTheCentre(int handle)
+    {
+        var start = new Rect(300, 200, 200, 150);
+        var (west, east, north, south) = HandleGeometry.EdgesFor(handle);
+        // Drag every handle far inward, past the centre.
+        double dx = west ? 9999 : -9999, dy = north ? 9999 : -9999;
+
+        var result = HandleGeometry.DragEdgesSymmetric(start, handle, dx, dy, Min, Bounds);
+
+        Assert.Equal(west || east ? Min : start.Width, result.Width);
+        Assert.Equal(north || south ? Min : start.Height, result.Height);
+        Assert.Equal(400, result.X + result.Width / 2);
+        Assert.Equal(275, result.Y + result.Height / 2);
+    }
+
+    [Theory]
+    [MemberData(nameof(AllHandles))]
+    public void DragEdgesSymmetric_DoesNotThrow_WhenStartLiesOutsideShrunkenBounds(int handle)
+    {
+        var shrunk = new Rect(0, 0, 500, 50);
+        var stranded = new Rect(900, 100, 60, 60);
+
+        var result = HandleGeometry.DragEdgesSymmetric(stranded, handle, 5, 5, Min, shrunk);
+
+        Assert.True(result.Width >= Min);
+        Assert.True(result.Height >= Min);
+    }
+
     [Fact]
     public void ClampInto_PullsAStrandedRectBackInside_KeepingItsSize()
     {

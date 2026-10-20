@@ -100,6 +100,9 @@ public partial class CaptureOverlayWindow
             case OverlayCommand.AcceptDetected: AcceptDetected(); return true;
             case OverlayCommand.HoldToMove: BeginHoldToMove(); return true;
             case OverlayCommand.ToggleGuideLines: ToggleGuideLines(); return true;
+            case OverlayCommand.MoveRegion:
+            case OverlayCommand.GrowRegion:
+            case OverlayCommand.ShrinkRegion: NudgeRegion(ctx.Key, ctx.Modifiers); return true;
             case OverlayCommand.CommitText: CommitActiveText(discardIfEmpty: true); return true;
             case OverlayCommand.CancelFramedDrag: CancelMagnifySourceDrag(); return true;
             case OverlayCommand.Deselect: Deselect(); return true;

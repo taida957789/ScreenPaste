@@ -26,7 +26,8 @@ public partial class CaptureOverlayWindow : Window
     private double _dpiScale = 1.0;
     private Phase _phase = Phase.Selecting;
 
-    // The chosen region (selection-phase state: CaptureOverlayWindow.Selecting.cs)
+    // The chosen region (selection-phase state: CaptureOverlayWindow.Selecting.cs;
+    // adjusting it while editing, and right-click: CaptureOverlayWindow.Region.cs)
     private Int32Rect _selection;                 // physical px, screenshot/local coords
 
     // Editing state
@@ -78,16 +79,6 @@ public partial class CaptureOverlayWindow : Window
     private int _pixStride;
     private ColorFormatKind _magFormat = ColorFormatKind.Hex;   // a Shift tap cycles HEX → RGB → HSV
     private Color _magColor;
-
-    // Selection-adjust state (editing phase): 8 resize handles + drag-to-move.
-    // Handle indices: 0=NW 1=N 2=NE 3=W 4=E 5=SW 6=S 7=SE.
-    private const double HandleSize = 12;
-    private const int MinRegionSize = 20;
-    private readonly List<Rectangle> _handles = new();
-    private int _resizeHandle = -1;
-    private bool _regionMoving;
-    private Point _regionGrab;                // pointer at drag start (canvas px)
-    private Int32Rect _regionStart;           // selection at drag start
 
     // Select-tool state (click annotations to move them, Delete to remove)
     private FrameworkElement? _selected;
@@ -165,6 +156,7 @@ public partial class CaptureOverlayWindow : Window
         Loaded += (_, _) => { Activate(); Focus(); };
 
         InitSelecting();
+        InitRegion();
         InitKeyboard();
         // A resolution / monitor change (common over RDP) invalidates the frozen
         // screenshot and every cached physical coordinate, so the selection would drift
@@ -1293,157 +1285,6 @@ public partial class CaptureOverlayWindow : Window
         }
     }
 
-    // ---------------------------------------------------- region adjust ---
-    // Editing-phase selection tweaks: 8 handles resize, dragging the interior (with no
-    // tool active) moves the whole region. Annotations stay glued to the SCREENSHOT
-    // content: when the region origin shifts by (dx,dy), every annotation element gets
-    // a compensating translate and the ink strokes are transformed by the inverse.
-
-    private void EnsureHandles()
-    {
-        if (_handles.Count > 0) return;
-        Cursor[] cursors =
-        {
-            Cursors.SizeNWSE, Cursors.SizeNS, Cursors.SizeNESW,
-            Cursors.SizeWE,                   Cursors.SizeWE,
-            Cursors.SizeNESW, Cursors.SizeNS, Cursors.SizeNWSE,
-        };
-        for (int i = 0; i < 8; i++)
-        {
-            var h = new Rectangle
-            {
-                Width = HandleSize,
-                Height = HandleSize,
-                Fill = new SolidColorBrush(Theme.Accent),
-                Stroke = Brushes.White,
-                StrokeThickness = 1,
-                Cursor = cursors[i],
-                Tag = i,
-            };
-            h.MouseLeftButtonDown += Handle_MouseDown;
-            h.MouseMove += Handle_MouseMove;
-            h.MouseLeftButtonUp += Handle_MouseUp;
-            _handles.Add(h);
-            HandleLayer.Children.Add(h);
-        }
-    }
-
-    private void LayoutHandles()
-    {
-        var at = HandleGeometry.Place(
-            new Rect(_selection.X, _selection.Y, _selection.Width, _selection.Height),
-            HandleSize, outside: false);
-        for (int i = 0; i < HandleGeometry.Count; i++)
-        {
-            Canvas.SetLeft(_handles[i], at[i].X);
-            Canvas.SetTop(_handles[i], at[i].Y);
-        }
-    }
-
-    private void Handle_MouseDown(object sender, MouseButtonEventArgs e)
-    {
-        if (sender is not Rectangle h || _phase != Phase.Editing) return;
-        _resizeHandle = (int)h.Tag!;
-        _regionGrab = e.GetPosition(RootCanvas);
-        _regionStart = _selection;
-        h.CaptureMouse();
-        e.Handled = true;
-    }
-
-    private void Handle_MouseMove(object sender, MouseEventArgs e)
-    {
-        if (_resizeHandle < 0) return;
-        var p = e.GetPosition(RootCanvas);
-        UpdateMagnifier(p);
-        if (TryHoldMoveRegion(p)) return;   // Space held: move rather than resize
-        var r = HandleGeometry.DragEdges(
-            new Rect(_regionStart.X, _regionStart.Y, _regionStart.Width, _regionStart.Height),
-            _resizeHandle, p.X - _regionGrab.X, p.Y - _regionGrab.Y,
-            MinRegionSize, new Rect(0, 0, _screenshot.PixelWidth, _screenshot.PixelHeight));
-
-        ApplyRegion(new Int32Rect(
-            (int)Math.Round(r.X), (int)Math.Round(r.Y),
-            (int)Math.Round(r.Width), (int)Math.Round(r.Height)));
-    }
-
-    private void Handle_MouseUp(object sender, MouseButtonEventArgs e)
-    {
-        if (_resizeHandle < 0) return;
-        _resizeHandle = -1;
-        (sender as Rectangle)?.ReleaseMouseCapture();
-        e.Handled = true;
-    }
-
-    private void Region_MoveStart(Point p)
-    {
-        _regionMoving = true;
-        _regionGrab = p;
-        _regionStart = _selection;
-        InteractionLayer.CaptureMouse();
-    }
-
-    private void Region_MoveTo(Point p)
-    {
-        UpdateMagnifier(p);
-        int dx = (int)Math.Round(p.X - _regionGrab.X);
-        int dy = (int)Math.Round(p.Y - _regionGrab.Y);
-        int x = Math.Clamp(_regionStart.X + dx, 0, _screenshot.PixelWidth - _regionStart.Width);
-        int y = Math.Clamp(_regionStart.Y + dy, 0, _screenshot.PixelHeight - _regionStart.Height);
-        ApplyRegion(new Int32Rect(x, y, _regionStart.Width, _regionStart.Height));
-    }
-
-    private void Region_MoveEnd()
-    {
-        _regionMoving = false;
-        InteractionLayer.ReleaseMouseCapture();
-    }
-
-    /// <summary>Apply a new selection rect and re-layout everything that depends on it.</summary>
-    private void ApplyRegion(Int32Rect r)
-    {
-        if (r == _selection) return;
-
-        int dx = r.X - _selection.X;
-        int dy = r.Y - _selection.Y;
-        if (dx != 0 || dy != 0) ShiftAnnotations(-dx, -dy);
-
-        _selection = r;
-        // A region RESIZE (as opposed to a move) leaves annotations where they are, so a
-        // magnifier's framed source — stored in region-local coords — can end up outside the
-        // new, smaller region. Pull it back in, or every later interaction with it would be
-        // working from an out-of-bounds rect.
-        ClampMagnifySourcesIntoRegion();
-
-        var sel = new Rect(r.X, r.Y, r.Width, r.Height);
-        ShowSelectionRect(sel);
-        LayoutEditLayer(sel);
-        LayoutHandles();
-        PositionToolbar();
-        InvalidateSampledLayers();   // the region now covers different screenshot pixels
-        if (_selected != null) UpdateSelectionBox();
-        else LayoutMagnifySourceHandles();
-    }
-
-    /// <summary>Keep annotations pinned to the screenshot content while the region moves.</summary>
-    private void ShiftAnnotations(int dx, int dy)
-    {
-        foreach (var host in new[] { BlurHost, MagnifyHost, ShapeHost, StickerHost, TextHost })
-        {
-            foreach (var child in host.Children)
-            {
-                if (child is not FrameworkElement el) continue;
-                var tt = EnsureTranslate(el);
-                tt.X += dx;
-                tt.Y += dy;
-                // A magnifier frames its source in region-local coords too, so that has to
-                // travel along or the enlarged view would start showing a different area.
-                MagnifyEffects.ShiftSource(el, dx, dy);
-            }
-        }
-        if (Ink.Strokes.Count > 0)
-            Ink.Strokes.Transform(new Matrix(1, 0, 0, 1, dx, dy), false);
-    }
-
     // -------------------------------------------- direct manipulation ---
     // Hover any annotation (blur / shape / line / text / sticker) with ANY tool: the
     // cursor becomes a move cursor and dragging grabs it; Delete removes the selection.
@@ -1951,22 +1792,8 @@ public partial class CaptureOverlayWindow : Window
     /// </summary>
     private void ConfirmCancel()
     {
-        if (!_settings.ConfirmDiscardEdits)
-        {
-            Cancel();
-            return;
-        }
-
         CommitActiveText(discardIfEmpty: true);
-        var dlg = new ConfirmDiscardDialog { Owner = this };
-        bool? discard = dlg.ShowDialog();
-
-        if (dlg.DontAskAgain)
-        {
-            _settings.ConfirmDiscardEdits = false;
-            _settings.Save();
-        }
-        if (discard == true) Cancel();
+        if (ConfirmDiscard()) Cancel();
     }
 
     private void Cancel() => Close();

@@ -51,6 +51,39 @@ public static class HandleGeometry
             Math.Max(minSize, bottom - top));
     }
 
+    /// <summary>
+    /// Ctrl+drag of a handle: resize about the centre. The edges handle
+    /// <paramref name="index"/> owns move by the drag, and the opposite edges by the mirrored
+    /// amount, so the centre stays put. Growth stops when either edge of an axis reaches
+    /// <paramref name="bounds"/> and shrinking stops at <paramref name="minSize"/>; like
+    /// <see cref="DragEdges"/>, inverted limits collapse to the minimum instead of throwing.
+    /// </summary>
+    public static Rect DragEdgesSymmetric(Rect start, int index, double dx, double dy,
+        double minSize, Rect bounds)
+    {
+        var (west, east, north, south) = EdgesFor(index);
+
+        // Growth per side: dragging an east/south edge out is +delta, a west/north one -delta.
+        double gx = west || east
+            ? SymmetricGrowth(east ? dx : -dx, start.Width,
+                start.Left - bounds.Left, bounds.Right - start.Right, minSize)
+            : 0;
+        double gy = north || south
+            ? SymmetricGrowth(south ? dy : -dy, start.Height,
+                start.Top - bounds.Top, bounds.Bottom - start.Bottom, minSize)
+            : 0;
+
+        return new Rect(start.X - gx, start.Y - gy,
+            Math.Max(minSize, start.Width + 2 * gx),
+            Math.Max(minSize, start.Height + 2 * gy));
+    }
+
+    /// <summary>One axis of <see cref="DragEdgesSymmetric"/>: the growth applied to each side,
+    /// at least what keeps <paramref name="minSize"/> and at most the room on the tighter side.</summary>
+    private static double SymmetricGrowth(double growth, double size, double roomBefore,
+        double roomAfter, double minSize) =>
+        ClampTolerant(growth, (minSize - size) / 2, Math.Min(roomBefore, roomAfter));
+
     /// <summary>Move <paramref name="r"/> back inside <paramref name="bounds"/>, keeping its
     /// size; it is shrunk only when it is too large to fit.</summary>
     public static Rect ClampInto(Rect r, Rect bounds, double minSize)

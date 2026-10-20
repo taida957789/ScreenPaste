@@ -217,6 +217,10 @@ public static class Loc
         Add("dlg.discardYes","Discard",              "放棄截圖",       "破棄",              "취소",            "Abandonner",        "Verwerfen",         "Descartar");
         Add("dlg.discardNo", "Keep editing",         "繼續編輯",       "編集を続ける",        "계속 편집",        "Continuer l'édition","Weiter bearbeiten","Seguir editando");
         Add("dlg.dontAsk",   "Don't ask again",      "下次不再詢問",   "今後は確認しない",     "다시 묻지 않음",    "Ne plus demander",  "Nicht mehr fragen", "No volver a preguntar");
+        // Right-click that would drop the annotations to choose the area again
+        Add("dlg.reselectTitle","Choose again",      "重新選取",       "範囲を選び直す",      "다시 선택",        "Choisir à nouveau", "Neu auswählen",     "Elegir de nuevo");
+        Add("dlg.reselectMsg","Discard the annotations and choose the area again?", "要捨棄標註並重新選取截圖範圍嗎？", "注釈を破棄して範囲を選び直しますか？", "주석을 삭제하고 영역을 다시 선택할까요?", "Abandonner les annotations et choisir à nouveau la zone ?", "Anmerkungen verwerfen und den Bereich neu auswählen?", "¿Descartar las anotaciones y elegir el área de nuevo?");
+        Add("dlg.reselectYes","Choose again",        "重新選取",       "選び直す",           "다시 선택",        "Choisir à nouveau", "Neu auswählen",     "Elegir de nuevo");
         Add("set.confirmDiscard","Ask before discarding an annotated capture", "取消含標註的截圖前先詢問", "注釈付きキャプチャの破棄前に確認", "주석이 있는 캡처 취소 전 확인", "Confirmer avant d'abandonner une capture annotée", "Vor dem Verwerfen einer beschrifteten Aufnahme fragen", "Preguntar antes de descartar una captura anotada");
 
         // Color picker

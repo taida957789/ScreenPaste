@@ -194,6 +194,19 @@ public sealed class OverlayKeyRouter
             return OverlayCommand.HoldToMove;
         if (IsSelectAll(ctx) && !ctx.Dragging) return OverlayCommand.CycleScreenArea;
         if (CursorNudge.IsWasd(ctx.Key) && IsNudge(ctx)) return OverlayCommand.NudgeCursor;
+        if (CursorNudge.IsArrow(ctx.Key) && !ctx.Dragging) return RouteRegionArrow(ctx);
+        return OverlayCommand.None;
+    }
+
+    /// <summary>The arrows adjust the chosen region a pixel at a time (RegionNudge): plain
+    /// arrows move it unless an annotation is selected, Ctrl grows and Shift shrinks it on
+    /// the arrow's side, whatever is selected or whichever tool is active.</summary>
+    private static OverlayCommand RouteRegionArrow(OverlayKeyContext ctx)
+    {
+        if (ctx.Modifiers == ModifierKeys.None)
+            return ctx.HasSelection ? OverlayCommand.None : OverlayCommand.MoveRegion;
+        if (ctx.Modifiers == ModifierKeys.Control) return OverlayCommand.GrowRegion;
+        if (ctx.Modifiers == ModifierKeys.Shift) return OverlayCommand.ShrinkRegion;
         return OverlayCommand.None;
     }
 
