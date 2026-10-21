@@ -9,7 +9,6 @@ using System.Windows.Shapes;
 using Microsoft.Win32;
 using ScreenPaste.Editor;
 using ScreenPaste.Native;
-using ScreenPaste.Output;
 using ScreenPaste.Rendering;
 using ScreenPaste.Settings;
 
@@ -19,22 +18,15 @@ public partial class CaptureOverlayWindow : Window
 {
     private enum Phase { Selecting, Editing }
 
-    private readonly BitmapSource _screenshot;
+    private BitmapSource _screenshot;   // the backdrop: swapped by F5 and , / . (History.cs)
     private readonly VirtualScreen _vs;
     private readonly AppSettings _settings;
 
     private double _dpiScale = 1.0;
     private Phase _phase = Phase.Selecting;
 
-    // Selection-phase state
-    private List<DetectedWindow> _windows = new();
-    private ElementDetector? _elements;           // UIA element rects, scanned in background
-    private int _detectLevel;                     // 0 = deepest element … N = whole window
-    private int _detectCandidates = 1;            // chain length at the current hover point
-    private IntPtr _hoverWindow;
-    private Point _dragStart;
-    private bool _dragging;
-    private Rect? _detectRect;
+    // The chosen region (selection-phase state: CaptureOverlayWindow.Selecting.cs;
+    // adjusting it while editing, and right-click: CaptureOverlayWindow.Region.cs)
     private Int32Rect _selection;                 // physical px, screenshot/local coords
 
     // Editing state
@@ -42,9 +34,6 @@ public partial class CaptureOverlayWindow : Window
     private BlurKind _blurKind = BlurKind.Gaussian;
     private readonly EditHistory _history = new();
     private bool _suppressStrokeHistory;
-
-    // Configurable editor shortcuts (from settings.json).
-    private KeyGesture? _undoGesture, _redoGesture, _copyGesture, _saveGesture, _quickSaveGesture;
 
     // Blur-drag state
     private bool _blurDragging;
@@ -87,18 +76,8 @@ public partial class CaptureOverlayWindow : Window
     private const int MagSrcW = 30, MagSrcH = 22, MagZoom = 6;   // 30×22 px shown at 180×132
     private byte[]? _pixels;                  // cached BGRA snapshot for pixel lookups
     private int _pixStride;
-    private bool _magHex = true;              // Shift toggles hex ⇄ decimal
+    private ColorFormatKind _magFormat = ColorFormatKind.Hex;   // a Shift tap cycles HEX → RGB → HSV
     private Color _magColor;
-
-    // Selection-adjust state (editing phase): 8 resize handles + drag-to-move.
-    // Handle indices: 0=NW 1=N 2=NE 3=W 4=E 5=SW 6=S 7=SE.
-    private const double HandleSize = 12;
-    private const int MinRegionSize = 20;
-    private readonly List<Rectangle> _handles = new();
-    private int _resizeHandle = -1;
-    private bool _regionMoving;
-    private Point _regionGrab;                // pointer at drag start (canvas px)
-    private Int32Rect _regionStart;           // selection at drag start
 
     // Select-tool state (click annotations to move them, Delete to remove)
     private FrameworkElement? _selected;
@@ -122,10 +101,11 @@ public partial class CaptureOverlayWindow : Window
     private readonly List<Button> _shapeKindButtons = new();
     private readonly List<Button> _shapeStyleButtons = new();
 
-    public CaptureOverlayWindow(BitmapSource screenshot, VirtualScreen vs, AppSettings settings)
+    public CaptureOverlayWindow(CaptureRequest request, AppSettings settings)
     {
-        _screenshot = screenshot;
-        _vs = vs;
+        _request = request;
+        _screenshot = request.Screenshot;
+        _vs = request.Screen;
         _settings = settings;
 
         InitializeComponent();
@@ -168,24 +148,16 @@ public partial class CaptureOverlayWindow : Window
             if (_customColors.Count >= MaxCustomColors) break;
         }
 
-        _undoGesture = HotkeyGesture.Parse(settings.UndoHotkey);
-        _redoGesture = HotkeyGesture.Parse(settings.RedoHotkey);
-        _copyGesture = HotkeyGesture.Parse(settings.CopyHotkey);
-        _saveGesture = HotkeyGesture.Parse(settings.SaveHotkey);
-        _quickSaveGesture = HotkeyGesture.Parse(settings.QuickSaveHotkey);
-
-        ScreenImage.Source = _screenshot;
-        ScreenImage.Width = vs.Width;
-        ScreenImage.Height = vs.Height;
+        InitHistory();   // the backdrop and the pointer
 
         SourceInitialized += OnSourceInitialized;
         Loaded += (_, _) => { Activate(); Focus(); };
 
-        RootCanvas.MouseLeftButtonDown += RootCanvas_MouseDown;
-        RootCanvas.MouseMove += RootCanvas_MouseMove;
-        RootCanvas.MouseLeftButtonUp += RootCanvas_MouseUp;
-        MouseWheel += OnDetectLevelWheel;
-        KeyDown += OnKeyDown;
+        InitSelecting();
+        InitRegion();
+        InitKeyboard();
+        InitOutput();
+        InitTools();
         // A resolution / monitor change (common over RDP) invalidates the frozen
         // screenshot and every cached physical coordinate, so the selection would drift
         // against a screen that no longer matches.
@@ -269,195 +241,6 @@ public partial class CaptureOverlayWindow : Window
         _elements.StartScan(_windows);
     }
 
-    // ------------------------------------------------------- selection phase ---
-
-    private void RootCanvas_MouseDown(object sender, MouseButtonEventArgs e)
-    {
-        if (_phase != Phase.Selecting) return;
-        _dragStart = e.GetPosition(RootCanvas);
-        _dragging = false;
-        RootCanvas.CaptureMouse();
-    }
-
-    private void RootCanvas_MouseMove(object sender, MouseEventArgs e)
-    {
-        if (_phase != Phase.Selecting) return;
-        var p = e.GetPosition(RootCanvas);
-        UpdateMagnifier(p);
-
-        if (e.LeftButton == MouseButtonState.Pressed)
-        {
-            if (!_dragging && (Math.Abs(p.X - _dragStart.X) > 3 || Math.Abs(p.Y - _dragStart.Y) > 3))
-                _dragging = true;
-
-            if (_dragging)
-            {
-                DetectBorder.Visibility = Visibility.Collapsed;
-                var r = MakeRect(_dragStart, p);
-                ShowSelectionRect(r);
-            }
-        }
-        else
-        {
-            UpdateDetect(p);
-        }
-    }
-
-    /// <summary>
-    /// Hover auto-detect: snap to the deepest cached UI element under the cursor
-    /// (Snipaste-style), falling back to the whole window until its UIA scan lands.
-    /// <see cref="_detectLevel"/> (mouse wheel) walks outward toward the window.
-    /// </summary>
-    private void UpdateDetect(Point p)
-    {
-        int sx = _vs.X + (int)Math.Round(p.X);
-        int sy = _vs.Y + (int)Math.Round(p.Y);
-
-        var win = WindowEnumerator.HitTestWindow(_windows, sx, sy);
-        if (win is { } w)
-        {
-            if (w.Handle != _hoverWindow)
-            {
-                _hoverWindow = w.Handle;
-                _detectLevel = 0;   // new window: restart at the deepest element
-            }
-
-            Rect chosen;
-            if (_elements != null)
-            {
-                var chain = _elements.CandidatesAt(w, sx, sy);
-                _detectCandidates = chain.Count;
-                chosen = chain[Math.Clamp(_detectLevel, 0, chain.Count - 1)];
-            }
-            else
-            {
-                _detectCandidates = 1;
-                chosen = new Rect(w.Bounds.Left, w.Bounds.Top, w.Bounds.Width, w.Bounds.Height);
-            }
-            _detectRect = new Rect(chosen.X - _vs.X, chosen.Y - _vs.Y, chosen.Width, chosen.Height);
-        }
-        else
-        {
-            _hoverWindow = IntPtr.Zero;
-            _detectCandidates = 1;
-            _detectRect = null;
-        }
-
-        if (_detectRect is { } dr)
-        {
-            Canvas.SetLeft(DetectBorder, dr.X);
-            Canvas.SetTop(DetectBorder, dr.Y);
-            DetectBorder.Width = dr.Width;
-            DetectBorder.Height = dr.Height;
-            DetectBorder.Visibility = Visibility.Visible;
-            ShowSizeReadout(dr);
-        }
-        else
-        {
-            DetectBorder.Visibility = Visibility.Collapsed;
-            SizeReadout.Visibility = Visibility.Collapsed;
-        }
-    }
-
-    /// <summary>Mouse wheel while framing: cycle the detection level (element ⇄ window).
-    /// While editing, it re-zooms the selected magnifier instead.</summary>
-    private void OnDetectLevelWheel(object sender, MouseWheelEventArgs e)
-    {
-        if (_phase == Phase.Editing)
-        {
-            if (_selected?.Parent == MagnifyHost && MagnifyEffects.SpecOf(_selected) is { } spec &&
-                MagnifyEffects.SetZoom(_selected, spec.Zoom + (e.Delta > 0 ? 0.5 : -0.5)))
-            {
-                MagnifyEffects.ClampViewInto(_selected, RegionBounds());
-                ResampleMagnifier(_selected);
-                MagnifyHost.UpdateLayout();   // the view just resized; re-fit the marching box
-                UpdateSelectionBox();
-                e.Handled = true;
-            }
-            return;
-        }
-        if (_phase != Phase.Selecting || _dragging || _detectRect == null) return;
-        _detectLevel = Math.Clamp(_detectLevel + (e.Delta > 0 ? 1 : -1), 0, Math.Max(0, _detectCandidates - 1));
-        UpdateDetect(Mouse.GetPosition(RootCanvas));
-        e.Handled = true;
-    }
-
-    /// <summary>
-    /// Display geometry changed (resolution/monitor swap, e.g. an RDP resize). While still
-    /// framing the shot, bail out — the frozen backdrop and coordinates no longer match the
-    /// screen. Once editing, the annotations live on a fixed self-contained canvas, so the
-    /// user's work is left intact.
-    /// </summary>
-    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
-    {
-        Dispatcher.BeginInvoke(() => { if (_phase == Phase.Selecting) Close(); });
-    }
-
-    private void RootCanvas_MouseUp(object sender, MouseButtonEventArgs e)
-    {
-        if (_phase != Phase.Selecting) return;
-        RootCanvas.ReleaseMouseCapture();
-
-        Rect finalRect;
-        if (_dragging)
-        {
-            finalRect = MakeRect(_dragStart, e.GetPosition(RootCanvas));
-        }
-        else if (_detectRect is { } dr)
-        {
-            finalRect = dr;                       // click on auto-detected window
-        }
-        else
-        {
-            return;                               // nothing selected
-        }
-
-        if (finalRect.Width < 4 || finalRect.Height < 4) return;
-        EnterEditing(finalRect);
-    }
-
-    private void ShowSelectionRect(Rect r)
-    {
-        Canvas.SetLeft(SelectionBorder, r.X);
-        Canvas.SetTop(SelectionBorder, r.Y);
-        SelectionBorder.Width = r.Width;
-        SelectionBorder.Height = r.Height;
-        SelectionBorder.Visibility = Visibility.Visible;
-        UpdateMask(r);
-        ShowSizeReadout(r);
-    }
-
-    private void ShowSizeReadout(Rect r)
-    {
-        SizeText.Text = $"{(int)r.Width} × {(int)r.Height}";
-        double chipH = 30 * _dpiScale;   // physical footprint (chip is counter-scaled)
-        double x = r.X;
-        double y = r.Y - chipH;
-        if (y < 2) y = r.Y + 4;
-        Canvas.SetLeft(SizeReadout, Math.Round(x));
-        Canvas.SetTop(SizeReadout, Math.Round(y));
-        SizeReadout.Visibility = Visibility.Visible;
-    }
-
-    private void UpdateMask(Rect? selection)
-    {
-        var outer = new RectangleGeometry(new Rect(0, 0, _vs.Width, _vs.Height));
-        if (selection is { } s)
-        {
-            var group = new GeometryGroup { FillRule = FillRule.EvenOdd };
-            group.Children.Add(outer);
-            group.Children.Add(new RectangleGeometry(s));
-            MaskPath.Data = group;
-        }
-        else
-        {
-            MaskPath.Data = outer;
-        }
-    }
-
-    private static Rect MakeRect(Point a, Point b) =>
-        new(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y), Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
-
     // ---------------------------------------------------------- edit phase ---
 
     private void EnterEditing(Rect r)
@@ -539,25 +322,23 @@ public partial class CaptureOverlayWindow : Window
         Toolbar.BorderBrush = Theme.ButtonBorderBrush;
 
         var toolsRow = new StackPanel { Orientation = Orientation.Horizontal };
-        toolsRow.Children.Add(MakeToolButton(GlyphMarker, Loc.T("tool.marker"), ToolKind.MarkerPen));
-        toolsRow.Children.Add(MakeToolButton(GlyphHighlighter, Loc.T("tool.highlighter"), ToolKind.Highlighter));
-        toolsRow.Children.Add(MakeToolButton(GlyphText, Loc.T("tool.text"), ToolKind.Text));
-        toolsRow.Children.Add(MakeToolButton(GlyphShape, Loc.T("tool.shape"), ToolKind.Shape));
-        toolsRow.Children.Add(MakeToolButton(GlyphLine, Loc.T("tool.line"), ToolKind.Line));
-        toolsRow.Children.Add(MakeToolButton(GlyphSticker, Loc.T("tool.sticker"), ToolKind.Sticker));
-        toolsRow.Children.Add(MakeToolButton(GlyphBlur, Loc.T("tool.blur"), ToolKind.Blur));
-        toolsRow.Children.Add(MakeToolButton(GlyphMagnify,
-            Loc.T("tool.magnify") + " - " + Loc.T("magnify.hint"), ToolKind.Magnify));
+        toolsRow.Children.Add(MakeToolButton(GlyphMarker, ToolKind.MarkerPen));
+        toolsRow.Children.Add(MakeToolButton(GlyphHighlighter, ToolKind.Highlighter));
+        toolsRow.Children.Add(MakeToolButton(GlyphText, ToolKind.Text));
+        toolsRow.Children.Add(MakeToolButton(GlyphShape, ToolKind.Shape));
+        toolsRow.Children.Add(MakeToolButton(GlyphLine, ToolKind.Line));
+        toolsRow.Children.Add(MakeToolButton(GlyphSticker, ToolKind.Sticker));
+        toolsRow.Children.Add(MakeToolButton(GlyphBlur, ToolKind.Blur));
+        toolsRow.Children.Add(MakeToolButton(GlyphMagnify, ToolKind.Magnify));
+        toolsRow.Children.Add(MakeNumberToolButton());
+        toolsRow.Children.Add(MakeToolButton(GlyphEraser, ToolKind.Eraser));
         toolsRow.Children.Add(MakeSeparator());
-        _undoButton = MakeActionButton(GlyphUndo, Loc.T("action.undo") + " (" + _settings.UndoHotkey + ")", () => _history.Undo());
-        _redoButton = MakeActionButton(GlyphRedo, Loc.T("action.redo") + " (" + _settings.RedoHotkey + ")", () => _history.Redo());
+        _undoButton = MakeActionButton(GlyphUndo, WithHotkey(Loc.T("action.undo"), _shortcuts.Label(CaptureShortcuts.Undo)), () => _history.Undo());
+        _redoButton = MakeActionButton(GlyphRedo, WithHotkey(Loc.T("action.redo"), _shortcuts.Label(CaptureShortcuts.Redo)), () => _history.Redo());
         toolsRow.Children.Add(_undoButton);
         toolsRow.Children.Add(_redoButton);
         toolsRow.Children.Add(MakeSeparator());
-        toolsRow.Children.Add(MakeActionButton(GlyphCopy, Loc.T("action.copy") + " (" + _settings.CopyHotkey + ")", DoCopy));
-        toolsRow.Children.Add(MakeActionButton(GlyphSave, Loc.T("action.save") + " (" + _settings.SaveHotkey + ")", DoSave));
-        toolsRow.Children.Add(MakeActionButton(GlyphPin, Loc.T("action.pin"), DoPin));
-        toolsRow.Children.Add(MakeActionButton(GlyphClose, Loc.T("action.close") + " (Esc)", Cancel));
+        AddOutputButtons(toolsRow);
         ToolbarStack.Children.Add(toolsRow);
 
         // ---- Pen options (width / opacity / colours) ----
@@ -589,6 +370,8 @@ public partial class CaptureOverlayWindow : Window
         ToolbarStack.Children.Add(_blurOptionsPanel);
 
         BuildMagnifyOptions();
+        BuildNumberOptions();
+        BuildEraserOptions();
 
         // ---- Text options (font / size / style / colour) ----
         _textOptionsPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
@@ -849,9 +632,9 @@ public partial class CaptureOverlayWindow : Window
         Toolbar.ReleaseMouseCapture();
     }
 
-    private Button MakeToolButton(string glyph, string tooltip, ToolKind kind)
+    private Button MakeToolButton(string glyph, ToolKind kind)
     {
-        var b = MakeIconButton(glyph, tooltip);
+        var b = MakeIconButton(glyph, ToolTipFor(kind));
         b.Tag = kind;
         b.Click += (_, _) => SelectTool(kind);
         _toolButtons.Add(b);
@@ -944,6 +727,7 @@ public partial class CaptureOverlayWindow : Window
             Tag = c,   // lets RefreshSwatchSelection find and mark the active colour
         };
         b.Click += (_, _) => OnColorPicked(c);
+        b.MouseWheel += Swatch_MouseWheel;   // the wheel steps the tool colour's opacity
         return b;
     }
 
@@ -961,7 +745,7 @@ public partial class CaptureOverlayWindow : Window
         if (Palette.Contains(c) || _customColors.Contains(c)) return;
         _customColors.Add(c);
         if (_customColors.Count > MaxCustomColors) _customColors.RemoveAt(0);
-        foreach (var panel in new[] { _penOptionsPanel, _textOptionsPanel, _shapeOptionsPanel, _lineOptionsPanel, _magnifyOptionsPanel })
+        foreach (var panel in SwatchPanels())
             panel.Children.Insert(panel.Children.Count - 1, MakeCustomSwatch(c));   // before the "+"
     }
 
@@ -990,7 +774,7 @@ public partial class CaptureOverlayWindow : Window
     {
         ToolKind.Highlighter => _hlColor,
         ToolKind.Text => _textColor,
-        ToolKind.Shape => _shapeColor,
+        ToolKind.Shape or ToolKind.Number => _shapeColor,
         ToolKind.Line => _lineColor,
         ToolKind.Magnify => _magnifyBorderColor,
         _ => _penColor,
@@ -1000,7 +784,7 @@ public partial class CaptureOverlayWindow : Window
     private void RefreshSwatchSelection()
     {
         var cur = ToolColor(_tool);
-        foreach (var panel in new[] { _penOptionsPanel, _textOptionsPanel, _shapeOptionsPanel, _lineOptionsPanel, _magnifyOptionsPanel })
+        foreach (var panel in SwatchPanels())
         {
             foreach (var child in panel.Children)
             {
@@ -1047,6 +831,7 @@ public partial class CaptureOverlayWindow : Window
             ToolTip = Loc.T("color.more"),
         };
         b.Click += (_, _) => OpenColorPicker();
+        b.MouseWheel += Swatch_MouseWheel;
         return b;
     }
 
@@ -1058,7 +843,7 @@ public partial class CaptureOverlayWindow : Window
         {
             case ToolKind.Highlighter: current = _hlColor; opacity = _hlOpacity; break;
             case ToolKind.Text: current = _textColor; opacity = _textColor.A / 255.0; break;
-            case ToolKind.Shape: current = _shapeColor; opacity = _shapeColor.A / 255.0; break;
+            case ToolKind.Shape: case ToolKind.Number: current = _shapeColor; opacity = _shapeColor.A / 255.0; break;
             case ToolKind.Line: current = _lineColor; opacity = _lineColor.A / 255.0; break;
             case ToolKind.Magnify: current = _magnifyBorderColor; opacity = _magnifyBorderColor.A / 255.0; break;
             default: current = _penColor; opacity = _penOpacity; break;
@@ -1084,7 +869,7 @@ public partial class CaptureOverlayWindow : Window
             RefocusText();
             return;
         }
-        if (_tool == ToolKind.Shape)
+        if (_tool is ToolKind.Shape or ToolKind.Number)
         {
             _shapeColor = Color.FromArgb(a, rgb.R, rgb.G, rgb.B);
             return;
@@ -1114,132 +899,16 @@ public partial class CaptureOverlayWindow : Window
         return new Rect(_vs.X + left, _vs.Y + top, ToolbarWidth(), ToolbarHeight());
     }
 
-    // ---------------------------------------------------------- tool state ---
-
-    private void SelectTool(ToolKind kind)
-    {
-        if (_editingText != null && kind != ToolKind.Text) CommitActiveText(discardIfEmpty: true);
-        _tool = kind;
-
-        foreach (var b in _toolButtons)
-        {
-            bool active = (ToolKind)b.Tag! == kind;
-            b.Background = active ? Theme.ActiveBrush : Theme.ButtonBgBrush;
-        }
-
-        bool isNone = kind is ToolKind.None;
-        bool isPen = kind is ToolKind.MarkerPen or ToolKind.Highlighter;
-        bool isBlur = kind is ToolKind.Blur;
-        bool isText = kind is ToolKind.Text;
-        bool isShape = kind is ToolKind.Shape;
-        bool isLine = kind is ToolKind.Line;
-        bool isSticker = kind is ToolKind.Sticker;
-        bool isMagnify = kind is ToolKind.Magnify;
-        // Selection survives tool switches — grabbing works with every tool.
-
-        _penOptionsPanel.Visibility = isPen ? Visibility.Visible : Visibility.Collapsed;
-        _blurOptionsPanel.Visibility = isBlur ? Visibility.Visible : Visibility.Collapsed;
-        _textOptionsPanel.Visibility = isText ? Visibility.Visible : Visibility.Collapsed;
-        _shapeOptionsPanel.Visibility = isShape ? Visibility.Visible : Visibility.Collapsed;
-        _lineOptionsPanel.Visibility = isLine ? Visibility.Visible : Visibility.Collapsed;
-        _stickerOptionsPanel.Visibility = isSticker ? Visibility.Visible : Visibility.Collapsed;
-        _magnifyOptionsPanel.Visibility = isMagnify ? Visibility.Visible : Visibility.Collapsed;
-
-        Ink.EditingMode = isPen ? InkCanvasEditingMode.Ink : InkCanvasEditingMode.None;
-        Ink.IsHitTestVisible = isPen;
-        // Region tools capture via InteractionLayer; with no tool it catches drags that
-        // move the whole selection; sticker mode lets clicks reach the sticker images
-        // below so they can be dragged/resized. (Annotation grabbing is handled earlier
-        // by the tunneling EditLayer handlers, for every tool.)
-        InteractionLayer.IsHitTestVisible = isBlur || isText || isShape || isLine || isNone || isMagnify;
-        InteractionLayer.Cursor = DefaultInteractionCursor();
-
-        if (isPen) LoadPenControls();
-        if (isBlur) SelectBlurKind(_blurKind);
-        if (isShape) { SelectShapeKind(_shapeKind); SelectShapeStyle(_shapeFilled); }
-        if (isLine) RefreshArrowToggles();
-        if (isSticker && StickerHost.Children.Count == 0) AddSticker();
-        if (isMagnify) { SelectMagnifyShape(_magnifyShape); RefreshMagnifyToggles(); }
-        RefreshSwatchSelection();
-    }
-
-    /// <summary>With no tool, dragging the interaction layer moves the whole selection; every
-    /// other tool draws with it. Hover feedback overrides this while something is grabbable.</summary>
-    private Cursor DefaultInteractionCursor() =>
-        _tool == ToolKind.None ? Cursors.SizeAll : Cursors.Arrow;
-
-    private void SelectBlurKind(BlurKind kind)
-    {
-        _blurKind = kind;
-        foreach (var b in _blurKindButtons)
-        {
-            bool active = (BlurKind)b.Tag! == kind;
-            b.Background = active ? Theme.ActiveBrush : Theme.ButtonBgBrush;
-        }
-    }
-
-    private void LoadPenControls()
-    {
-        bool hl = _tool == ToolKind.Highlighter;
-        _widthSlider.Value = hl ? _hlWidth : _penWidth;
-        _opacitySlider.Value = hl ? _hlOpacity : _penOpacity;
-        ApplyDrawingAttributes();
-    }
-
-    private void ApplyDrawingAttributes()
-    {
-        bool hl = _tool == ToolKind.Highlighter;
-        double width = hl ? _hlWidth : _penWidth;
-        double opacity = hl ? _hlOpacity : _penOpacity;
-        Color baseColor = hl ? _hlColor : _penColor;
-        var color = Color.FromArgb((byte)Math.Round(opacity * 255), baseColor.R, baseColor.G, baseColor.B);
-
-        Ink.DefaultDrawingAttributes = new DrawingAttributes
-        {
-            Color = color,
-            Width = width,
-            Height = width,
-            IsHighlighter = hl,
-            FitToCurve = true,
-            StylusTip = StylusTip.Ellipse,
-        };
-    }
-
-    private void OnWidthChanged()
-    {
-        if (_tool == ToolKind.Highlighter) _hlWidth = _widthSlider.Value;
-        else _penWidth = _widthSlider.Value;
-        ApplyDrawingAttributes();
-    }
-
-    private void OnOpacityChanged()
-    {
-        if (_tool == ToolKind.Highlighter) _hlOpacity = _opacitySlider.Value;
-        else _penOpacity = _opacitySlider.Value;
-        ApplyDrawingAttributes();
-    }
-
-    private void OnColorPicked(Color c)
-    {
-        if (_tool == ToolKind.Text) { _textColor = Color.FromArgb(_textColor.A, c.R, c.G, c.B); ApplyTextStyle(); RefocusText(); }
-        else if (_tool == ToolKind.Shape) { _shapeColor = Color.FromArgb(_shapeColor.A, c.R, c.G, c.B); }
-        else if (_tool == ToolKind.Line) { _lineColor = Color.FromArgb(_lineColor.A, c.R, c.G, c.B); }
-        else if (_tool == ToolKind.Magnify) { _magnifyBorderColor = Color.FromArgb(_magnifyBorderColor.A, c.R, c.G, c.B); }
-        else
-        {
-            if (_tool == ToolKind.Highlighter) _hlColor = c;
-            else _penColor = c;
-            ApplyDrawingAttributes();
-        }
-        RefreshSwatchSelection();
-    }
-
     // ------------------------------------------------------ ink undo/redo ---
 
     private void Ink_StrokeCollected(object sender, InkCanvasStrokeCollectedEventArgs e)
     {
-        if (_suppressStrokeHistory) return;
-        var stroke = e.Stroke;
+        if (!_suppressStrokeHistory) PushStrokeHistory(e.Stroke);
+    }
+
+    /// <summary>Record a stroke already on the canvas (drawn, or a Shift straight segment).</summary>
+    private void PushStrokeHistory(Stroke stroke)
+    {
         _history.Push(
             undo: () => { _suppressStrokeHistory = true; Ink.Strokes.Remove(stroke); _suppressStrokeHistory = false; },
             redo: () => { _suppressStrokeHistory = true; Ink.Strokes.Add(stroke); _suppressStrokeHistory = false; });
@@ -1249,11 +918,12 @@ public partial class CaptureOverlayWindow : Window
 
     private void Blur_MouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (_tool == ToolKind.None) { Region_MoveStart(e.GetPosition(RootCanvas)); return; }
+        if (_tool == ToolKind.None) { Interior_MouseDown(e); return; }
         if (_tool == ToolKind.Text) { PlaceText(e.GetPosition(InteractionLayer)); return; }
         if (_tool == ToolKind.Shape) { Shape_MouseDown(e.GetPosition(InteractionLayer)); return; }
         if (_tool == ToolKind.Line) { Line_MouseDown(e.GetPosition(InteractionLayer)); return; }
         if (_tool == ToolKind.Magnify) { Magnify_MouseDown(e.GetPosition(InteractionLayer)); return; }
+        if (_tool == ToolKind.Number) { PlaceNumber(e.GetPosition(InteractionLayer)); return; }
         if (_tool != ToolKind.Blur) return;
 
         _blurDragging = true;
@@ -1278,8 +948,7 @@ public partial class CaptureOverlayWindow : Window
         if (_lineDragging) { Line_MouseMove(e.GetPosition(InteractionLayer)); return; }
         if (_magnifyDragging) { Magnify_MouseMove(e.GetPosition(InteractionLayer)); return; }
         if (!_blurDragging || _blurPreview == null) return;
-        var p = e.GetPosition(InteractionLayer);
-        var r = MakeRect(_blurStart, p);
+        var r = DragRect(_blurStart, e.GetPosition(InteractionLayer));
         Canvas.SetLeft(_blurPreview, r.X);
         Canvas.SetTop(_blurPreview, r.Y);
         _blurPreview.Width = r.Width;
@@ -1299,19 +968,21 @@ public partial class CaptureOverlayWindow : Window
         if (_blurPreview != null) BlurHost.Children.Remove(_blurPreview);
         _blurPreview = null;
 
-        var rel = MakeRect(_blurStart, e.GetPosition(InteractionLayer));
+        var rel = DragRect(_blurStart, e.GetPosition(InteractionLayer));
         // Clamp to selection.
         rel.Intersect(new Rect(0, 0, _selection.Width, _selection.Height));
         if (rel.Width < 6 || rel.Height < 6) return;
+        RecordAdded(BlurHost, CreateBlur(rel));   // the history push re-samples it
+    }
 
-        // Region-local coords: the region samples the composite beneath it, not the raw
-        // screenshot, so it stays valid wherever the user later drags it.
+    /// <summary>A blur region in the blur tool's kind and strength over <paramref name="rel"/>,
+    /// added to its layer; the caller records it. Region-local coords: the region samples the
+    /// composite beneath it, not the raw screenshot, so it stays valid wherever it is dragged.</summary>
+    private FrameworkElement CreateBlur(Rect rel)
+    {
         var visual = BlurEffects.Create(_blurKind, rel, _blurStrength);
-        BlurHost.Children.Add(visual);   // the history push below re-samples it
-
-        _history.Push(
-            undo: () => BlurHost.Children.Remove(visual),
-            redo: () => { if (!BlurHost.Children.Contains(visual)) BlurHost.Children.Add(visual); });
+        BlurHost.Children.Add(visual);
+        return visual;
     }
 
     // -------------------------------------------------- layer sampling ---
@@ -1338,7 +1009,7 @@ public partial class CaptureOverlayWindow : Window
     }
 
     private BitmapSource BlurBeneath() => _blurBeneath ??= Compositor.ComposeBeneathBlur(
-        _screenshot, _selection, Ink.Strokes, ShapeHost, StickerHost, TextHost);
+        _screenshot, _selection, ShownCursor(), Ink.Strokes, ShapeHost, StickerHost, TextHost);
 
     /// <summary>Re-sample every blur region from the content beneath the blur layer.</summary>
     private void RefreshBlurs()
@@ -1357,28 +1028,37 @@ public partial class CaptureOverlayWindow : Window
     {
         _shapeDragging = true;
         _shapeStart = start;
+        _shapePreview = CreateShape(new Rect(start, start));
+        InteractionLayer.CaptureMouse();
+    }
 
+    /// <summary>A rectangle or ellipse in the shape tool's style over <paramref name="r"/>,
+    /// added to the shape layer; the caller records it.</summary>
+    private Shape CreateShape(Rect r)
+    {
         var brush = new SolidColorBrush(_shapeColor);
         Shape s = _shapeKind == ShapeKind.Ellipse ? new Ellipse() : new Rectangle();
         if (_shapeFilled) { s.Fill = brush; }
         else { s.Fill = Brushes.Transparent; s.Stroke = brush; s.StrokeThickness = _shapeWidth; }
-
-        Canvas.SetLeft(s, start.X);
-        Canvas.SetTop(s, start.Y);
+        LayoutShape(s, r, _shapeKind == ShapeKind.RoundedRectangle);
         ShapeHost.Children.Add(s);
-        _shapePreview = s;
-        InteractionLayer.CaptureMouse();
+        return s;
     }
 
     private void Shape_MouseMove(Point p)
     {
         if (_shapePreview == null) return;
-        var r = MakeRect(_shapeStart, p);
-        Canvas.SetLeft(_shapePreview, r.X);
-        Canvas.SetTop(_shapePreview, r.Y);
-        _shapePreview.Width = r.Width;
-        _shapePreview.Height = r.Height;
-        if (_shapePreview is Rectangle rect && _shapeKind == ShapeKind.RoundedRectangle)
+        LayoutShape(_shapePreview, DragRect(_shapeStart, p), _shapeKind == ShapeKind.RoundedRectangle);
+    }
+
+    /// <summary>Place a rectangle or ellipse; a rounded rectangle's corners follow its size.</summary>
+    private static void LayoutShape(Shape shape, Rect r, bool rounded)
+    {
+        Canvas.SetLeft(shape, r.X);
+        Canvas.SetTop(shape, r.Y);
+        shape.Width = r.Width;
+        shape.Height = r.Height;
+        if (shape is Rectangle rect && rounded)
         {
             double radius = Math.Min(16, Math.Min(r.Width, r.Height) / 3.0);
             rect.RadiusX = radius;
@@ -1395,19 +1075,16 @@ public partial class CaptureOverlayWindow : Window
         _shapePreview = null;
         if (shape == null) return;
 
-        var r = MakeRect(_shapeStart, p);
-        if (r.Width < 4 || r.Height < 4) { ShapeHost.Children.Remove(shape); return; }
-
-        _history.Push(
-            undo: () => ShapeHost.Children.Remove(shape),
-            redo: () => { if (!ShapeHost.Children.Contains(shape)) ShapeHost.Children.Add(shape); });
+        var r = DragRect(_shapeStart, p);
+        if (r.Width < MinShapeSize || r.Height < MinShapeSize) { ShapeHost.Children.Remove(shape); return; }
+        RecordAdded(ShapeHost, shape);
     }
 
     // -------------------------------------------------------- magnifier ---
     // Follows the cursor while framing and while dragging the region handles: a 6×
     // pixel view with a translucent crosshair and a white box on the hovered pixel,
     // plus a readout panel (position, colour, copy/format hints). C copies the colour,
-    // Shift toggles hex ⇄ decimal.
+    // a Shift tap cycles its notation (keys: CaptureOverlayWindow.Keyboard.cs).
 
     private void EnsurePixelCache()
     {
@@ -1459,14 +1136,12 @@ public partial class CaptureOverlayWindow : Window
         MagPos.Text = $"({_vs.X + px}, {_vs.Y + py})";
         RefreshMagColorText();
 
+        UpdateGuideLines(px, py);
         PositionMagnifier(px, py);
         Magnifier.Visibility = Visibility.Visible;
     }
 
-    private void RefreshMagColorText() =>
-        MagColor.Text = _magHex
-            ? $"#{_magColor.R:X2}{_magColor.G:X2}{_magColor.B:X2}"
-            : $"RGB({_magColor.R}, {_magColor.G}, {_magColor.B})";
+    private void RefreshMagColorText() => MagColor.Text = ColorFormat.Format(_magColor, _magFormat);
 
     /// <summary>Bottom-right of the cursor by default; flips left/up near screen edges.</summary>
     private void PositionMagnifier(int px, int py)
@@ -1489,7 +1164,7 @@ public partial class CaptureOverlayWindow : Window
     {
         try
         {
-            Clipboard.SetText(MagColor.Text);
+            Clipboard.SetText(ColorFormat.Format(_magColor, _magFormat));
         }
         catch (Exception ex)
         {
@@ -1502,156 +1177,6 @@ public partial class CaptureOverlayWindow : Window
             }
             catch { /* never fail while reporting a failure */ }
         }
-    }
-
-    // ---------------------------------------------------- region adjust ---
-    // Editing-phase selection tweaks: 8 handles resize, dragging the interior (with no
-    // tool active) moves the whole region. Annotations stay glued to the SCREENSHOT
-    // content: when the region origin shifts by (dx,dy), every annotation element gets
-    // a compensating translate and the ink strokes are transformed by the inverse.
-
-    private void EnsureHandles()
-    {
-        if (_handles.Count > 0) return;
-        Cursor[] cursors =
-        {
-            Cursors.SizeNWSE, Cursors.SizeNS, Cursors.SizeNESW,
-            Cursors.SizeWE,                   Cursors.SizeWE,
-            Cursors.SizeNESW, Cursors.SizeNS, Cursors.SizeNWSE,
-        };
-        for (int i = 0; i < 8; i++)
-        {
-            var h = new Rectangle
-            {
-                Width = HandleSize,
-                Height = HandleSize,
-                Fill = new SolidColorBrush(Theme.Accent),
-                Stroke = Brushes.White,
-                StrokeThickness = 1,
-                Cursor = cursors[i],
-                Tag = i,
-            };
-            h.MouseLeftButtonDown += Handle_MouseDown;
-            h.MouseMove += Handle_MouseMove;
-            h.MouseLeftButtonUp += Handle_MouseUp;
-            _handles.Add(h);
-            HandleLayer.Children.Add(h);
-        }
-    }
-
-    private void LayoutHandles()
-    {
-        var at = HandleGeometry.Place(
-            new Rect(_selection.X, _selection.Y, _selection.Width, _selection.Height),
-            HandleSize, outside: false);
-        for (int i = 0; i < HandleGeometry.Count; i++)
-        {
-            Canvas.SetLeft(_handles[i], at[i].X);
-            Canvas.SetTop(_handles[i], at[i].Y);
-        }
-    }
-
-    private void Handle_MouseDown(object sender, MouseButtonEventArgs e)
-    {
-        if (sender is not Rectangle h || _phase != Phase.Editing) return;
-        _resizeHandle = (int)h.Tag!;
-        _regionGrab = e.GetPosition(RootCanvas);
-        _regionStart = _selection;
-        h.CaptureMouse();
-        e.Handled = true;
-    }
-
-    private void Handle_MouseMove(object sender, MouseEventArgs e)
-    {
-        if (_resizeHandle < 0) return;
-        var p = e.GetPosition(RootCanvas);
-        UpdateMagnifier(p);
-        var r = HandleGeometry.DragEdges(
-            new Rect(_regionStart.X, _regionStart.Y, _regionStart.Width, _regionStart.Height),
-            _resizeHandle, p.X - _regionGrab.X, p.Y - _regionGrab.Y,
-            MinRegionSize, new Rect(0, 0, _screenshot.PixelWidth, _screenshot.PixelHeight));
-
-        ApplyRegion(new Int32Rect(
-            (int)Math.Round(r.X), (int)Math.Round(r.Y),
-            (int)Math.Round(r.Width), (int)Math.Round(r.Height)));
-    }
-
-    private void Handle_MouseUp(object sender, MouseButtonEventArgs e)
-    {
-        if (_resizeHandle < 0) return;
-        _resizeHandle = -1;
-        (sender as Rectangle)?.ReleaseMouseCapture();
-        e.Handled = true;
-    }
-
-    private void Region_MoveStart(Point p)
-    {
-        _regionMoving = true;
-        _regionGrab = p;
-        _regionStart = _selection;
-        InteractionLayer.CaptureMouse();
-    }
-
-    private void Region_MoveTo(Point p)
-    {
-        UpdateMagnifier(p);
-        int dx = (int)Math.Round(p.X - _regionGrab.X);
-        int dy = (int)Math.Round(p.Y - _regionGrab.Y);
-        int x = Math.Clamp(_regionStart.X + dx, 0, _screenshot.PixelWidth - _regionStart.Width);
-        int y = Math.Clamp(_regionStart.Y + dy, 0, _screenshot.PixelHeight - _regionStart.Height);
-        ApplyRegion(new Int32Rect(x, y, _regionStart.Width, _regionStart.Height));
-    }
-
-    private void Region_MoveEnd()
-    {
-        _regionMoving = false;
-        InteractionLayer.ReleaseMouseCapture();
-    }
-
-    /// <summary>Apply a new selection rect and re-layout everything that depends on it.</summary>
-    private void ApplyRegion(Int32Rect r)
-    {
-        if (r == _selection) return;
-
-        int dx = r.X - _selection.X;
-        int dy = r.Y - _selection.Y;
-        if (dx != 0 || dy != 0) ShiftAnnotations(-dx, -dy);
-
-        _selection = r;
-        // A region RESIZE (as opposed to a move) leaves annotations where they are, so a
-        // magnifier's framed source — stored in region-local coords — can end up outside the
-        // new, smaller region. Pull it back in, or every later interaction with it would be
-        // working from an out-of-bounds rect.
-        ClampMagnifySourcesIntoRegion();
-
-        var sel = new Rect(r.X, r.Y, r.Width, r.Height);
-        ShowSelectionRect(sel);
-        LayoutEditLayer(sel);
-        LayoutHandles();
-        PositionToolbar();
-        InvalidateSampledLayers();   // the region now covers different screenshot pixels
-        if (_selected != null) UpdateSelectionBox();
-        else LayoutMagnifySourceHandles();
-    }
-
-    /// <summary>Keep annotations pinned to the screenshot content while the region moves.</summary>
-    private void ShiftAnnotations(int dx, int dy)
-    {
-        foreach (var host in new[] { BlurHost, MagnifyHost, ShapeHost, StickerHost, TextHost })
-        {
-            foreach (var child in host.Children)
-            {
-                if (child is not FrameworkElement el) continue;
-                var tt = EnsureTranslate(el);
-                tt.X += dx;
-                tt.Y += dy;
-                // A magnifier frames its source in region-local coords too, so that has to
-                // travel along or the enlarged view would start showing a different area.
-                MagnifyEffects.ShiftSource(el, dx, dy);
-            }
-        }
-        if (Ink.Strokes.Count > 0)
-            Ink.Strokes.Transform(new Matrix(1, 0, 0, 1, dx, dy), false);
     }
 
     // -------------------------------------------- direct manipulation ---
@@ -1689,12 +1214,12 @@ public partial class CaptureOverlayWindow : Window
     {
         if (_phase != Phase.Editing || _editingText != null) return;
         var p = e.GetPosition(EditLayer);
-        var hit = HitAnnotation(p);
+        var hit = HitAnnotation(p, ToolGrabs);
 
         // A magnifier's framed source is grabbable too — dragging it re-points the enlarged
         // view at different content. It is drawn in the top layer, so it wins over anything
         // below the magnifier host, while the enlarged views themselves stay above it.
-        if ((hit == null || hit.Parent != MagnifyHost) && HitMagnifySource(p) is { } mag)
+        if ((hit == null || hit.Parent != MagnifyHost) && HitMagnifySource(p) is { } mag && ToolGrabs(mag))
         {
             _selected = mag;
             UpdateSelectionBox();
@@ -1730,9 +1255,9 @@ public partial class CaptureOverlayWindow : Window
 
         if (_magnifySourceDrag is { } mag)
         {
+            var (sdx, sdy) = MoveDelta(_magnifySourceGrab, p);
             MagnifyEffects.MoveSourceTo(mag, ClampSourceToRegion(new Rect(
-                _magnifySourceStart.X + (p.X - _magnifySourceGrab.X),
-                _magnifySourceStart.Y + (p.Y - _magnifySourceGrab.Y),
+                _magnifySourceStart.X + sdx, _magnifySourceStart.Y + sdy,
                 _magnifySourceStart.Width, _magnifySourceStart.Height)).TopLeft);
             ResampleMagnifier(mag);   // it now frames different pixels
             LayoutMagnifySourceHandles();
@@ -1742,15 +1267,11 @@ public partial class CaptureOverlayWindow : Window
 
         if (_moveDragging && _selected != null)
         {
+            var (dx, dy) = MoveDelta(_moveGrab, p);
             var tt = EnsureTranslate(_selected);
-            tt.X = _moveOrigX + (p.X - _moveGrab.X);
-            tt.Y = _moveOrigY + (p.Y - _moveGrab.Y);
-            // A blur shows the pixels it currently sits over, so it has to follow the drag.
-            if (_selected.Parent == BlurHost) BlurEffects.Resample(_selected, BlurBeneath());
-            // A magnifier keeps its content (it is tied to the framed source), but the frame
-            // and connector are drawn relative to the view, so they get rebuilt.
-            else if (_selected.Parent == MagnifyHost) MagnifyEffects.UpdateDecoration(_selected);
-            UpdateSelectionBox();
+            tt.X = _moveOrigX + dx;
+            tt.Y = _moveOrigY + dy;
+            AfterAnnotationMoved(_selected);
             e.Handled = true;
             return;
         }
@@ -1758,7 +1279,7 @@ public partial class CaptureOverlayWindow : Window
         // Hover feedback (idle pointer only — never during a drawing drag).
         if (_editingText == null && e.LeftButton == MouseButtonState.Released)
         {
-            bool grabbable = HitAnnotation(p) != null || HitMagnifySource(p) != null;
+            bool grabbable = HitAnnotation(p, ToolGrabs) != null || HitMagnifySource(p) is { } source && ToolGrabs(source);
             EditLayer.Cursor = grabbable ? Cursors.SizeAll : null;
             // Over a magnifier's framed source the element under the pointer is usually
             // InteractionLayer, and an explicit Cursor on the hit element beats the one
@@ -1793,13 +1314,7 @@ public partial class CaptureOverlayWindow : Window
         e.Handled = true;
         if (_selected is not { } el) return;
 
-        var tt = EnsureTranslate(el);
-        double ox = _moveOrigX, oy = _moveOrigY, nx = tt.X, ny = tt.Y;
-        if (Math.Abs(nx - ox) < 0.5 && Math.Abs(ny - oy) < 0.5) return;   // click, not a move
-
-        _history.Push(
-            undo: () => { var t = EnsureTranslate(el); t.X = ox; t.Y = oy; },
-            redo: () => { var t = EnsureTranslate(el); t.X = nx; t.Y = ny; });
+        PushMove(el, new Point(_moveOrigX, _moveOrigY));
     }
 
     private void DeleteSelected()
@@ -1814,15 +1329,22 @@ public partial class CaptureOverlayWindow : Window
 
     /// <summary>Topmost annotation whose bounds contain <paramref name="p"/> (host z-order:
     /// magnifier above blur above text above stickers above shapes/lines, matching the
-    /// composite). A magnifier is only grabbed by its enlarged view, not by its frame.</summary>
-    private FrameworkElement? HitAnnotation(Point p)
+    /// composite), skipping any <paramref name="accept"/> turns down. A magnifier is only
+    /// grabbed by its enlarged view, not by its frame.</summary>
+    private FrameworkElement? HitAnnotation(Point p, Func<FrameworkElement, bool>? accept = null)
     {
         foreach (var host in new[] { MagnifyHost, BlurHost, TextHost, StickerHost, ShapeHost })
             for (int i = host.Children.Count - 1; i >= 0; i--)
-                if (host.Children[i] is FrameworkElement el && AnnotationBounds(el).Contains(p))
+                if (host.Children[i] is FrameworkElement el && AnnotationBounds(el).Contains(p) &&
+                    (accept == null || accept(el)))
                     return el;
         return null;
     }
+
+    /// <summary>Whether a press with the current tool picks <paramref name="el"/> up: the
+    /// number tool only picks up number markers and numbers what lies under the others.</summary>
+    private bool ToolGrabs(FrameworkElement el) =>
+        NumberMarker.PressGrabs(_tool, NumberMarker.SpecOf(el) != null);
 
     /// <summary>Element bounds in host coordinates, including any move translation.</summary>
     private static Rect AnnotationBounds(FrameworkElement el)
@@ -1895,51 +1417,6 @@ public partial class CaptureOverlayWindow : Window
         MagnifySourceHandleLayer.Visibility = Visibility.Collapsed;
     }
 
-    // -------------------------------------------------------- line tool ---
-
-    private void Line_MouseDown(Point start)
-    {
-        _lineDragging = true;
-        _lineStart = start;
-        var brush = new SolidColorBrush(_lineColor);
-        _linePreview = new Path
-        {
-            Stroke = brush,
-            Fill = brush,                    // fills the arrowhead triangles
-            StrokeThickness = _lineWidth,
-            StrokeStartLineCap = PenLineCap.Round,
-            StrokeEndLineCap = PenLineCap.Round,
-            StrokeLineJoin = PenLineJoin.Round,
-        };
-        ShapeHost.Children.Add(_linePreview);
-        InteractionLayer.CaptureMouse();
-    }
-
-    private void Line_MouseMove(Point p)
-    {
-        if (_linePreview == null) return;
-        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) p = ArrowGeometry.SnapTo45(_lineStart, p);
-        _linePreview.Data = ArrowGeometry.Build(_lineStart, p, _lineWidth, _lineArrowStart, _lineArrowEnd);
-    }
-
-    private void Line_MouseUp(Point p)
-    {
-        _lineDragging = false;
-        InteractionLayer.ReleaseMouseCapture();
-
-        var path = _linePreview;
-        _linePreview = null;
-        if (path == null) return;
-
-        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) p = ArrowGeometry.SnapTo45(_lineStart, p);
-        if ((p - _lineStart).Length < 8) { ShapeHost.Children.Remove(path); return; }
-        path.Data = ArrowGeometry.Build(_lineStart, p, _lineWidth, _lineArrowStart, _lineArrowEnd);
-
-        _history.Push(
-            undo: () => ShapeHost.Children.Remove(path),
-            redo: () => { if (!ShapeHost.Children.Contains(path)) ShapeHost.Children.Add(path); });
-    }
-
     // ----------------------------------------------------- sticker tool ---
 
     private void AddSticker()
@@ -1968,10 +1445,7 @@ public partial class CaptureOverlayWindow : Window
         Canvas.SetTop(image, (_selection.Height - h) / 2);
         AttachStickerInteractions(image);
         StickerHost.Children.Add(image);
-
-        _history.Push(
-            undo: () => StickerHost.Children.Remove(image),
-            redo: () => { if (!StickerHost.Children.Contains(image)) StickerHost.Children.Add(image); });
+        RecordAdded(StickerHost, image);
     }
 
     private void AttachStickerInteractions(Image image)
@@ -2040,16 +1514,15 @@ public partial class CaptureOverlayWindow : Window
 
         // Let the box receive typing (InteractionLayer would otherwise eat clicks).
         InteractionLayer.IsHitTestVisible = false;
+        // The overlay turns the IME off so shortcut letters arrive as keys; typing a
+        // Chinese/Japanese annotation needs it back on here.
+        InputMethod.SetIsInputMethodEnabled(box, true);
 
-        box.PreviewKeyDown += (_, e) =>
-        {
-            if (e.Key == Key.Escape) { CommitActiveText(discardIfEmpty: true); e.Handled = true; }
-            else if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Shift) == 0)
-            { CommitActiveText(discardIfEmpty: true); e.Handled = true; }
-        };
+        // Esc and Enter (not Shift+Enter) commit through the overlay's key router.
         // NOTE: no commit-on-focus-loss — clicking a toolbar style button must not
         // dismiss the box. It commits on Enter/Esc, a new placement, tool switch, or export.
 
+        box.PreviewMouseDown += TextBox_PreviewMiddleDown;   // middle-click pastes the clipboard text
         box.Loaded += (_, _) => { box.Focus(); Keyboard.Focus(box); };
         box.Focus();
         Keyboard.Focus(box);
@@ -2108,172 +1581,7 @@ public partial class CaptureOverlayWindow : Window
         InteractionLayer.IsHitTestVisible = _tool is ToolKind.Text or ToolKind.Blur or ToolKind.Magnify;
     }
 
-    // ----------------------------------------------------------- outputs ---
-
-    private BitmapSource Flatten()
-    {
-        CommitActiveText(discardIfEmpty: true);
-        InvalidateSampledLayers();   // make sure every region reflects the final annotation stack
-        // Re-sampling assigns new bitmaps to the blur/magnifier images, which invalidates
-        // their layout; RenderTargetBitmap draws whatever was last *arranged*, so flush the
-        // pending pass or a freshly sampled image would export at a stale (or zero) size.
-        EditLayer.UpdateLayout();
-        return Compositor.Compose(_screenshot, _selection, Ink.Strokes, BlurHost, MagnifyHost,
-            ShapeHost, StickerHost, TextHost);
-    }
-
-    private void DoCopy()
-    {
-        var img = Flatten();
-        ClipboardService.CopyImage(img);
-        PersistSettings();
-        Close();
-    }
-
-    private void DoSave()
-    {
-        var img = Flatten();
-        var path = FileSaveService.SaveAs(img, _settings.SaveDirectory);
-        if (path != null) { PersistSettings(); Close(); }
-        else { SelectionBorder.Visibility = Visibility.Visible; }
-    }
-
-    private void DoQuickSave()
-    {
-        var img = Flatten();
-        FileSaveService.QuickSave(img, _settings.SaveDirectory);
-        PersistSettings();
-        Close();
-    }
-
-    private void DoPin()
-    {
-        var img = Flatten();
-        int screenX = _vs.X + _selection.X;
-        int screenY = _vs.Y + _selection.Y;
-        var pin = new PinWindow(img, screenX, screenY, _settings.SaveDirectory);
-        pin.Show();
-        PersistSettings();
-        Close();
-    }
-
-    /// <summary>
-    /// Leave the capture from the editing phase: always ask first (a selected region
-    /// counts as work too), with a "don't ask again" option persisted to settings.
-    /// </summary>
-    private void ConfirmCancel()
-    {
-        if (!_settings.ConfirmDiscardEdits)
-        {
-            Cancel();
-            return;
-        }
-
-        CommitActiveText(discardIfEmpty: true);
-        var dlg = new ConfirmDiscardDialog { Owner = this };
-        bool? discard = dlg.ShowDialog();
-
-        if (dlg.DontAskAgain)
-        {
-            _settings.ConfirmDiscardEdits = false;
-            _settings.Save();
-        }
-        if (discard == true) Cancel();
-    }
-
-    private void Cancel() => Close();
-
-    private void PersistSettings()
-    {
-        _settings.PenWidth = _penWidth;
-        _settings.PenOpacity = _penOpacity;
-        _settings.PenColor = ToHex(_penColor);
-        _settings.HighlighterWidth = _hlWidth;
-        _settings.HighlighterOpacity = _hlOpacity;
-        _settings.HighlighterColor = ToHex(_hlColor);
-        _settings.BlurKind = _blurKind.ToString();
-        _settings.GaussianStrength = _blurStrength;
-        _settings.TextFont = _textFont;
-        _settings.TextSize = _textSize;
-        _settings.TextColor = ToHex(_textColor);
-        _settings.TextBold = _textBold;
-        _settings.TextItalic = _textItalic;
-        _settings.TextStrikethrough = _textStrike;
-        _settings.ShapeKind = _shapeKind.ToString();
-        _settings.ShapeFilled = _shapeFilled;
-        _settings.ShapeColor = ToHex(_shapeColor);
-        _settings.ShapeWidth = _shapeWidth;
-        _settings.LineWidth = _lineWidth;
-        _settings.LineColor = ToHex(_lineColor);
-        _settings.LineArrowStart = _lineArrowStart;
-        _settings.LineArrowEnd = _lineArrowEnd;
-        _settings.MagnifyShape = _magnifyShape.ToString();
-        _settings.MagnifyZoom = _magnifyZoom;
-        _settings.MagnifyBorderWidth = _magnifyBorderWidth;
-        _settings.MagnifyBorderColor = ToHex(_magnifyBorderColor);
-        _settings.MagnifyConnector = _magnifyConnector;
-        _settings.MagnifyShadow = _magnifyShadow;
-        _settings.MagnifySmooth = _magnifySmooth;
-        _settings.MagnifyIncludeAnnotations = _magnifyWithAnnotations;
-        _settings.CustomColors = _customColors.Select(ToHex).ToList();
-        _settings.Save();
-    }
-
-    // --------------------------------------------------------- keyboard ---
-
-    private void OnKeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Escape)
-        {
-            // A framed-source drag owns the mouse and hides its handles on Deselect, so it
-            // has to be aborted explicitly or it would keep resizing invisibly.
-            if (_phase == Phase.Editing && CancelMagnifySourceDrag()) { e.Handled = true; return; }
-
-            // Snipaste-style: Esc clears the selection first, then LEAVES the capture
-            // (confirming when annotations would be lost) — no reselect step.
-            if (_phase == Phase.Editing && _selected != null) Deselect();
-            else if (_phase == Phase.Editing) ConfirmCancel();
-            else Cancel();
-            e.Handled = true;
-            return;
-        }
-
-        // Magnifier keys (framing, or mid-drag while adjusting the region).
-        if (Magnifier.Visibility == Visibility.Visible && _editingText == null)
-        {
-            if (e.Key == Key.C && Keyboard.Modifiers == ModifierKeys.None)
-            {
-                CopyMagColor();
-                e.Handled = true;
-                return;
-            }
-            if (e.Key is Key.LeftShift or Key.RightShift && !e.IsRepeat)
-            {
-                _magHex = !_magHex;
-                RefreshMagColorText();
-                e.Handled = true;
-                return;
-            }
-        }
-
-        if (_phase != Phase.Editing) return;
-
-        if (e.Key == Key.Delete && _selected != null && _editingText == null)
-        {
-            DeleteSelected();
-            e.Handled = true;
-            return;
-        }
-
-        // Shortcuts are user-configurable in settings.json (parsed into KeyGestures).
-        if (Matches(_quickSaveGesture, e)) { DoQuickSave(); e.Handled = true; }
-        else if (Matches(_undoGesture, e)) { _history.Undo(); e.Handled = true; }
-        else if (Matches(_redoGesture, e)) { _history.Redo(); e.Handled = true; }
-        else if (Matches(_copyGesture, e)) { DoCopy(); e.Handled = true; }
-        else if (Matches(_saveGesture, e)) { DoSave(); e.Handled = true; }
-    }
-
-    private bool Matches(KeyGesture? g, KeyEventArgs e) => g != null && g.Matches(this, e);
+    // ---------------------------------------------------------- history ---
 
     private void UpdateHistoryButtons()
     {
@@ -2284,6 +1592,9 @@ public partial class CaptureOverlayWindow : Window
     }
 
     // ----------------------------------------------------------- helpers ---
+
+    private static Rect MakeRect(Point a, Point b) =>
+        new(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y), Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
 
     private static Color ParseColor(string hex, Color fallback)
     {

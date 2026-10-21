@@ -13,7 +13,7 @@ A lightweight Windows screenshot, annotation and screen-recording tool: capture 
 ### Capture
 - The whole screen (multi-monitor support)
 - **Automatic window & UI-element detection**: hover over a window or an interface element (buttons, panels, web-page blocks) to outline it, then click to capture; scroll the **mouse wheel** to switch the detection level (element ⇄ window)
-- Drag to select a custom region, with a size readout; a **pixel magnifier** follows the cursor throughout (framing and editing) with a crosshair, coordinates and the pixel color — `C` copies the color value, `Shift` toggles hex/decimal
+- Drag to select a custom region, with a size readout; a **pixel magnifier** follows the cursor throughout (framing and editing) with a crosshair, coordinates and the pixel color — `C` copies the color value, a `Shift` tap cycles HEX / RGB / HSV
 - **Adjustable after selecting**: drag the corner and edge-midpoint handles to resize; with no tool active, drag inside the region to move it — existing annotations stay pinned to the content
 
 ### Annotate
@@ -34,7 +34,7 @@ After capturing, an **icon toolbar** pops up next to the cursor (draggable, and 
 ### Output
 - Copy to clipboard
 - Save as PNG / JPG (save as, or quick-save to a default folder)
-- **Pin to screen**: the image floats on top; drag it, scroll to resize, right-click for a menu; with multiple pins, Esc closes the focused one first, or closes them all when none is focused
+- **Pin to screen**: the image floats on top; drag it, scroll to zoom around the cursor, right-click for a menu; a double-click, `Esc` or `Ctrl+W` closes it and `F3` can bring it back (`Shift+Esc` destroys it); with multiple pins, Esc closes the focused one first, or closes them all when none is focused. `F3` also pins whatever the clipboard holds
 
 ### Region recording
 - A dedicated global hotkey (**F2** by default): drag-select the region to record, or **click a window to auto-detect it** (wheel cycles window/element levels, just like capture), press again (or click Stop) to finish
@@ -48,10 +48,10 @@ After capturing, an **icon toolbar** pops up next to the cursor (draggable, and 
 - Encoded by the bundled `ffmpeg` — no separate install required
 
 ### More
-- Global hotkeys (**F1** capture, **F2** recording, both configurable) and launch from the **system tray** icon
+- Global hotkeys (**F1** capture, **Ctrl+F1** capture and copy, **Shift+F1** custom snip, **F2** recording, **F3** paste / bring back a pin, **Shift+F3** hide / show pins, all configurable) and launch from the **system tray** icon
 - **Multiple languages**: Traditional Chinese / English / 日本語 / 한국어 / Français / Deutsch / Español (follows the system by default)
 - **Light / Dark / Follow system** theme, with a modern rounded UI and dark title bars
-- A centralized **Settings window**: language, hotkeys, theme, run at startup, save folder, annotation defaults (blur type), recording format / frame rate (hotkey fields are set by simply pressing the combination)
+- A centralized **Settings window**: language, hotkeys, theme, run at startup, save folder, annotation defaults (blur type), recording format / frame rate (hotkey fields are set by simply pressing the combination; every key of the capture and of pins can be rebound too)
 - Optional **run automatically at startup**
 - **Auto-update**: checks for new versions via GitHub Releases (toggle in settings, or check manually); one click to download and install
 
@@ -77,26 +77,139 @@ Recording: press **F2** and drag-select a region to start; press **F2** again (o
 
 ## Hotkeys
 
-| Context | Keys | Action |
-|---|---|---|
-| Global | `F1` | Start a capture (configurable) |
-| Global | `F2` | Start / stop region recording (configurable) |
-| Selecting | Mouse wheel | Switch detection level (UI element ⇄ window) |
-| Selecting / annotating | `C` | Copy the magnified pixel's color value |
-| Selecting / annotating | `Shift` | Toggle the color readout hex / decimal |
-| Annotating | `Ctrl+Z` / `Ctrl+Y` | Undo / redo (configurable) |
-| Annotating | `Ctrl+C` | Copy to clipboard (configurable) |
-| Annotating | `Ctrl+S` / `Ctrl+Shift+S` | Save as / quick save (configurable) |
-| Annotating | `Delete` | Delete the selected annotation |
-| Annotating | `Shift` + drag (line) | Snap to 45° angles |
-| Annotating | `Enter` or click outside | Commit the text box (`Shift+Enter` for a new line) |
-| Annotating | `Esc` | Deselect → leave the capture (asks first; can be disabled) |
-| Recording editor | `Space` | Play / pause |
-| Recording editor | `←` / `→` | Frame step |
-| Recording editor | `Home` / `End` | Jump to trim start / end |
-| Recording editor | `I` / `O` | Set trim in / out at the playhead |
-| Recording editor | `Ctrl+C` | Quick-export and copy the file to the clipboard |
-| Pinned window | `Ctrl+C` / `Esc` | Copy / close |
+The shortcuts follow Snipaste's wherever it has one; the tables list the defaults. Global hotkeys are changed in Settings → "Hotkeys"; every key of the capture and of pins can be rebound in Settings → "In-app shortcuts" → "Customize keys…" (up to two keys per action, with a warning when keys clash). Only the text box's own editing keys and the modifiers held during a drag (such as `Shift`) stay fixed.
+
+> **Changed in this version**
+> - A **double-click on a pin closes it** (the first time it asks first). Settings → "Pins" can make it toggle the thumbnail or do nothing instead.
+> - `Esc` / `Ctrl+W` close a pin **recoverably**: `F3`, pressed while the clipboard is unchanged since the last paste, brings it back where it was. `Shift+Esc` **destroys** it for good.
+> - The mouse wheel zooms a pin **around the cursor** (Settings → "Pins" can keep the top-left corner fixed instead).
+> - The loupe's colour format (HEX → RGB → HSV) switches on a **`Shift` tap**, pressed and released on its own, so `Shift`+drag and `Shift`+click no longer change it.
+
+### Global
+
+| Keys | Action |
+|---|---|
+| `F1` | Start a capture (configurable) |
+| `Ctrl+F1` | Capture and copy: the chosen area goes straight to the clipboard (configurable) |
+| `Shift+F1` | Custom snip: set the area and a delay in a dialog (configurable) |
+| `F2` | Start / stop region recording (configurable) |
+| `F3` | Pin the clipboard (image, image file, colour value or text) at the cursor; pressed again while the clipboard is unchanged, bring back the pin closed last (configurable) |
+| `Shift+F3` | Hide / show all pins (configurable) |
+| Unassigned | Pin click-through (the pin under the cursor lets clicks through), snip and pin, snip / copy / pin, copy the last area again, copy the whole screen, snip the active window, snip the screen under the cursor, delayed snip, clear snip history: assign them in Settings → "Hotkeys" / "More hotkeys" |
+| Tray icon | Double-click starts a capture; the menu also has custom snip, paste from clipboard, hide / show pins, "Make all pins clickable" and a "Capture hotkey (F1)" switch that turns the capture hotkey off and on (e.g. to free F1 for a game) without forgetting it |
+
+### Capture: selecting the area
+
+| Keys | Action |
+|---|---|
+| Click / drag | Take the highlighted window or UI element / frame a custom area |
+| Mouse wheel | Switch detection level (UI element ⇄ window) |
+| `Tab` | Switch between UI-element and window detection |
+| `Space` | Take the highlighted area |
+| `Ctrl+A` | Take the screen under the cursor, then all screens |
+| `Shift` + drag | Frame a square |
+| `Space` held while dragging | Move the area instead of resizing it |
+| `W` `A` `S` `D` / arrow keys | Move the cursor one pixel (faster when held); a drag follows it |
+| `Alt` tap | Show / hide crosshair guide lines (remembered) |
+| `C` | Copy the magnified pixel's colour value |
+| `Shift` tap | Cycle the colour readout HEX → RGB → HSV |
+| `R` / `Shift+R` | Step back / forward through the areas of earlier snips |
+| `,` / `.` | Step back / forward through the snip history (earlier snips, their annotations flattened; kept in memory only) |
+| `` ` `` or `!` | Show / hide the mouse pointer in the capture (remembered) |
+| `F5` | Capture the screen again from under the overlay |
+| Right-click | Drop the area being framed; with none, leave the capture |
+| `Esc` | Leave the capture |
+
+### Capture: editing and annotating
+
+| Keys | Action |
+|---|---|
+| Drag a handle | Resize the area (`Ctrl`: about its centre; `Space` held: move it instead) |
+| Drag inside the area (no tool) | Move the area (`Shift`: along one axis) |
+| Arrow keys | Move the area one pixel, or the selected annotation |
+| `Ctrl` / `Shift` + arrow keys | Grow / shrink the area on that side |
+| `Ctrl+A` | Area = the screen under the cursor, then all screens |
+| `W` `A` `S` `D` | Move the cursor one pixel (also while drawing) |
+| `C` / `Shift` tap | Copy the loupe's colour / cycle its format, as while selecting |
+| `R` / `Shift+R`, `,` / `.`, `` ` `` / `!`, `F5` | As while selecting; the annotations stay with the content (`,` / `.` ask first) |
+| `Space` | Show / hide the toolbar |
+| `Ctrl+1` … `Ctrl+9`, `Ctrl+0` | Shape, line / arrow, marker, highlighter, blur / mosaic, text, number, magnifier, eraser, sticker |
+| `T` / `B` / `M` / `E` | Text / marker / blur / eraser |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tool |
+| `Tab` | Switch the tool's variant: rectangle → rounded → ellipse, line ⇄ arrow, Gaussian ⇄ mosaic, the magnifier's shape |
+| `1` / `2`, `[` / `]`, mouse wheel | Thinner / thicker (font size with the text tool) |
+| `Alt+C` | Pick the colour under the cursor |
+| `+` / `-` | Number tool: next number up / down |
+| Wheel on a colour swatch | Step the tool's opacity |
+| `Shift` + drag while drawing | Square shapes, blur and magnifier frames; straight pen strokes; lines at 45° |
+| Click (line tool) | Start a line strip: each click adds a point; right-click, `Esc`, `Enter` or a double-click finishes it |
+| Drag an annotation | Move it (`Shift`: along one axis) |
+| `Ctrl` + drag an annotation | Drag a copy off it |
+| `Shift` + wheel | Scale the selected rectangle / ellipse |
+| Wheel on a selected magnifier | Change its zoom |
+| `Delete` | Delete the selected annotation |
+| `Ctrl+Shift+C` / `Ctrl+Shift+V` | Copy the selected annotation / paste a copy of it |
+| `Ctrl+Z` / `Ctrl+Y` | Undo / redo |
+| `Ctrl+Shift+Z` | Remove all annotations, as one undo step |
+| `Enter` or click outside | Commit the text box (`Shift+Enter` for a new line; `Esc` commits too) |
+| Wheel over the text box | Font size |
+| Middle-click in the text box | Paste the clipboard's text |
+| `Ctrl+C` / `Ctrl+Insert` | Copy to clipboard |
+| `Ctrl+S` / `Ctrl+Shift+S` | Save as / quick save (`Shift`+click on Save quick-saves too) |
+| `Ctrl+T` | Pin to screen |
+| `Ctrl+P` | Print |
+| `Ctrl+Alt+C` | Copy as a PNG file |
+| `V` | Copy the area's size as text (`800x600`) |
+| `Enter` | Copy and close (configurable in Settings → "Enter & mouse actions") |
+| Double-click in the area (no tool) | Copy and close (configurable in Settings → "Enter & mouse actions") |
+| Middle-click in the area | Pin to screen (configurable in Settings → "Enter & mouse actions") |
+| Right-click | Step back one level: finish the line strip or the text; with the shape, blur or eraser tool, mark the UI element under the cursor (outside the area: all of it); deselect; drop the tool; then discard the area to frame a new one (asks first when annotations would be lost) |
+| `Esc` | Cancel a magnifier-frame drag → finish the line strip → deselect → leave the capture (asks first; can be disabled) |
+
+### Pins
+
+| Keys | Action |
+|---|---|
+| Drag | Move the pin (`W` `A` `S` `D` while held: one pixel) |
+| `Shift` + drag | Snap its edges to other pins, windows and screen edges |
+| Drag the border | Resize, keeping the shape |
+| Mouse wheel | Zoom around the cursor (Settings → "Pins" can keep the top-left corner fixed instead) |
+| `Ctrl` + wheel | Opacity |
+| Middle-click | Reset to 100% size and opacity; again to go back |
+| Double-click | Close, recoverably (asks the first time; Settings → "Pins" or the pin menu can change it) |
+| `Shift` + double-click | Thumbnail on / off |
+| Right-drag | Shrink the pin to the part dragged over (a thumbnail) |
+| Right-click / `Menu` key | Pin menu |
+| `Ctrl` + click | Add the pin to the selection, or take it out; selected pins move, fade and close together |
+| `Esc` / `Ctrl+W` | Close, recoverably (`F3` brings it back) |
+| `Shift+Esc` | Destroy: it cannot be brought back |
+| `Esc` with no pin focused | Close every shown pin, recoverably |
+| `1` / `2` | Rotate clockwise / counter-clockwise |
+| `3` / `4` | Flip horizontally / vertically |
+| `5` / `6` | Grayscale / invert colours |
+| `+` / `-` | Zoom in / out |
+| `Ctrl++` / `Ctrl+-` | Opacity up / down |
+| Arrow keys | Move one pixel (faster when held) |
+| `Ctrl+C` / `Ctrl+Insert` | Copy |
+| `Ctrl+Alt+C` | Copy as a PNG file |
+| `Ctrl+S` / `Ctrl+Shift+S` | Save as / quick save |
+| `Ctrl+P` | Print |
+| `Ctrl+V` | Show the clipboard's content in this pin instead |
+| `Ctrl+Shift+C` | Copy the text a text pin was made from |
+| `Ctrl+A` | Select every shown pin |
+| `Ctrl+Shift+P` | Open Settings |
+| `Alt` tap | Loupe on / off: `C` copies the colour under the cursor, a `Shift` tap cycles HEX → RGB → HSV, `W` `A` `S` `D` move the cursor one pixel |
+| Drop an image file | Replace the pin's image (`Shift`: open it as a new pin) |
+
+### Recording editor
+
+| Keys | Action |
+|---|---|
+| `Space` | Play / pause |
+| `←` / `→` | Frame step |
+| `Home` / `End` | Jump to trim start / end |
+| `I` / `O` | Set trim in / out at the playhead |
+| `Ctrl+C` | Quick-export and copy the file to the clipboard |
 
 All settings (hotkeys, tool defaults, theme, run at startup, recording format / frame rate, and so on) can be adjusted from the tray menu → "Settings…" window.
 

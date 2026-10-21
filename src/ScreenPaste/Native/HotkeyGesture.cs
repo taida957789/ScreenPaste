@@ -5,7 +5,8 @@ namespace ScreenPaste.Native;
 
 /// <summary>
 /// Parses human-friendly hotkey strings ("F1", "Ctrl+Shift+A", "Ctrl+Z") into WPF
-/// <see cref="KeyGesture"/>s, and converts the capture hotkey into Win32 RegisterHotKey args.
+/// <see cref="KeyGesture"/>s, and converts the global hotkeys (GlobalHotkeyTable) into Win32
+/// RegisterHotKey args.
 /// </summary>
 public static class HotkeyGesture
 {

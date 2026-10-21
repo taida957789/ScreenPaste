@@ -11,6 +11,8 @@ public enum ToolKind
     Sticker,       // 貼圖：貼上 PNG / JPEG / WebP 圖片
     Blur,          // 模糊：於選項列再選高斯 / 馬賽克
     Magnify,       // 局部放大：框出來源區域，旁邊放大顯示（形狀 / 倍率 / 邊框 / 連接線）
+    Number,        // 序號標記：點一下放一個帶數字的實心圓，+ / - 調整下一個數字
+    Eraser,        // 橡皮擦：拖過筆觸或標註即擦除
 }
 
 /// <summary>形狀子類型。</summary>

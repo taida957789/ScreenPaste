@@ -66,7 +66,7 @@ internal static class WindowEnumerator
     }
 
     /// <summary>Prefer DWM extended frame bounds (no shadow); fall back to GetWindowRect.</summary>
-    private static RECT GetVisibleBounds(IntPtr hWnd)
+    internal static RECT GetVisibleBounds(IntPtr hWnd)
     {
         if (DwmGetWindowAttribute(hWnd, DWMWA_EXTENDED_FRAME_BOUNDS, out RECT r,
                 Marshal.SizeOf<RECT>()) == 0)

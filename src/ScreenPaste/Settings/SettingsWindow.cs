@@ -1,8 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
-using ScreenPaste.Native;
+using ScreenPaste.Editor;
+using ScreenPaste.Output;
 using ScreenPaste.Recording;
 using Forms = System.Windows.Forms;
 
@@ -10,18 +10,24 @@ namespace ScreenPaste.Settings;
 
 /// <summary>
 /// GUI for app-level settings: language, hotkeys, appearance, startup, save folder.
-/// (Per-tool defaults are adjusted live in the editor toolbar and persist there.)
+/// (Per-tool defaults are adjusted live in the editor toolbar and persist there.) The
+/// hotkey and shortcut rows are <see cref="ShortcutSettingsSection"/>'s.
 /// </summary>
 public sealed class SettingsWindow : Window
 {
+    private const double LabelWidth = 170;   // the longer hotkey names wrap
+
     private readonly AppSettings _s;
     private readonly Action _onApplied;
     private readonly Action _onCheckUpdates;
+    private readonly ShortcutSettingsSection _shortcuts;
 
-    private TextBox _capture = null!, _record = null!, _undo = null!, _redo = null!, _copy = null!, _save = null!, _quickSave = null!;
+    private ComboBox _enterAction = null!, _doubleClickAction = null!, _middleClickAction = null!;
     private ComboBox _language = null!;
     private ComboBox _theme = null!;
     private ComboBox _blurKind = null!;
+    private ComboBox _pinDoubleClick = null!;
+    private CheckBox _pinZoomAtCursor = null!;
     private ComboBox _recordFormat = null!;
     private ComboBox _recordFps = null!;
     private ComboBox _recordAudio = null!;
@@ -32,14 +38,18 @@ public sealed class SettingsWindow : Window
     private CheckBox _checkUpdate = null!;
     private TextBox _saveDir = null!;
 
-    public SettingsWindow(AppSettings settings, Action onApplied, Action onCheckUpdates)
+    /// <param name="holdHotkeys">true while a hotkey field reads keys (the app lets its global
+    /// hotkeys go meanwhile), false after.</param>
+    public SettingsWindow(AppSettings settings, Action onApplied, Action onCheckUpdates, Action<bool> holdHotkeys)
     {
         _s = settings;
         _onApplied = onApplied;
         _onCheckUpdates = onCheckUpdates;
+        _shortcuts = new ShortcutSettingsSection(settings, holdHotkeys);
+        Closed += (_, _) => holdHotkeys(false);
 
         Title = Loc.T("set.title");
-        Width = 470;
+        Width = 520;
         SizeToContent = SizeToContent.Height;
         MaxHeight = 720;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -78,6 +88,15 @@ public sealed class SettingsWindow : Window
         body.Children.Add(Row(Loc.T("set.blurKind"), _blurKind));
         body.Children.Add(Hint(Loc.T("set.blurKindHint")));
 
+        body.Children.Add(Header(Loc.T("set.pins")));
+        _pinZoomAtCursor = new CheckBox { IsChecked = _s.PinZoomAtCursor, Content = Loc.T("set.pinZoomAtCursor"), Foreground = Theme.ForegroundBrush, VerticalAlignment = VerticalAlignment.Center };
+        body.Children.Add(Row("", _pinZoomAtCursor));
+        _pinDoubleClick = ValueCombo(
+            PinDoubleClickActions.All.Select(a => (a.ToToken(), PinDoubleClickLabel(a), (string?)null)).ToList(),
+            PinDoubleClickActions.Parse(_s.PinDoubleClickAction).ToToken());
+        body.Children.Add(Row(Loc.T("set.pinDblClick"), _pinDoubleClick));
+        body.Children.Add(Hint(Loc.T("set.pinDblClickHint")));
+
         body.Children.Add(Header(Loc.T("set.updates")));
         _checkUpdate = new CheckBox { IsChecked = _s.CheckUpdateOnStartup, Content = Loc.T("set.checkStartup"), Foreground = Theme.ForegroundBrush, VerticalAlignment = VerticalAlignment.Center };
         body.Children.Add(Row("", _checkUpdate));
@@ -86,20 +105,16 @@ public sealed class SettingsWindow : Window
         checkNow.Margin = new Thickness(0);
         body.Children.Add(Row("", checkNow));
 
-        body.Children.Add(Header(Loc.T("set.hotkeys")));
-        body.Children.Add(new TextBlock
-        {
-            Text = Loc.T("set.hotkeyHint"),
-            Foreground = Theme.ForegroundBrush, FontSize = 11, Opacity = 0.7,
-            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6),
-        });
-        _capture = HotkeyBox(_s.CaptureHotkey); body.Children.Add(Row(Loc.T("set.capture"), _capture));
-        _record = HotkeyBox(_s.RecordHotkey); body.Children.Add(Row(Loc.T("set.record"), _record));
-        _undo = HotkeyBox(_s.UndoHotkey); body.Children.Add(Row(Loc.T("action.undo"), _undo));
-        _redo = HotkeyBox(_s.RedoHotkey); body.Children.Add(Row(Loc.T("action.redo"), _redo));
-        _copy = HotkeyBox(_s.CopyHotkey); body.Children.Add(Row(Loc.T("action.copy"), _copy));
-        _save = HotkeyBox(_s.SaveHotkey); body.Children.Add(Row(Loc.T("action.save"), _save));
-        _quickSave = HotkeyBox(_s.QuickSaveHotkey); body.Children.Add(Row(Loc.T("set.quickSave"), _quickSave));
+        _shortcuts.AddTo(body);
+
+        body.Children.Add(Header(Loc.T("set.outputActions")));
+        body.Children.Add(Hint(Loc.T("set.outputActionsHint")));
+        _enterAction = OutputActionCombo(_s.EnterAction, OutputAction.Copy);
+        body.Children.Add(Row(Loc.T("set.enterAction"), _enterAction));
+        _doubleClickAction = OutputActionCombo(_s.DoubleClickAction, OutputAction.Copy);
+        body.Children.Add(Row(Loc.T("set.dblClickAction"), _doubleClickAction));
+        _middleClickAction = OutputActionCombo(_s.MiddleClickAction, OutputAction.Pin);
+        body.Children.Add(Row(Loc.T("set.middleClickAction"), _middleClickAction));
 
         body.Children.Add(Header(Loc.T("set.recording")));
         _recordFormat = ValueCombo(new()
@@ -160,15 +175,13 @@ public sealed class SettingsWindow : Window
         _s.CheckUpdateOnStartup = _checkUpdate.IsChecked == true;
         _s.SaveDirectory = _saveDir.Text.Trim();
 
-        _s.CaptureHotkey = _capture.Text.Trim();
-        _s.RecordHotkey = _record.Text.Trim();
-        _s.UndoHotkey = _undo.Text.Trim();
-        _s.RedoHotkey = _redo.Text.Trim();
-        _s.CopyHotkey = _copy.Text.Trim();
-        _s.SaveHotkey = _save.Text.Trim();
-        _s.QuickSaveHotkey = _quickSave.Text.Trim();
+        _shortcuts.Save(_s);
+        _s.EnterAction = ComboValue(_enterAction);
+        _s.DoubleClickAction = ComboValue(_doubleClickAction);
+        _s.MiddleClickAction = ComboValue(_middleClickAction);
 
         _s.BlurKind = ComboValue(_blurKind);
+        SavePinOptions();
         _s.RecordFormat = ComboValue(_recordFormat);
         _s.RecordAudioSource = ComboValue(_recordAudio);
         _s.RecordCaptureCursor = _recordCursor.IsChecked == true;
@@ -180,70 +193,52 @@ public sealed class SettingsWindow : Window
         Close();
     }
 
+    /// <summary>A double-click chosen here was chosen knowingly, so the pin's one-time tip is
+    /// not needed after; saving the same choice again leaves the tip as it was.</summary>
+    private void SavePinOptions()
+    {
+        _s.PinZoomAtCursor = _pinZoomAtCursor.IsChecked == true;
+        var doubleClick = PinDoubleClickActions.Parse(ComboValue(_pinDoubleClick));
+        if (doubleClick != PinDoubleClickActions.Parse(_s.PinDoubleClickAction)) _s.PinDoubleClickTipShown = true;
+        _s.PinDoubleClickAction = doubleClick.ToToken();
+    }
+
     private void BrowseFolder()
     {
         using var dlg = new Forms.FolderBrowserDialog { SelectedPath = _saveDir.Text };
         if (dlg.ShowDialog() == Forms.DialogResult.OK) _saveDir.Text = dlg.SelectedPath;
     }
 
-    // ---- key-capture hotkey field: focus it and press the combo ----
-
-    private TextBox HotkeyBox(string val)
-    {
-        var tb = Themed(new TextBox { Text = val, IsReadOnly = true, VerticalAlignment = VerticalAlignment.Center });
-        InputMethod.SetIsInputMethodEnabled(tb, false);   // stop IME from eating keys
-        tb.PreviewKeyDown += (_, e) =>
-        {
-            var key = e.Key == Key.System ? e.SystemKey
-                    : e.Key == Key.ImeProcessed ? e.ImeProcessedKey : e.Key;
-
-            if (IsModifierKey(key)) { e.Handled = true; return; }
-            if (key == Key.Escape) return;
-            if (key is Key.Back or Key.Delete) { tb.Text = ""; e.Handled = true; return; }
-
-            var g = BuildGesture(Keyboard.Modifiers, key);
-            if (g != null) tb.Text = g;
-            e.Handled = true;
-        };
-        return tb;
-    }
-
-    private static bool IsModifierKey(Key k) => k is
-        Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or
-        Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin or Key.System;
-
-    private static string? BuildGesture(ModifierKeys mods, Key key)
-    {
-        var prefix = "";
-        if (mods.HasFlag(ModifierKeys.Control)) prefix += "Ctrl+";
-        if (mods.HasFlag(ModifierKeys.Alt)) prefix += "Alt+";
-        if (mods.HasFlag(ModifierKeys.Shift)) prefix += "Shift+";
-        if (mods.HasFlag(ModifierKeys.Windows)) prefix += "Win+";
-        var candidate = prefix + key;
-        return HotkeyGesture.Parse(candidate) != null ? candidate : null;
-    }
-
     // ------------------------------------------------------------- widgets ---
+    // Shared with ShortcutSettingsSection and CustomSnipDialog, so they look alike.
 
-    private static TextBlock Header(string t) => new()
+    /// <summary>Text that warns: a shortcut used twice, an area off the screen.</summary>
+    internal static SolidColorBrush WarningBrush =>
+        new(Theme.IsDark ? Color.FromRgb(0xFF, 0xB0, 0x40) : Color.FromRgb(0xB0, 0x50, 0x00));
+
+    internal static TextBlock Header(string t) => new()
     {
         Text = t, FontWeight = FontWeights.Bold, FontSize = 14,
         Foreground = new SolidColorBrush(Theme.Accent), Margin = new Thickness(0, 12, 0, 6),
     };
 
     /// <summary>A muted, indented one-line note under a row.</summary>
-    private static TextBlock Hint(string t) => new()
+    internal static TextBlock Hint(string t) => new()
     {
         Text = t, FontSize = 11, Opacity = 0.7, TextWrapping = TextWrapping.Wrap,
         Foreground = Theme.ForegroundBrush, Margin = new Thickness(0, 0, 0, 4),
     };
 
-    private static FrameworkElement Row(string label, FrameworkElement control)
+    internal static FrameworkElement Row(string label, FrameworkElement control)
     {
         var grid = new Grid { Margin = new Thickness(0, 3, 0, 3) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(LabelWidth) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var lbl = new TextBlock { Text = label, Foreground = Theme.ForegroundBrush, VerticalAlignment = VerticalAlignment.Center };
+        var lbl = new TextBlock
+        {
+            Text = label, Foreground = Theme.ForegroundBrush, VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 8, 0),
+        };
         Grid.SetColumn(lbl, 0);
         Grid.SetColumn(control, 1);
         grid.Children.Add(lbl);
@@ -251,7 +246,7 @@ public sealed class SettingsWindow : Window
         return grid;
     }
 
-    private static TextBox Themed(TextBox tb)
+    internal static TextBox Themed(TextBox tb)
     {
         tb.Background = Theme.ControlBgBrush;
         tb.Foreground = Theme.ForegroundBrush;
@@ -298,7 +293,29 @@ public sealed class SettingsWindow : Window
 
     private static string ComboValue(ComboBox cb) => (string)((ComboBoxItem)cb.SelectedItem).Tag!;
 
-    private static Button TextButton(string text, Action onClick, bool isDefault = false)
+    /// <summary>Every <see cref="OutputAction"/>, showing the one the setting holds.</summary>
+    private static ComboBox OutputActionCombo(string? setting, OutputAction fallback) => ValueCombo(
+        OutputActions.All.Select(a => (a.ToToken(), OutputActionLabel(a), (string?)null)).ToList(),
+        OutputActions.Parse(setting, fallback).ToToken());
+
+    private static string OutputActionLabel(OutputAction action) => action switch
+    {
+        OutputAction.Copy => Loc.T("out.copy"),
+        OutputAction.Pin => Loc.T("action.pin"),
+        OutputAction.Save => Loc.T("out.save"),
+        OutputAction.QuickSave => Loc.T("set.quickSave"),
+        OutputAction.CopyAndPin => Loc.T("out.copyAndPin"),
+        _ => Loc.T("out.none"),
+    };
+
+    private static string PinDoubleClickLabel(PinDoubleClickAction action) => action switch
+    {
+        PinDoubleClickAction.Close => Loc.T("pin.close"),
+        PinDoubleClickAction.Thumbnail => Loc.T("pin.thumbnail"),
+        _ => Loc.T("out.none"),
+    };
+
+    internal static Button TextButton(string text, Action onClick, bool isDefault = false)
     {
         var b = new Button
         {

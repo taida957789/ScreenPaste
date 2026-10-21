@@ -10,14 +10,46 @@ public sealed class AppSettings
     // ---- Hotkeys (human-friendly gesture strings, e.g. "F1", "Ctrl+Shift+A", "Ctrl+Z") ----
     // 全域截圖熱鍵（系統層級）
     public string CaptureHotkey { get; set; } = "F1";
+    // 系統匣選單可暫停截圖熱鍵（例如玩遊戲時讓出 F1），不清掉上面的設定
+    public bool CaptureHotkeyEnabled { get; set; } = true;
     // 全域區域錄影熱鍵（再按一次停止）
     public string RecordHotkey { get; set; } = "F2";
+    // 其他全域熱鍵（Snipaste 預設；留空即停用）：截圖並複製、自訂截圖、貼上剪貼簿／叫回關閉的貼圖、
+    // 隱藏／顯示所有貼圖、切換游標下貼圖的滑鼠穿透（預設未指定）
+    public string SnipAndCopyHotkey { get; set; } = "Ctrl+F1";
+    public string CustomSnipHotkey { get; set; } = "Shift+F1";
+    public string PasteHotkey { get; set; } = "F3";
+    public string HidePinsHotkey { get; set; } = "Shift+F3";
+    public string ClickThroughHotkey { get; set; } = "";
+    // 更多截圖模式（預設皆未指定）
+    public string SnipAndPinHotkey { get; set; } = "";
+    public string SnipCopyAndPinHotkey { get; set; } = "";
+    public string LastAreaCopyHotkey { get; set; } = "";
+    public string FullScreenCopyHotkey { get; set; } = "";
+    public string ActiveWindowHotkey { get; set; } = "";
+    public string ActiveScreenHotkey { get; set; } = "";
+    public string DelayedSnipHotkey { get; set; } = "";
+    public string ClearSnipHistoryHotkey { get; set; } = "";
+    // 延遲截圖與自訂截圖的等待秒數（0–60，自訂截圖對話框會記住上次的值）
+    public double SnipDelaySeconds { get; set; } = 3;
     // 編輯器內快捷鍵（皆可自訂）
     public string UndoHotkey { get; set; } = "Ctrl+Z";
     public string RedoHotkey { get; set; } = "Ctrl+Y";
     public string CopyHotkey { get; set; } = "Ctrl+C";
     public string SaveHotkey { get; set; } = "Ctrl+S";
     public string QuickSaveHotkey { get; set; } = "Ctrl+Shift+S";
+    public string PinHotkey { get; set; } = "Ctrl+T";
+    public string PrintHotkey { get; set; } = "Ctrl+P";
+    // 清除所有標註（可復原；留空即停用）
+    public string ClearAllHotkey { get; set; } = "Ctrl+Shift+Z";
+    // 截圖與貼圖內每個快速鍵的自訂按鍵（動作 id → 按鍵清單，空清單即停用）；只記錄改過的，
+    // 其餘用 Snipaste 預設（見 ShortcutActions）。上面的 Undo/Copy… 欄位會同步成第一個組合鍵。
+    public Dictionary<string, List<string>> KeyBindings { get; set; } = new();
+
+    // 框選完成後在範圍內按 Enter／雙擊／中鍵的動作：Copy | Pin | Save | QuickSave | CopyAndPin | None
+    public string EnterAction { get; set; } = "Copy";
+    public string DoubleClickAction { get; set; } = "Copy";
+    public string MiddleClickAction { get; set; } = "Pin";
 
     // ---- Marker pen defaults ----
     public double PenWidth { get; set; } = 4;
@@ -49,6 +81,14 @@ public sealed class AppSettings
     public string ShapeColor { get; set; } = "#FFFF3B30"; // red
     public double ShapeWidth { get; set; } = 3;
 
+    // ---- Number marker defaults ----
+    // 序號標記：圓的直徑（顏色沿用形狀顏色）
+    public double NumberSize { get; set; } = 28;
+
+    // ---- Eraser defaults ----
+    // 橡皮擦的大小（直徑）
+    public double EraserWidth { get; set; } = 16;
+
     // ---- Magnifier ("local zoom") defaults ----
     // 局部放大：框出來源區域，旁邊以放大鏡顯示放大後的內容
     public string MagnifyShape { get; set; } = "RoundedRectangle";  // Rectangle | RoundedRectangle | Ellipse
@@ -76,6 +116,25 @@ public sealed class AppSettings
     // ---- Behavior ----
     // Esc 離開編輯模式時，若有標註先跳確認對話框（可於對話框勾選「不再詢問」關閉）
     public bool ConfirmDiscardEdits { get; set; } = true;
+    // 框選時顯示貫穿全螢幕的十字輔助線（Alt 單按切換，會記住上次的狀態）
+    public bool SnipGuideLines { get; set; }
+    // 截圖中顯示開始截圖時的滑鼠游標（按 ` 或 ! 切換，會記住上次的狀態）
+    public bool SnipShowCursor { get; set; }
+    // 截圖歷史（按 , / . 回放，只存在記憶體）：保留筆數 0–8（0 = 停用）與記憶體上限 MB（最多 512）
+    public int SnipHistoryCount { get; set; } = 8;
+    public int SnipHistoryBudgetMb { get; set; } = 512;
+    // 貼圖滾輪縮放以滑鼠游標為中心（關閉則固定左上角）
+    public bool PinZoomAtCursor { get; set; } = true;
+    // 以 Esc／Ctrl+W／雙擊關閉的貼圖可再叫回的數量（0 = 停用；Shift+Esc 銷毀的不會保留）
+    public int MaxRecoverableClosedPins { get; set; } = 1;
+    // 雙擊貼圖：Close（關閉，可再叫回）| Thumbnail（切換縮圖，同 Shift+雙擊）| None（不動作）
+    public string PinDoubleClickAction { get; set; } = "Close";
+    // 第一次雙擊貼圖時已提示過
+    public bool PinDoubleClickTipShown { get; set; }
+    // 沒有貼圖取得焦點時，在任何地方按 Esc 會關閉所有顯示中的貼圖（可再叫回）
+    public bool PinGlobalEscClosesAll { get; set; } = true;
+    // Shift+雙擊貼圖切換的縮圖邊長（100% 縮放下的像素，16–512）
+    public int PinThumbnailSize { get; set; } = 64;
 
     // ---- Startup ----
     public bool RunAtStartup { get; set; }

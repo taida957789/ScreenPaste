@@ -59,6 +59,7 @@ public partial class CaptureOverlayWindow
     /// smoothing, and whether the enlarged content includes the other annotations.</summary>
     private void BuildMagnifyOptions()
     {
+        _magnifyShapeButtons.Clear();   // the toolbar is rebuilt each time a region is chosen
         _magnifyOptionsPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
         _magnifyOptionsPanel.Children.Add(Label(Loc.T("lbl.shape")));
         _magnifyOptionsPanel.Children.Add(MakeMagnifyShapeButton(Loc.T("shape.rect"), ShapeKind.Rectangle));
@@ -133,8 +134,9 @@ public partial class CaptureOverlayWindow
     private BitmapSource MagnifyBeneath() => _magnifyBeneath ??=
         Compositor.ComposeBeneathMagnify(BlurBeneath(), _selection, BlurHost);
 
-    /// <summary>The bare screenshot crop, for magnifiers told to ignore other annotations.</summary>
-    private BitmapSource RegionCrop() => _regionCrop ??= Compositor.CropRegion(_screenshot, _selection);
+    /// <summary>The bare screenshot crop (with the pointer, when shown), for magnifiers told to
+    /// ignore other annotations.</summary>
+    private BitmapSource RegionCrop() => _regionCrop ??= Compositor.CropRegion(_screenshot, _selection, ShownCursor());
 
     /// <summary>Re-sample every magnifier from the content it was told to enlarge.</summary>
     private void RefreshMagnifiers()
@@ -172,7 +174,7 @@ public partial class CaptureOverlayWindow
     private void Magnify_MouseMove(Point p)
     {
         if (_magnifyPreview == null) return;
-        var r = MakeRect(_magnifyStart, p);
+        var r = DragRect(_magnifyStart, p);
         Canvas.SetLeft(_magnifyPreview, r.X);
         Canvas.SetTop(_magnifyPreview, r.Y);
         _magnifyPreview.Width = r.Width;
@@ -188,7 +190,7 @@ public partial class CaptureOverlayWindow
         _magnifyPreview = null;
 
         var region = RegionBounds();
-        var source = MakeRect(_magnifyStart, p);
+        var source = DragRect(_magnifyStart, p);
         source.Intersect(region);
         if (source.Width < 6 || source.Height < 6) return;
 

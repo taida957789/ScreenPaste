@@ -5,9 +5,10 @@ using ScreenPaste.Settings;
 namespace ScreenPaste.Editor;
 
 /// <summary>
-/// "Discard this capture?" confirmation shown when Esc leaves the editor with
-/// annotations present. Includes a don't-ask-again checkbox; standard dialog keys
-/// apply (Enter = discard, Esc = keep editing).
+/// "Discard this capture?" confirmation shown when Esc leaves the editor, and (reworded)
+/// when a right-click would throw the annotations away to choose the area again. Includes
+/// a don't-ask-again checkbox; standard dialog keys apply (Enter = discard, Esc = keep
+/// editing).
 /// </summary>
 public sealed class ConfirmDiscardDialog : Window
 {
@@ -18,7 +19,8 @@ public sealed class ConfirmDiscardDialog : Window
 
     /// <param name="title">Optional title override (defaults to the capture wording).</param>
     /// <param name="message">Optional message override.</param>
-    public ConfirmDiscardDialog(string? title = null, string? message = null)
+    /// <param name="confirm">Optional label override for the discard button.</param>
+    public ConfirmDiscardDialog(string? title = null, string? message = null, string? confirm = null)
     {
         Title = title ?? Loc.T("dlg.discardTitle");
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -52,7 +54,7 @@ public sealed class ConfirmDiscardDialog : Window
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 18, 0, 0),
         };
-        var discard = MakeButton(Loc.T("dlg.discardYes"));
+        var discard = MakeButton(confirm ?? Loc.T("dlg.discardYes"));
         discard.IsDefault = true;
         discard.Click += (_, _) => DialogResult = true;
         var keep = MakeButton(Loc.T("dlg.discardNo"));

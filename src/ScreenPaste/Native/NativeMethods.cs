@@ -124,6 +124,28 @@ internal static class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
+    // ---- Cursor position (W/A/S/D nudges the pointer while snipping) ----
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetCursorPos(out POINT lpPoint);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetCursorPos(int X, int Y);
+
+    // ---- Keyboard layout (a pin's + and - go by the character a key types) ----
+    public const uint MAPVK_VK_TO_CHAR = 2;
+
+    /// <summary>With MAPVK_VK_TO_CHAR: the character the key types unshifted on the current
+    /// layout in the low word, 0 for none; the top bit is set for a dead key.</summary>
+    [DllImport("user32.dll", EntryPoint = "MapVirtualKeyW")]
+    public static extern uint MapVirtualKey(uint uCode, uint uMapType);
+
+    /// <summary>The key that types <paramref name="ch"/> on the current layout in the low byte,
+    /// and the shift state it takes in the high byte (1 Shift, 2 Ctrl, 4 Alt); -1 for none.</summary>
+    [DllImport("user32.dll", EntryPoint = "VkKeyScanW", CharSet = CharSet.Unicode)]
+    public static extern short VkKeyScan(char ch);
+
     // ---- Foreground window ----
     [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();
@@ -155,6 +177,29 @@ internal static class NativeMethods
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+    /// <summary>Turn on <paramref name="styles"/> (WS_EX_*) for the window, keeping the rest.</summary>
+    public static void AddExStyle(IntPtr hWnd, long styles) =>
+        SetWindowLong(hWnd, GWL_EXSTYLE, GetWindowLong(hWnd, GWL_EXSTYLE) | (int)styles);
+
+    /// <summary>Turn off <paramref name="styles"/> (WS_EX_*) for the window, keeping the rest.</summary>
+    public static void RemoveExStyle(IntPtr hWnd, long styles) =>
+        SetWindowLong(hWnd, GWL_EXSTYLE, GetWindowLong(hWnd, GWL_EXSTYLE) & ~(int)styles);
+
+    // ---- Clipboard (the paste hotkey tells a new clipboard from the one it pasted last) ----
+    /// <summary>Changes whenever the clipboard does; 0 without access to the clipboard.</summary>
+    [DllImport("user32.dll")]
+    public static extern uint GetClipboardSequenceNumber();
+
+    // ---- Monitor DPI (a text pin is drawn at the scale of the monitor it opens on) ----
+    public const uint MONITOR_DEFAULTTONEAREST = 2;
+    public const int MDT_EFFECTIVE_DPI = 0;
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr MonitorFromPoint(POINT pt, uint dwFlags);
+
+    [DllImport("shcore.dll")]
+    public static extern int GetDpiForMonitor(IntPtr hmonitor, int dpiType, out uint dpiX, out uint dpiY);
 
     // ---- Cursor capture (drawing the pointer into recorded frames) ----
     public const int CURSOR_SHOWING = 0x0001;
@@ -195,4 +240,33 @@ internal static class NativeMethods
     [DllImport("gdi32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool DeleteObject(IntPtr hObject);
+
+    // ---- Cursor snapshot (the pointer's image size, for a still screenshot) ----
+    [StructLayout(LayoutKind.Sequential)]
+    public struct BITMAP
+    {
+        public int bmType;
+        public int bmWidth;
+        public int bmHeight;
+        public int bmWidthBytes;
+        public ushort bmPlanes;
+        public ushort bmBitsPixel;
+        public IntPtr bmBits;
+    }
+
+    [DllImport("gdi32.dll", EntryPoint = "GetObjectW")]
+    public static extern int GetObject(IntPtr hgdiobj, int cbBuffer, out BITMAP lpvObject);
+
+    // ---- Display affinity (F5 re-captures the screen from under the overlay) ----
+    // WDA_EXCLUDEFROMCAPTURE needs Windows 10 2004; older systems fail the call.
+    public const uint WDA_NONE = 0x00000000;
+    public const uint WDA_EXCLUDEFROMCAPTURE = 0x00000011;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
+
+    /// <summary>Blocks until the desktop compositor has presented its next frame.</summary>
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmFlush();
 }
