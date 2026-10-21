@@ -10,18 +10,21 @@ public enum PasteChoice
 }
 
 /// <summary>
-/// The paste hotkey (Snipaste's F3): pin the clipboard, or, pressed again while the clipboard
-/// is what it was at the last paste, bring back the pins closed recently instead. Windows'
-/// clipboard sequence number tells a new clipboard from the old one. Pure, so it is unit tested.
+/// The paste hotkey (Snipaste's F3): pin the clipboard, or, while the clipboard is what it was
+/// at the last paste or when a pin was last closed, bring back the pins closed recently
+/// instead. The close counts too, so a pin made from a capture (Ctrl+T) and closed comes back
+/// even though nothing was ever pasted. Windows' clipboard sequence number tells a new
+/// clipboard from the old one. Pure, so it is unit tested.
 /// </summary>
 public static class PasteDecision
 {
     /// <param name="sequenceNow">GetClipboardSequenceNumber now; 0 when Windows would not say.</param>
     /// <param name="sequenceAtLastPaste">The number at the last paste; null before the first.</param>
+    /// <param name="sequenceAtLastClose">The number when a pin was last closed recoverably; null before the first.</param>
     /// <param name="closedCount">How many closed pins can still be brought back.</param>
-    public static PasteChoice Decide(uint sequenceNow, uint? sequenceAtLastPaste, int closedCount)
+    public static PasteChoice Decide(uint sequenceNow, uint? sequenceAtLastPaste, uint? sequenceAtLastClose, int closedCount)
     {
-        bool unchanged = sequenceNow != 0 && sequenceAtLastPaste == sequenceNow;
+        bool unchanged = sequenceNow != 0 && (sequenceAtLastPaste == sequenceNow || sequenceAtLastClose == sequenceNow);
         return unchanged && closedCount > 0 ? PasteChoice.Restore : PasteChoice.Paste;
     }
 }

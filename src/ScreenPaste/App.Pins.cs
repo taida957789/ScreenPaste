@@ -9,8 +9,8 @@ namespace ScreenPaste;
 
 /// <summary>
 /// The hotkeys for pins: paste (Snipaste's F3) pins what the clipboard holds near the cursor,
-/// or, pressed again with the clipboard unchanged, brings back the pin closed last
-/// (<see cref="PasteDecision"/>); click-through acts on the pin under the cursor. Hiding and
+/// or, with the clipboard unchanged since the last paste or the last close, brings back the
+/// pin closed last (<see cref="PasteDecision"/>); click-through acts on the pin under the cursor. Hiding and
 /// showing every pin is <see cref="PinManager.ToggleAllVisible"/>.
 /// </summary>
 public partial class App
@@ -22,7 +22,7 @@ public partial class App
     private void PasteOrRestore()
     {
         uint sequence = NativeMethods.GetClipboardSequenceNumber();
-        if (PasteDecision.Decide(sequence, _pasteSequence, PinManager.ClosedCount) == PasteChoice.Restore &&
+        if (PasteDecision.Decide(sequence, _pasteSequence, PinManager.ClipboardSequenceAtLastClose, PinManager.ClosedCount) == PasteChoice.Restore &&
             PinManager.RestoreLastClosed())
             return;
         PasteClipboard(sequence);

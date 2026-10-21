@@ -59,6 +59,10 @@ public static class PinManager
     /// <summary>How many closed pins <see cref="RestoreLastClosed"/> can still bring back.</summary>
     public static int ClosedCount => ClosedPins.Count;
 
+    /// <summary>The clipboard's sequence number when a pin was last closed recoverably, or null:
+    /// while the clipboard stays so, the paste hotkey brings the pin back (PasteDecision).</summary>
+    public static uint? ClipboardSequenceAtLastClose { get; private set; }
+
     /// <summary>Close <paramref name="pin"/> so it can be brought back.</summary>
     public static void CloseRecoverable(PinWindow pin) => pin.CloseAs(PinCloseKind.Recoverable);
 
@@ -185,6 +189,7 @@ public static class PinManager
     {
         ClosedPins.Capacity = ClosedPinLimits.Capacity(closed.Settings.MaxRecoverableClosedPins);
         ClosedPins.Add(closed, kind);
+        if (kind == PinCloseKind.Recoverable) ClipboardSequenceAtLastClose = NativeMethods.GetClipboardSequenceNumber();
     }
 
     public static void Add(PinWindow pin)
