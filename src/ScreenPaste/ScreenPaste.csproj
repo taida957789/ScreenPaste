@@ -21,9 +21,9 @@
     <Authors>taida957789</Authors>
     <Description>截圖與標註工具</Description>
     <Copyright>Copyright © 2026</Copyright>
-    <Version>1.8.0</Version>
-    <AssemblyVersion>1.8.0.0</AssemblyVersion>
-    <FileVersion>1.8.0.0</FileVersion>
+    <Version>1.10.0</Version>
+    <AssemblyVersion>1.10.0.0</AssemblyVersion>
+    <FileVersion>1.10.0.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
