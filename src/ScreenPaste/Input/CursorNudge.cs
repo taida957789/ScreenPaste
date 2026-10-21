@@ -32,10 +32,6 @@ public static class CursorNudge
         _ => (0, 0),
     };
 
-    public static bool IsWasd(Key key) => key is Key.W or Key.A or Key.S or Key.D;
-
-    public static bool IsArrow(Key key) => key is Key.Up or Key.Down or Key.Left or Key.Right;
-
     /// <summary>Keep a physical screen point on the virtual desktop's last pixel row and
     /// column; the origin can be negative when a monitor sits left of or above the primary.</summary>
     public static (int X, int Y) Clamp(int x, int y, VirtualScreen screen) => (

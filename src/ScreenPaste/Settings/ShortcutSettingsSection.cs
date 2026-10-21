@@ -3,24 +3,25 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using ScreenPaste.Capture;
+using ScreenPaste.Input;
 using ScreenPaste.Native;
 
 namespace ScreenPaste.Settings;
 
 /// <summary>
 /// The settings window's shortcut rows: the global hotkeys (<see cref="GlobalHotkeyTable"/>),
-/// the extra snip modes under "More hotkeys" with the delayed snip's delay, and the in-app
-/// gestures (<see cref="InAppShortcutTable"/>). A gesture used twice is named under the rows
-/// as it is typed (<see cref="ShortcutConflicts"/>). While a field has the keyboard the app's
-/// global hotkeys are let go, so pressing one types it instead of running it. Split out so
-/// the settings window does not grow with every hotkey.
+/// the extra snip modes under "More hotkeys" with the delayed snip's delay, and the button to
+/// every in-app key of the capture and the pins (<see cref="KeyBindingsWindow"/>). A global
+/// hotkey used twice, or on an in-app key, is named under the rows as it is typed
+/// (<see cref="ShortcutConflicts"/>). While a field has the keyboard the app's global hotkeys
+/// are let go, so pressing one types it instead of running it. Split out so the settings
+/// window does not grow with every hotkey.
 /// </summary>
 internal sealed class ShortcutSettingsSection
 {
     private readonly AppSettings _settings;
     private readonly Action<bool> _holdHotkeys;
     private readonly List<(GlobalHotkey Hotkey, TextBox Box)> _global = new();
-    private readonly List<(InAppShortcut Shortcut, TextBox Box)> _inApp = new();
     private readonly HashSet<TextBox> _boxes = new();
     private readonly TextBlock _warning;
     private TextBox _delay = null!;
@@ -46,20 +47,18 @@ internal sealed class ShortcutSettingsSection
 
         body.Children.Add(SettingsWindow.Header(Loc.T("set.inAppShortcuts")));
         body.Children.Add(SettingsWindow.Hint(Loc.T("set.inAppHint")));
-        foreach (var shortcut in InAppShortcutTable.All)
-        {
-            var box = HotkeyBox(shortcut.Get(_settings));
-            _inApp.Add((shortcut, box));
-            body.Children.Add(SettingsWindow.Row(Loc.T(shortcut.LabelKey), box));
-        }
+        var edit = SettingsWindow.TextButton(Loc.T("keys.edit"), () => { });
+        edit.HorizontalAlignment = HorizontalAlignment.Left;
+        edit.Margin = new Thickness(0, 2, 0, 2);
+        edit.Click += (_, _) => OpenKeyBindings(edit);
+        body.Children.Add(SettingsWindow.Row("", edit));
         body.Children.Add(_warning);
         UpdateWarning();
     }
 
     public void Save(AppSettings s)
     {
-        foreach (var (hotkey, box) in _global) hotkey.Set(s, box.Text.Trim());
-        foreach (var (shortcut, box) in _inApp) shortcut.Set(s, box.Text.Trim());
+        foreach (var (hotkey, box) in _global) hotkey.Set(s, GestureOf(box));
         if (ReadSeconds(_delay.Text) is { } seconds) s.SnipDelaySeconds = CustomSnipRequest.ClampDelay(seconds);
     }
 
@@ -92,6 +91,13 @@ internal sealed class ShortcutSettingsSection
 
     private static string MoreLabel(bool open) => Loc.T("set.moreHotkeys") + (open ? "  ▴" : "  ▾");
 
+    /// <summary>The in-app keys, as a dialog over the settings window; saved on its own.</summary>
+    private void OpenKeyBindings(FrameworkElement from)
+    {
+        var dialog = new KeyBindingsWindow(_settings, UpdateWarning, _holdHotkeys) { Owner = Window.GetWindow(from) };
+        dialog.ShowDialog();
+    }
+
     private FrameworkElement GlobalRow(GlobalHotkey hotkey)
     {
         var box = HotkeyBox(hotkey.Get(_settings));
@@ -110,31 +116,34 @@ internal sealed class ShortcutSettingsSection
 
     private void UpdateWarning()
     {
-        var conflicts = ShortcutConflicts.Find(ShortcutConflicts.Entries(
-            _global.Select(g => (Loc.T(g.Hotkey.LabelKey), (string?)g.Box.Text)),
-            _inApp.Select(i => (Loc.T(i.Shortcut.LabelKey), (string?)i.Box.Text))));
+        var conflicts = ShortcutConflicts.Global(
+            _global.Select(g => (Loc.T(g.Hotkey.LabelKey), (string?)GestureOf(g.Box))),
+            ShortcutMap.FromSettings(_settings), ShortcutText.Name);
         _warning.Text = string.Join("\n", conflicts.Select(c => "⚠ " + Describe(c)));
         _warning.Visibility = conflicts.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private static string Describe(ShortcutConflict conflict)
+    /// <summary>One warning line; the in-app keys window words its own the same way.</summary>
+    internal static string Describe(ShortcutConflict conflict)
     {
         var names = string.Join(", ", conflict.Names);
         var key = conflict.Kind switch
         {
             ShortcutConflictKind.GlobalDuplicate => "conflict.global",
             ShortcutConflictKind.GlobalTakesInAppKey => "conflict.globalInApp",
-            ShortcutConflictKind.InAppDuplicate => "conflict.inApp",
-            _ => "conflict.builtIn",
+            _ => "conflict.inApp",
         };
-        return Loc.T(key, conflict.Chord.ToString(), names);
+        // Named as the fields show it ("Shift+1" for "!"); the stored text is what the window's outlines match.
+        var shown = ShortcutKey.Parse(conflict.Key) is { } k ? ShortcutText.Key(k) : conflict.Key;
+        return Loc.T(key, shown, names);
     }
 
     // ---- key-capture hotkey field: focus it and press the combo ----
 
     private TextBox HotkeyBox(string? value)
     {
-        var tb = SettingsWindow.Themed(new TextBox { Text = value ?? "", IsReadOnly = true, VerticalAlignment = VerticalAlignment.Center });
+        var tb = SettingsWindow.Themed(new TextBox { IsReadOnly = true, VerticalAlignment = VerticalAlignment.Center });
+        SetGesture(tb, value ?? "");
         InputMethod.SetIsInputMethodEnabled(tb, false);   // stop IME from eating keys
         _boxes.Add(tb);
         tb.PreviewKeyDown += (_, e) =>
@@ -144,10 +153,10 @@ internal sealed class ShortcutSettingsSection
 
             if (IsModifierKey(key)) { e.Handled = true; return; }
             if (key == Key.Escape) return;
-            if (key is Key.Back or Key.Delete) { tb.Text = ""; e.Handled = true; return; }
+            if (key is Key.Back or Key.Delete) { SetGesture(tb, ""); e.Handled = true; return; }
 
             var g = BuildGesture(Keyboard.Modifiers, key);
-            if (g != null) tb.Text = g;
+            if (g != null) SetGesture(tb, g);
             e.Handled = true;
         };
         tb.TextChanged += (_, _) => UpdateWarning();
@@ -160,6 +169,16 @@ internal sealed class ShortcutSettingsSection
         };
         return tb;
     }
+
+    // The field shows "Shift+[" (ShortcutText.Gesture); its Tag holds what settings.json gets
+    // and RegisterHotKey reads ("Shift+OemOpenBrackets"). Tag first: Text's change re-checks clashes.
+    internal static void SetGesture(TextBox box, string gesture)
+    {
+        box.Tag = gesture.Trim();
+        box.Text = ShortcutText.Gesture(gesture.Trim());
+    }
+
+    private static string GestureOf(TextBox box) => box.Tag as string ?? "";
 
     private static bool IsModifierKey(Key k) => k is
         Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or

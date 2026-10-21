@@ -42,6 +42,9 @@ public sealed class AppSettings
     public string PrintHotkey { get; set; } = "Ctrl+P";
     // 清除所有標註（可復原；留空即停用）
     public string ClearAllHotkey { get; set; } = "Ctrl+Shift+Z";
+    // 截圖與貼圖內每個快速鍵的自訂按鍵（動作 id → 按鍵清單，空清單即停用）；只記錄改過的，
+    // 其餘用 Snipaste 預設（見 ShortcutActions）。上面的 Undo/Copy… 欄位會同步成第一個組合鍵。
+    public Dictionary<string, List<string>> KeyBindings { get; set; } = new();
 
     // 框選完成後在範圍內按 Enter／雙擊／中鍵的動作：Copy | Pin | Save | QuickSave | CopyAndPin | None
     public string EnterAction { get; set; } = "Copy";

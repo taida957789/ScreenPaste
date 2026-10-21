@@ -51,7 +51,7 @@ Tras capturar, aparece una **barra de herramientas** junto al cursor (arrastrabl
 - Atajos globales (**F1** captura, **Ctrl+F1** capturar y copiar, **Mayús+F1** captura personalizada, **F2** grabación, **F3** pegar / recuperar una imagen, **Mayús+F3** ocultar / mostrar imágenes fijadas, todos configurables) y arranque desde el icono de la **bandeja del sistema**
 - **Varios idiomas**: 繁體中文 / English / 日本語 / 한국어 / Français / Deutsch / Español (sigue el sistema por defecto)
 - Tema **claro / oscuro / según el sistema**, interfaz moderna con esquinas redondeadas y barras de título oscuras
-- **Ventana de ajustes** centralizada: idioma, atajos, tema, inicio automático, carpeta de guardado, valores predeterminados de anotación (tipo de desenfoque), formato / tasa de grabación (los campos de atajo se fijan pulsando la combinación)
+- **Ventana de ajustes** centralizada: idioma, atajos, tema, inicio automático, carpeta de guardado, valores predeterminados de anotación (tipo de desenfoque), formato / tasa de grabación (los campos de atajo se fijan pulsando la combinación; también se puede reasignar cada tecla de la captura y de las imágenes fijadas)
 - **Inicio automático con Windows** (opcional)
 - **Actualización automática**: comprueba nuevas versiones vía GitHub Releases (activable en ajustes, o comprobación manual); descarga e instala con un clic
 
@@ -77,7 +77,7 @@ Grabación: pulsa **F2** y arrastra para elegir la zona; pulsa **F2** de nuevo (
 
 ## Atajos de teclado
 
-Los atajos siguen los de Snipaste cuando tiene uno. Las teclas marcadas *(configurable)* se cambian en Ajustes → «Atajos» / «Atajos en la aplicación»; las demás son fijas.
+Los atajos siguen los de Snipaste cuando tiene uno; las tablas muestran las teclas predeterminadas. Los atajos globales se cambian en Ajustes → «Atajos»; todas las teclas de la captura y de las imágenes fijadas se reasignan en Ajustes → «Atajos en la aplicación» → «Personalizar teclas…» (hasta dos teclas por acción, con un aviso si chocan). Solo quedan fijas las teclas de edición propias del cuadro de texto y los modificadores que se mantienen pulsados al arrastrar (como `Mayús`).
 
 > **Cambios en esta versión**
 > - Un **doble clic en una imagen fijada la cierra** (la primera vez pregunta antes). En Ajustes → «Imágenes fijadas» puede pasar a alternar la miniatura o a no hacer nada.
@@ -96,7 +96,7 @@ Los atajos siguen los de Snipaste cuando tiene uno. Las teclas marcadas *(config
 | `F3` | Fijar el portapapeles (imagen, archivo de imagen, valor de color o texto) en el cursor; pulsado de nuevo con el portapapeles sin cambios, recupera la última imagen cerrada (configurable) |
 | `Mayús+F3` | Ocultar / mostrar todas las imágenes fijadas (configurable) |
 | Sin asignar | Imagen fijada traspasable (la que está bajo el cursor deja pasar los clics), capturar y fijar, capturar, copiar y fijar, copiar de nuevo la última área, copiar toda la pantalla, capturar la ventana activa, capturar la pantalla bajo el cursor, captura retardada, borrar historial de capturas: se asignan en Ajustes → «Atajos» / «Más atajos» |
-| Icono de la bandeja | Doble clic inicia una captura; el menú también ofrece captura personalizada, pegar del portapapeles, ocultar / mostrar imágenes fijadas y «Hacer clicables todas las imágenes fijadas» |
+| Icono de la bandeja | Doble clic inicia una captura; el menú también ofrece captura personalizada, pegar del portapapeles, ocultar / mostrar imágenes fijadas, «Hacer clicables todas las imágenes fijadas» y «Atajo de captura (F1)», que desactiva y reactiva el atajo de captura sin olvidarlo (por ejemplo, para dejar F1 libre para un juego) |
 
 ### Captura: selección del área
 
@@ -149,20 +149,20 @@ Los atajos siguen los de Snipaste cuando tiene uno. Las teclas marcadas *(config
 | Rueda sobre una lupa seleccionada | Cambiar su aumento |
 | `Supr` | Eliminar la anotación seleccionada |
 | `Ctrl+Mayús+C` / `Ctrl+Mayús+V` | Copiar la anotación seleccionada / pegar una copia |
-| `Ctrl+Z` / `Ctrl+Y` | Deshacer / rehacer (configurable) |
-| `Ctrl+Mayús+Z` | Quitar todas las anotaciones, en un solo paso de deshacer (configurable) |
+| `Ctrl+Z` / `Ctrl+Y` | Deshacer / rehacer |
+| `Ctrl+Mayús+Z` | Quitar todas las anotaciones, en un solo paso de deshacer |
 | `Intro` o clic fuera | Confirmar el texto (`Mayús+Intro` para salto de línea; `Esc` también confirma) |
 | Rueda sobre el cuadro de texto | Tamaño de fuente |
 | Clic central en el cuadro de texto | Pegar el texto del portapapeles |
-| `Ctrl+C` / `Ctrl+Insert` | Copiar al portapapeles (`Ctrl+C` configurable) |
-| `Ctrl+S` / `Ctrl+Mayús+S` | Guardar como / guardado rápido (configurable; `Mayús`+clic en Guardar también guarda rápido) |
-| `Ctrl+T` | Fijar en pantalla (configurable) |
-| `Ctrl+P` | Imprimir (configurable) |
+| `Ctrl+C` / `Ctrl+Insert` | Copiar al portapapeles |
+| `Ctrl+S` / `Ctrl+Mayús+S` | Guardar como / guardado rápido (`Mayús`+clic en Guardar también guarda rápido) |
+| `Ctrl+T` | Fijar en pantalla |
+| `Ctrl+P` | Imprimir |
 | `Ctrl+Alt+C` | Copiar como archivo PNG |
 | `V` | Copiar el tamaño del área como texto (`800x600`) |
 | `Intro` | Copiar y cerrar (configurable en Ajustes → «Intro y ratón») |
-| Doble clic en el área (sin herramienta) | Copiar y cerrar (configurable) |
-| Clic central en el área | Fijar en pantalla (configurable) |
+| Doble clic en el área (sin herramienta) | Copiar y cerrar (configurable en Ajustes → «Intro y ratón») |
+| Clic central en el área | Fijar en pantalla (configurable en Ajustes → «Intro y ratón») |
 | Clic derecho | Retroceder un nivel: terminar la polilínea o el texto; con la herramienta de forma, desenfoque o borrador, marcar el elemento bajo el cursor (fuera del área: toda el área); deseleccionar; soltar la herramienta; por último descartar el área para trazar otra (pregunta antes si se perderían anotaciones) |
 | `Esc` | Cancelar el arrastre de un marco de lupa → terminar la polilínea → deseleccionar → salir de la captura (pregunta primero; desactivable) |
 
@@ -190,10 +190,10 @@ Los atajos siguen los de Snipaste cuando tiene uno. Las teclas marcadas *(config
 | `+` / `-` | Acercar / alejar |
 | `Ctrl++` / `Ctrl+-` | Subir / bajar la opacidad |
 | Flechas | Mover un píxel (más rápido si se mantiene) |
-| `Ctrl+C` / `Ctrl+Insert` | Copiar (`Ctrl+C` configurable) |
+| `Ctrl+C` / `Ctrl+Insert` | Copiar |
 | `Ctrl+Alt+C` | Copiar como archivo PNG |
-| `Ctrl+S` / `Ctrl+Mayús+S` | Guardar como / guardado rápido (configurable) |
-| `Ctrl+P` | Imprimir (configurable) |
+| `Ctrl+S` / `Ctrl+Mayús+S` | Guardar como / guardado rápido |
+| `Ctrl+P` | Imprimir |
 | `Ctrl+V` | Mostrar en su lugar el contenido del portapapeles |
 | `Ctrl+Mayús+C` | Copiar el texto del que se creó una imagen de texto |
 | `Ctrl+A` | Seleccionar todas las imágenes visibles |

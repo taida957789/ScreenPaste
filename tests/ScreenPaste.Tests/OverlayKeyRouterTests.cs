@@ -19,7 +19,7 @@ public sealed class OverlayKeyRouterTests
     private const ModifierKeys Shift = ModifierKeys.Shift;
     private const ModifierKeys Alt = ModifierKeys.Alt;
 
-    private static readonly OverlayKeyRouter Router = new(OverlayKeyBindings.FromSettings(new AppSettings()));
+    private static readonly OverlayKeyRouter Router = new(ShortcutMap.Defaults);
 
     private static OverlayKeyContext Selecting(Key key, ModifierKeys modifiers = None) => new()
     {
@@ -128,7 +128,7 @@ public sealed class OverlayKeyRouterTests
     [Fact]
     public void ABareLetterGesture_NeverFiresWhileTyping()
     {
-        var bindings = OverlayKeyBindings.FromSettings(new AppSettings()) with { Copy = new KeyChord(Key.C, None) };
+        var bindings = ShortcutMap.Defaults.WithKeys(CaptureShortcuts.Copy, "C");
         var ctx = Typing(Key.C) with { TextBoxDeclined = true };
 
         Assert.Equal(OverlayCommand.PassThrough, new OverlayKeyRouter(bindings).Route(ctx));
@@ -234,8 +234,7 @@ public sealed class OverlayKeyRouterTests
     [Fact]
     public void QuickSave_TakesPrecedenceOverSave_WhenBothShareAChord()
     {
-        var same = new KeyChord(Key.S, Ctrl);
-        var bindings = OverlayKeyBindings.FromSettings(new AppSettings()) with { Save = same, QuickSave = same };
+        var bindings = ShortcutMap.Defaults.WithKeys(CaptureShortcuts.Save, "Ctrl+S").WithKeys(CaptureShortcuts.QuickSave, "Ctrl+S");
 
         Assert.Equal(OverlayCommand.QuickSave, new OverlayKeyRouter(bindings).Route(Editing(Key.S, Ctrl)));
     }
@@ -297,7 +296,7 @@ public sealed class OverlayKeyRouterTests
     [Fact]
     public void AGestureBoundToCtrlA_WinsOverTheScreenCycle_WhileEditing()
     {
-        var bindings = OverlayKeyBindings.FromSettings(new AppSettings()) with { Copy = new KeyChord(Key.A, Ctrl) };
+        var bindings = ShortcutMap.Defaults.WithKeys(CaptureShortcuts.Copy, "Ctrl+A");
 
         Assert.Equal(OverlayCommand.Copy, new OverlayKeyRouter(bindings).Route(Editing(Key.A, Ctrl)));
     }
@@ -455,7 +454,7 @@ public sealed class OverlayKeyRouterTests
     [Fact]
     public void AGestureBoundToCtrlArrow_WinsOverTheRegionGrow()
     {
-        var bindings = OverlayKeyBindings.FromSettings(new AppSettings()) with { Save = new KeyChord(Key.Right, Ctrl) };
+        var bindings = ShortcutMap.Defaults.WithKeys(CaptureShortcuts.Save, "Ctrl+Right");
 
         Assert.Equal(OverlayCommand.Save, new OverlayKeyRouter(bindings).Route(Editing(Key.Right, Ctrl)));
     }
@@ -554,8 +553,8 @@ public sealed class OverlayKeyRouterTests
     [Fact]
     public void CtrlInsert_StillCopies_WhenTheCopyGestureIsRebound()
     {
-        // A fixed alias, as in Snipaste: it does not follow CopyHotkey.
-        var router = new OverlayKeyRouter(OverlayKeyBindings.FromSettings(new AppSettings { CopyHotkey = "" }));
+        // Copy's second key stays when an old settings file cleared the Copy gesture.
+        var router = new OverlayKeyRouter(ShortcutMap.FromSettings(new AppSettings { CopyHotkey = "" }));
 
         Assert.Equal(OverlayCommand.Copy, router.Route(Editing(Key.Insert, Ctrl)));
     }
@@ -636,9 +635,9 @@ public sealed class OverlayKeyRouterTests
     }
 
     [Fact]
-    public void AGestureBoundToCtrlInsert_WinsOverTheCopyAlias()
+    public void CtrlInsertMovedFromCopyToPin_Pins()
     {
-        var bindings = OverlayKeyBindings.FromSettings(new AppSettings()) with { Pin = new KeyChord(Key.Insert, Ctrl) };
+        var bindings = ShortcutMap.Defaults.WithKeys(CaptureShortcuts.Copy, "Ctrl+C").WithKeys(CaptureShortcuts.Pin, "Ctrl+Insert");
 
         Assert.Equal(OverlayCommand.Pin, new OverlayKeyRouter(bindings).Route(Editing(Key.Insert, Ctrl)));
     }
@@ -649,7 +648,7 @@ public sealed class OverlayKeyRouterTests
     public void FromSettings_FollowsRebindingAndDisabling()
     {
         var settings = new AppSettings { UndoHotkey = "Ctrl+Alt+Z", RedoHotkey = "" };
-        var router = new OverlayKeyRouter(OverlayKeyBindings.FromSettings(settings));
+        var router = new OverlayKeyRouter(ShortcutMap.FromSettings(settings));
 
         Assert.Equal(OverlayCommand.Undo, router.Route(Editing(Key.Z, Ctrl | Alt)));
         Assert.Equal(OverlayCommand.None, router.Route(Editing(Key.Z, Ctrl)));
@@ -661,11 +660,11 @@ public sealed class OverlayKeyRouterTests
     {
         // A hand-edited settings.json; the Settings window cannot write these.
         var settings = new AppSettings { CopyHotkey = "C", UndoHotkey = "Shift+Z" };
-        var bindings = OverlayKeyBindings.FromSettings(settings);
+        var bindings = ShortcutMap.FromSettings(settings);
         var router = new OverlayKeyRouter(bindings);
 
-        Assert.Null(bindings.Copy);
-        Assert.Null(bindings.Undo);
+        Assert.Equal(new[] { ShortcutKey.Chord(Key.Insert, Ctrl) }, bindings.For(CaptureShortcuts.Copy));
+        Assert.Empty(bindings.For(CaptureShortcuts.Undo));
         Assert.Equal(OverlayCommand.None, router.Route(Editing(Key.C) with { LoupeVisible = false }));
         Assert.Equal(OverlayCommand.None, router.Route(Editing(Key.Z, Shift)));
     }
@@ -673,23 +672,23 @@ public sealed class OverlayKeyRouterTests
     [Fact]
     public void FromSettings_ReadsTheDefaultGestures()
     {
-        var bindings = OverlayKeyBindings.FromSettings(new AppSettings());
+        var bindings = ShortcutMap.FromSettings(new AppSettings());
 
-        Assert.Equal(new KeyChord(Key.Z, Ctrl), bindings.Undo);
-        Assert.Equal(new KeyChord(Key.Y, Ctrl), bindings.Redo);
-        Assert.Equal(new KeyChord(Key.C, Ctrl), bindings.Copy);
-        Assert.Equal(new KeyChord(Key.S, Ctrl), bindings.Save);
-        Assert.Equal(new KeyChord(Key.S, Ctrl | Shift), bindings.QuickSave);
-        Assert.Equal(new KeyChord(Key.T, Ctrl), bindings.Pin);
-        Assert.Equal(new KeyChord(Key.P, Ctrl), bindings.Print);
-        Assert.Equal(new KeyChord(Key.Z, Ctrl | Shift), bindings.ClearAll);
+        Assert.Equal(ShortcutKey.Chord(Key.Z, Ctrl), bindings.For(CaptureShortcuts.Undo)[0]);
+        Assert.Equal(ShortcutKey.Chord(Key.Y, Ctrl), bindings.For(CaptureShortcuts.Redo)[0]);
+        Assert.Equal(ShortcutKey.Chord(Key.C, Ctrl), bindings.For(CaptureShortcuts.Copy)[0]);
+        Assert.Equal(ShortcutKey.Chord(Key.S, Ctrl), bindings.For(CaptureShortcuts.Save)[0]);
+        Assert.Equal(ShortcutKey.Chord(Key.S, Ctrl | Shift), bindings.For(CaptureShortcuts.QuickSave)[0]);
+        Assert.Equal(ShortcutKey.Chord(Key.T, Ctrl), bindings.For(CaptureShortcuts.Pin)[0]);
+        Assert.Equal(ShortcutKey.Chord(Key.P, Ctrl), bindings.For(CaptureShortcuts.Print)[0]);
+        Assert.Equal(ShortcutKey.Chord(Key.Z, Ctrl | Shift), bindings.For(CaptureShortcuts.ClearAll)[0]);
     }
 
     [Fact]
     public void FromSettings_FollowsThePinAndPrintGestures()
     {
         var settings = new AppSettings { PinHotkey = "Ctrl+Shift+T", PrintHotkey = "" };
-        var router = new OverlayKeyRouter(OverlayKeyBindings.FromSettings(settings));
+        var router = new OverlayKeyRouter(ShortcutMap.FromSettings(settings));
 
         Assert.Equal(OverlayCommand.Pin, router.Route(Editing(Key.T, Ctrl | Shift)));
         Assert.Equal(OverlayCommand.None, router.Route(Editing(Key.T, Ctrl)));
@@ -722,7 +721,7 @@ public sealed class OverlayKeyRouterTests
     [Fact]
     public void ARedoBoundToCtrlShiftZ_WinsOverClearAll()
     {
-        var bindings = OverlayKeyBindings.FromSettings(new AppSettings()) with { Redo = new KeyChord(Key.Z, Ctrl | Shift) };
+        var bindings = ShortcutMap.Defaults.WithKeys(CaptureShortcuts.Redo, "Ctrl+Shift+Z");
 
         Assert.Equal(OverlayCommand.Redo, new OverlayKeyRouter(bindings).Route(Editing(Key.Z, Ctrl | Shift)));
     }
@@ -730,8 +729,8 @@ public sealed class OverlayKeyRouterTests
     [Fact]
     public void FromSettings_FollowsTheClearAllGesture()
     {
-        var rebound = new OverlayKeyRouter(OverlayKeyBindings.FromSettings(new AppSettings { ClearAllHotkey = "Ctrl+Shift+Delete" }));
-        var disabled = new OverlayKeyRouter(OverlayKeyBindings.FromSettings(new AppSettings { ClearAllHotkey = "" }));
+        var rebound = new OverlayKeyRouter(ShortcutMap.FromSettings(new AppSettings { ClearAllHotkey = "Ctrl+Shift+Delete" }));
+        var disabled = new OverlayKeyRouter(ShortcutMap.FromSettings(new AppSettings { ClearAllHotkey = "" }));
 
         Assert.Equal(OverlayCommand.ClearAll, rebound.Route(Editing(Key.Delete, Ctrl | Shift)));
         Assert.Equal(OverlayCommand.None, rebound.Route(Editing(Key.Z, Ctrl | Shift)));
@@ -770,7 +769,7 @@ public sealed class OverlayKeyRouterTests
     [InlineData(Key.E)]
     public void ToolLetters_WhileEditing_SwitchTheTool(Key key)
     {
-        Assert.Equal(OverlayCommand.SelectToolByLetter, Router.Route(Editing(key)));
+        Assert.Equal(OverlayCommand.SelectTool, Router.Route(Editing(key)));
     }
 
     [Theory]
@@ -778,7 +777,7 @@ public sealed class OverlayKeyRouterTests
     [InlineData(Alt)]
     public void ChordedToolLetters_AreNotToolSwitches(ModifierKeys modifiers)
     {
-        Assert.NotEqual(OverlayCommand.SelectToolByLetter, Router.Route(Editing(Key.B, modifiers)));
+        Assert.NotEqual(OverlayCommand.SelectTool, Router.Route(Editing(Key.B, modifiers)));
     }
 
     [Fact]
@@ -805,7 +804,7 @@ public sealed class OverlayKeyRouterTests
     [InlineData(Key.NumPad3)]
     public void CtrlDigits_SwitchTheTool(Key key)
     {
-        Assert.Equal(OverlayCommand.SelectToolByNumber, Router.Route(Editing(key, Ctrl)));
+        Assert.Equal(OverlayCommand.SelectTool, Router.Route(Editing(key, Ctrl)));
     }
 
     [Theory]
@@ -851,7 +850,7 @@ public sealed class OverlayKeyRouterTests
     [Fact]
     public void AGestureBoundToCtrlDigit_WinsOverTheToolSwitch()
     {
-        var bindings = OverlayKeyBindings.FromSettings(new AppSettings()) with { Save = new KeyChord(Key.D1, Ctrl) };
+        var bindings = ShortcutMap.Defaults.WithKeys(CaptureShortcuts.Save, "Ctrl+1");
 
         Assert.Equal(OverlayCommand.Save, new OverlayKeyRouter(bindings).Route(Editing(Key.D1, Ctrl)));
     }
@@ -1051,7 +1050,7 @@ public sealed class OverlayKeyRouterTests
     [Fact]
     public void AGestureBoundToCtrlShiftC_WinsOverTheAnnotationCopy()
     {
-        var bindings = OverlayKeyBindings.FromSettings(new AppSettings()) with { Copy = new KeyChord(Key.C, Ctrl | Shift) };
+        var bindings = ShortcutMap.Defaults.WithKeys(CaptureShortcuts.Copy, "Ctrl+Shift+C");
         var ctx = Editing(Key.C, Ctrl | Shift) with { HasSelection = true };
 
         Assert.Equal(OverlayCommand.Copy, new OverlayKeyRouter(bindings).Route(ctx));
@@ -1172,7 +1171,7 @@ public sealed class OverlayKeyRouterTests
     [Fact]
     public void AGestureBoundToF5_WinsWhileEditing()
     {
-        var bindings = OverlayKeyBindings.FromSettings(new AppSettings()) with { Save = new KeyChord(Key.F5, None) };
+        var bindings = ShortcutMap.Defaults.WithKeys(CaptureShortcuts.Save, "F5");
 
         Assert.Equal(OverlayCommand.Save, new OverlayKeyRouter(bindings).Route(Editing(Key.F5)));
     }
@@ -1235,29 +1234,173 @@ public sealed class OverlayKeyRouterTests
         Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.D1, Shift)));   // types "!" instead
     }
 
-    // ---------------------------------------------------------------- fixed chords ---
+    // ---------------------------------------------------------------- rebinding ---
 
-    /// <summary>The settings window warns when a gesture lands on one of these, so the list
-    /// must stay true to the table.</summary>
-    [Fact]
-    public void FixedChords_EachRouteToACommandWhileEditing()
+    /// <summary>A context in which <paramref name="action"/> can run, for checking that its
+    /// keys reach it: the first of its phases, with the loupe up, an annotation selected and a
+    /// tool that has what the action needs.</summary>
+    private static OverlayKeyContext ContextFor(ShortcutAction action)
     {
-        foreach (var chord in OverlayKeyRouter.FixedChords)
-        {
-            var ctx = Editing(chord.Key, chord.Modifiers) with { HasSelection = true };
+        var tool = action.Id == CaptureShortcuts.ToolVariant ? ToolKind.Shape : ToolKind.Number;
+        var ctx = Editing(Key.None) with { HasSelection = true, HasDetectedArea = false, Tool = tool };
+        if (action.Contexts.HasFlag(ShortcutContexts.Editing)) return ctx;
+        if (action.Contexts.HasFlag(ShortcutContexts.Selecting)) return ctx with { Phase = OverlayPhase.Selecting, HasDetectedArea = true };
+        if (action.Contexts.HasFlag(ShortcutContexts.EditingDrag)) return ctx with { Dragging = true };
+        return ctx with { Phase = OverlayPhase.Selecting, Dragging = true };
+    }
 
-            Assert.NotEqual(OverlayCommand.None, Router.Route(ctx));
-        }
+    private static OverlayRoute Press(OverlayKeyRouter router, ShortcutKey key, OverlayKeyContext ctx) => key.Kind switch
+    {
+        ShortcutKeyKind.Chord => router.ResolveKey(ctx with { Key = key.Key, Modifiers = key.Modifiers }),
+        ShortcutKeyKind.Character => router.ResolveText(key.Character.ToString(), ctx),
+        _ => router.ResolveTap(key.Modifiers, ctx),
+    };
+
+    [Fact]
+    public void EveryDefaultKey_ReachesItsOwnAction()
+    {
+        foreach (var action in ShortcutActions.All.Where(a => a.Area == ShortcutArea.Capture))
+        foreach (var key in action.DefaultKeys)
+            Assert.True(Press(Router, key, ContextFor(action)).Action?.Id == action.Id, $"{key} should run {action.Id}");
     }
 
     [Fact]
-    public void FixedChords_ListTheChordsAGestureCouldShadow()
+    public void AReboundKey_RunsTheAction_AndTheOldKeyNoLonger()
     {
-        Assert.Contains(new KeyChord(Key.A, Ctrl), OverlayKeyRouter.FixedChords);
-        Assert.Contains(new KeyChord(Key.Insert, Ctrl), OverlayKeyRouter.FixedChords);
-        Assert.Contains(new KeyChord(Key.C, Ctrl | Alt), OverlayKeyRouter.FixedChords);
-        Assert.Contains(new KeyChord(Key.D5, Ctrl), OverlayKeyRouter.FixedChords);
-        Assert.Contains(new KeyChord(Key.F5, None), OverlayKeyRouter.FixedChords);
-        Assert.DoesNotContain(new KeyChord(Key.Z, Ctrl), OverlayKeyRouter.FixedChords);   // Undo: a gesture
+        var router = new OverlayKeyRouter(ShortcutMap.Defaults.WithKeys(CaptureShortcuts.Refresh, "F6"));
+
+        Assert.Equal(OverlayCommand.RefreshScreenshot, router.Route(Editing(Key.F6)));
+        Assert.Equal(OverlayCommand.None, router.Route(Editing(Key.F5)));
+    }
+
+    [Fact]
+    public void AReboundMoveKey_StillTellsItsDirection()
+    {
+        var router = new OverlayKeyRouter(ShortcutMap.Defaults.WithKeys(CaptureShortcuts.MoveLeft, "J"));
+
+        var route = router.ResolveKey(Editing(Key.J));
+
+        Assert.Equal(OverlayCommand.MoveRegion, route.Command);
+        Assert.Equal(new KeyChord(Key.Left, None), route.Action!.Canonical);
+    }
+
+    [Fact]
+    public void AReboundToolKey_PicksItsTool()
+    {
+        var router = new OverlayKeyRouter(ShortcutMap.Defaults.WithKeys(CaptureShortcuts.ToolHighlighter, "H"));
+
+        var route = router.ResolveKey(Editing(Key.H));
+
+        Assert.Equal(OverlayCommand.SelectTool, route.Command);
+        Assert.Equal(ToolKind.Highlighter, route.Action!.Tool);
+    }
+
+    [Fact]
+    public void AGestureCanTakeACharacter()
+    {
+        var router = new OverlayKeyRouter(ShortcutMap.Defaults.WithKeys(CaptureShortcuts.Undo, "/"));
+
+        Assert.Equal(OverlayCommand.Undo, router.RouteText("/", Editing(Key.None)));
+    }
+
+    [Fact]
+    public void ACharacterGesture_NeverFiresWhileTyping()
+    {
+        var router = new OverlayKeyRouter(ShortcutMap.Defaults.WithKeys(CaptureShortcuts.Undo, "/"));
+
+        Assert.Equal(OverlayCommand.PassThrough, router.RouteText("/", Typing(Key.None)));
+    }
+
+    [Fact]
+    public void ATapCanBeRebound_AndFreesTheOldOne()
+    {
+        var router = new OverlayKeyRouter(ShortcutMap.Defaults
+            .WithKeys(CaptureShortcuts.ColorFormat, "Ctrl")
+            .WithKeys(CaptureShortcuts.CopyColor, "X"));
+
+        Assert.Equal(OverlayCommand.CycleLoupeFormat, router.RouteTap(Ctrl, Selecting(Key.LeftCtrl)));
+        Assert.Equal(OverlayCommand.None, router.RouteTap(Shift, Selecting(Key.LeftShift)));
+        Assert.Equal(OverlayCommand.CopyLoupeColor, router.Route(Selecting(Key.X)));
+        Assert.Equal(OverlayCommand.None, router.Route(Selecting(Key.C)));
+    }
+
+    [Fact]
+    public void AnUnboundAction_NoLongerRuns()
+    {
+        var router = new OverlayKeyRouter(ShortcutMap.Defaults.WithKeys(CaptureShortcuts.DetectMode));
+
+        Assert.Equal(OverlayCommand.None, router.Route(Selecting(Key.Tab)));
+    }
+
+    [Fact]
+    public void Esc_WithAModifierStillHeld_StillRunsTheEscChain()
+    {
+        // Shift still down from a Shift+drag square, as Esc always allowed.
+        Assert.Equal(OverlayCommand.Close, Router.Route(Selecting(Key.Escape, Shift)));
+        Assert.Equal(OverlayCommand.Deselect, Router.Route(Editing(Key.Escape, Shift) with { HasSelection = true, Dragging = true }));
+        Assert.Equal(OverlayCommand.ConfirmClose, Router.Route(Editing(Key.Escape, Ctrl)));
+    }
+
+    [Fact]
+    public void Esc_WithAModifier_IsTheChainOnlyWhileEscIsItsKey()
+    {
+        var router = new OverlayKeyRouter(ShortcutMap.Defaults.WithKeys(CaptureShortcuts.Escape, "Q"));
+
+        Assert.Equal(OverlayCommand.None, router.Route(Selecting(Key.Escape, Shift)));
+        Assert.Equal(OverlayCommand.Close, router.Route(Selecting(Key.Q)));
+    }
+
+    [Theory]
+    [InlineData(Ctrl)]
+    [InlineData(Shift)]
+    public void Delete_WithAModifier_StillDeletesTheSelection(ModifierKeys modifiers)
+    {
+        Assert.Equal(OverlayCommand.DeleteSelected, Router.Route(Editing(Key.Delete, modifiers) with { HasSelection = true }));
+    }
+
+    [Fact]
+    public void ACharacterWithCtrl_IsMatchedByTheCharacterItsKeyTypes()
+    {
+        var router = new OverlayKeyRouter(ShortcutMap.Defaults.WithKeys(CaptureShortcuts.NumberUp, "Ctrl+="));
+
+        var ctx = Numbering() with { Key = Key.OemPlus, Modifiers = Ctrl, Text = "=" };
+
+        Assert.Equal(OverlayCommand.NumberUp, router.Route(ctx));
+    }
+
+    [Fact]
+    public void APlainCharacter_WaitsForTheTypedCharacter_SoShiftedKeysStayApart()
+    {
+        // Shift+, types "<" on a US layout: it must not step the history as "," does.
+        Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.OemComma, Shift) with { Text = "," }));
+        Assert.Equal(OverlayCommand.None, Router.Route(Editing(Key.OemComma) with { Text = "," }));
+        Assert.Equal(OverlayCommand.HistoryPrevious, Router.RouteText(",", Editing(Key.None)));
+    }
+
+    [Fact]
+    public void AHoldToMoveOnACharacter_IsLetGoByTheKeyThatTypesIt()
+    {
+        var router = new OverlayKeyRouter(ShortcutMap.Defaults.WithKeys(CaptureShortcuts.HoldToMove, ";"));
+
+        Assert.True(router.Releases(new[] { CaptureShortcuts.HoldToMove }, Key.OemSemicolon, ";"));
+        Assert.False(router.Releases(new[] { CaptureShortcuts.HoldToMove }, Key.OemQuotes, "'"));
+    }
+
+    [Fact]
+    public void AReboundHoldToMove_IsLetGoByItsOwnKey()
+    {
+        var router = new OverlayKeyRouter(ShortcutMap.Defaults.WithKeys(CaptureShortcuts.HoldToMove, "Q"));
+
+        Assert.Equal(OverlayCommand.HoldToMove, router.Route(Selecting(Key.Q) with { Dragging = true }));
+        Assert.True(router.Releases(new[] { CaptureShortcuts.HoldToMove }, Key.Q));
+        Assert.False(router.Releases(new[] { CaptureShortcuts.HoldToMove }, Key.Space));
+    }
+
+    [Fact]
+    public void TheDefaultKeys_LetGoAsBefore()
+    {
+        Assert.True(Router.Releases(new[] { CaptureShortcuts.HoldToMove }, Key.Space));
+        Assert.True(Router.Releases(CaptureShortcuts.Moves, Key.Left));
+        Assert.False(Router.Releases(CaptureShortcuts.Moves, Key.W));
     }
 }

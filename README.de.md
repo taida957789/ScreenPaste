@@ -51,7 +51,7 @@ Nach der Aufnahme erscheint neben dem Cursor eine **Symbol-Werkzeugleiste** (ver
 - Globale Hotkeys (**F1** Aufnahme, **Strg+F1** aufnehmen und kopieren, **Umschalt+F1** benutzerdefinierte Aufnahme, **F2** Aufzeichnung, **F3** einfügen / Bild zurückholen, **Umschalt+F3** angeheftete Bilder aus-/einblenden, alle konfigurierbar) und Start über das **Infobereich**-Symbol
 - **Mehrsprachig**: 繁體中文 / English / 日本語 / 한국어 / Français / Deutsch / Español (folgt standardmäßig dem System)
 - **Hell / Dunkel / System**-Design, moderne abgerundete Oberfläche und dunkle Titelleisten
-- Zentrales **Einstellungsfenster**: Sprache, Hotkeys, Design, Autostart, Speicherordner, Anmerkungs-Standards (Weichzeichner-Typ), Aufnahmeformat / Bildrate (Hotkey-Felder werden durch einfaches Drücken der Kombination gesetzt)
+- Zentrales **Einstellungsfenster**: Sprache, Hotkeys, Design, Autostart, Speicherordner, Anmerkungs-Standards (Weichzeichner-Typ), Aufnahmeformat / Bildrate (Hotkey-Felder werden durch einfaches Drücken der Kombination gesetzt; auch jede Taste der Aufnahme und der angehefteten Bilder lässt sich neu belegen)
 - Optionaler **Autostart mit Windows**
 - **Auto-Update**: prüft über GitHub Releases auf neue Versionen (in den Einstellungen umschaltbar, auch manuell); Download und Installation mit einem Klick
 
@@ -77,7 +77,7 @@ Aufzeichnung: **F2** drücken und den Bereich per Ziehen wählen; erneut **F2** 
 
 ## Tastenkürzel
 
-Die Kürzel folgen Snipaste, wo es dort eine Entsprechung gibt. Mit *(konfigurierbar)* markierte Tasten lassen sich unter Einstellungen → „Tastenkürzel“ / „Kürzel in der App“ ändern; die übrigen sind fest.
+Die Kürzel folgen Snipaste, wo es dort eine Entsprechung gibt; die Tabellen zeigen die Standardbelegung. Globale Hotkeys werden unter Einstellungen → „Tastenkürzel“ geändert; jede Taste der Aufnahme und der angehefteten Bilder lässt sich unter Einstellungen → „Kürzel in der App“ → „Tasten anpassen…“ neu belegen (bis zu zwei Tasten je Aktion, mit Warnung bei Überschneidungen). Fest sind nur die eigenen Bearbeitungstasten des Textfelds und Zusatztasten, die während eines Ziehens gehalten werden (etwa `Umschalt`).
 
 > **Neu in dieser Version**
 > - Ein **Doppelklick auf ein angeheftetes Bild schließt es** (beim ersten Mal mit Nachfrage). Unter Einstellungen → „Angeheftete Bilder“ kann er stattdessen die Miniaturansicht umschalten oder nichts tun.
@@ -96,7 +96,7 @@ Die Kürzel folgen Snipaste, wo es dort eine Entsprechung gibt. Mit *(konfigurie
 | `F3` | Inhalt der Zwischenablage (Bild, Bilddatei, Farbwert oder Text) am Mauszeiger anheften; erneut gedrückt bei unveränderter Zwischenablage das zuletzt geschlossene Bild zurückholen (konfigurierbar) |
 | `Umschalt+F3` | Alle angehefteten Bilder aus- / einblenden (konfigurierbar) |
 | Nicht belegt | Bild klickdurchlässig (das Bild unter dem Mauszeiger lässt Klicks durch), aufnehmen und anheften, aufnehmen, kopieren und anheften, letzten Bereich erneut kopieren, ganzen Bildschirm kopieren, aktives Fenster aufnehmen, Bildschirm unter dem Mauszeiger aufnehmen, verzögerte Aufnahme, Aufnahmeverlauf löschen: unter Einstellungen → „Tastenkürzel“ / „Weitere Tastenkürzel“ belegen |
-| Infobereich-Symbol | Doppelklick startet eine Aufnahme; das Menü bietet außerdem benutzerdefinierte Aufnahme, aus Zwischenablage einfügen, angeheftete Bilder aus-/einblenden und „Alle angehefteten Bilder wieder anklickbar machen“ |
+| Infobereich-Symbol | Doppelklick startet eine Aufnahme; das Menü bietet außerdem benutzerdefinierte Aufnahme, aus Zwischenablage einfügen, angeheftete Bilder aus-/einblenden, „Alle angehefteten Bilder wieder anklickbar machen“ und „Aufnahme-Hotkey (F1)“, das den Aufnahme-Hotkey aus- und wieder einschaltet, ohne ihn zu vergessen (etwa um F1 für ein Spiel freizugeben) |
 
 ### Aufnahme: Bereich auswählen
 
@@ -149,20 +149,20 @@ Die Kürzel folgen Snipaste, wo es dort eine Entsprechung gibt. Mit *(konfigurie
 | Mausrad auf einer ausgewählten Lupe | Vergrößerung ändern |
 | `Entf` | Ausgewählte Anmerkung löschen |
 | `Strg+Umschalt+C` / `Strg+Umschalt+V` | Ausgewählte Anmerkung kopieren / eine Kopie einfügen |
-| `Strg+Z` / `Strg+Y` | Rückgängig / wiederholen (konfigurierbar) |
-| `Strg+Umschalt+Z` | Alle Anmerkungen entfernen, als ein Rückgängig-Schritt (konfigurierbar) |
+| `Strg+Z` / `Strg+Y` | Rückgängig / wiederholen |
+| `Strg+Umschalt+Z` | Alle Anmerkungen entfernen, als ein Rückgängig-Schritt |
 | `Eingabe` oder Klick außerhalb | Text bestätigen (`Umschalt+Eingabe` für Zeilenumbruch; `Esc` bestätigt ebenfalls) |
 | Mausrad über dem Textfeld | Schriftgröße |
 | Mittelklick im Textfeld | Text aus der Zwischenablage einfügen |
-| `Strg+C` / `Strg+Einfg` | In die Zwischenablage kopieren (`Strg+C` konfigurierbar) |
-| `Strg+S` / `Strg+Umschalt+S` | Speichern unter / Schnellspeichern (konfigurierbar; `Umschalt`+Klick auf Speichern speichert ebenfalls schnell) |
-| `Strg+T` | Am Bildschirm anheften (konfigurierbar) |
-| `Strg+P` | Drucken (konfigurierbar) |
+| `Strg+C` / `Strg+Einfg` | In die Zwischenablage kopieren |
+| `Strg+S` / `Strg+Umschalt+S` | Speichern unter / Schnellspeichern (`Umschalt`+Klick auf Speichern speichert ebenfalls schnell) |
+| `Strg+T` | Am Bildschirm anheften |
+| `Strg+P` | Drucken |
 | `Strg+Alt+C` | Als PNG-Datei kopieren |
 | `V` | Bereichsgröße als Text kopieren (`800x600`) |
 | `Eingabe` | Kopieren und schließen (konfigurierbar unter Einstellungen → „Eingabetaste & Maus“) |
-| Doppelklick im Bereich (ohne Werkzeug) | Kopieren und schließen (konfigurierbar) |
-| Mittelklick im Bereich | Am Bildschirm anheften (konfigurierbar) |
+| Doppelklick im Bereich (ohne Werkzeug) | Kopieren und schließen (konfigurierbar unter Einstellungen → „Eingabetaste & Maus“) |
+| Mittelklick im Bereich | Am Bildschirm anheften (konfigurierbar unter Einstellungen → „Eingabetaste & Maus“) |
 | Rechtsklick | Eine Ebene zurück: Linienzug oder Text beenden; mit Form-, Weichzeichner- oder Radierer-Werkzeug das UI-Element unter dem Mauszeiger markieren (außerhalb des Bereichs: den ganzen Bereich); Auswahl aufheben; Werkzeug ablegen; zuletzt den Bereich verwerfen und neu aufziehen (mit Nachfrage, wenn Anmerkungen verloren gingen) |
 | `Esc` | Ziehen eines Lupenrahmens abbrechen → Linienzug beenden → Auswahl aufheben → Aufnahme verlassen (mit Nachfrage, abschaltbar) |
 
@@ -190,10 +190,10 @@ Die Kürzel folgen Snipaste, wo es dort eine Entsprechung gibt. Mit *(konfigurie
 | `+` / `-` | Vergrößern / verkleinern |
 | `Strg++` / `Strg+-` | Deckkraft erhöhen / verringern |
 | Pfeiltasten | Um ein Pixel verschieben (gehalten schneller) |
-| `Strg+C` / `Strg+Einfg` | Kopieren (`Strg+C` konfigurierbar) |
+| `Strg+C` / `Strg+Einfg` | Kopieren |
 | `Strg+Alt+C` | Als PNG-Datei kopieren |
-| `Strg+S` / `Strg+Umschalt+S` | Speichern unter / Schnellspeichern (konfigurierbar) |
-| `Strg+P` | Drucken (konfigurierbar) |
+| `Strg+S` / `Strg+Umschalt+S` | Speichern unter / Schnellspeichern |
+| `Strg+P` | Drucken |
 | `Strg+V` | Stattdessen den Inhalt der Zwischenablage zeigen |
 | `Strg+Umschalt+C` | Den Text kopieren, aus dem ein Textbild erstellt wurde |
 | `Strg+A` | Alle angezeigten Bilder auswählen |

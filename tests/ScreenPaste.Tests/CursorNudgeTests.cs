@@ -63,17 +63,6 @@ public sealed class CursorNudgeTests
     public void Direction_IsZero_ForAnyOtherKey(Key key)
     {
         Assert.Equal((0, 0), CursorNudge.Direction(key));
-        Assert.False(CursorNudge.IsWasd(key));
-        Assert.False(CursorNudge.IsArrow(key));
-    }
-
-    [Fact]
-    public void IsWasdAndIsArrow_SplitTheTwoKeyGroups()
-    {
-        Assert.True(CursorNudge.IsWasd(Key.W));
-        Assert.False(CursorNudge.IsWasd(Key.Up));
-        Assert.True(CursorNudge.IsArrow(Key.Left));
-        Assert.False(CursorNudge.IsArrow(Key.A));
     }
 
     // ---------------------------------------------------------------- Clamp ---

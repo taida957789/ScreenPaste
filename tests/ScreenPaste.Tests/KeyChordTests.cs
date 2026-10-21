@@ -169,6 +169,31 @@ public sealed class KeyChordTests
         Assert.Equal(expected, text);
     }
 
+    // A US layout's unshifted characters; R's "r" shows a letter keeps its name all the same.
+    private static string? UsKeyText(Key key) => key switch
+    {
+        Key.OemOpenBrackets => "[",
+        Key.OemPlus => "=",
+        Key.OemComma => ",",
+        Key.R => "r",
+        _ => null,
+    };
+
+    [Theory]
+    [InlineData(Key.OemOpenBrackets, Shift, "Shift+[")]
+    [InlineData(Key.OemPlus, Ctrl, "Ctrl+=")]
+    [InlineData(Key.OemComma, Ctrl | Shift, "Ctrl+Shift+,")]
+    [InlineData(Key.OemQuestion, Ctrl, "Ctrl+OemQuestion")]   // types nothing (a dead key): its name
+    [InlineData(Key.R, Shift, "Shift+R")]
+    [InlineData(Key.F1, ModifierKeys.None, "F1")]
+    [InlineData(Key.Escape, ModifierKeys.None, "Esc")]
+    public void ToDisplayString_NamesAPunctuationKeyByTheCharacterItTypes(Key key, ModifierKeys modifiers, string shown)
+    {
+        var chord = new KeyChord(key, modifiers);
+
+        Assert.Equal(shown, chord.ToDisplayString(UsKeyText));
+    }
+
     [Theory]
     [InlineData("R")]
     [InlineData("1")]

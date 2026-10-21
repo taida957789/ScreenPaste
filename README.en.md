@@ -51,7 +51,7 @@ After capturing, an **icon toolbar** pops up next to the cursor (draggable, and 
 - Global hotkeys (**F1** capture, **Ctrl+F1** capture and copy, **Shift+F1** custom snip, **F2** recording, **F3** paste / bring back a pin, **Shift+F3** hide / show pins, all configurable) and launch from the **system tray** icon
 - **Multiple languages**: Traditional Chinese / English / 日本語 / 한국어 / Français / Deutsch / Español (follows the system by default)
 - **Light / Dark / Follow system** theme, with a modern rounded UI and dark title bars
-- A centralized **Settings window**: language, hotkeys, theme, run at startup, save folder, annotation defaults (blur type), recording format / frame rate (hotkey fields are set by simply pressing the combination)
+- A centralized **Settings window**: language, hotkeys, theme, run at startup, save folder, annotation defaults (blur type), recording format / frame rate (hotkey fields are set by simply pressing the combination; every key of the capture and of pins can be rebound too)
 - Optional **run automatically at startup**
 - **Auto-update**: checks for new versions via GitHub Releases (toggle in settings, or check manually); one click to download and install
 
@@ -77,7 +77,7 @@ Recording: press **F2** and drag-select a region to start; press **F2** again (o
 
 ## Hotkeys
 
-The shortcuts follow Snipaste's wherever it has one. Keys marked *(configurable)* can be changed in Settings → "Hotkeys" / "In-app shortcuts"; the others are fixed.
+The shortcuts follow Snipaste's wherever it has one; the tables list the defaults. Global hotkeys are changed in Settings → "Hotkeys"; every key of the capture and of pins can be rebound in Settings → "In-app shortcuts" → "Customize keys…" (up to two keys per action, with a warning when keys clash). Only the text box's own editing keys and the modifiers held during a drag (such as `Shift`) stay fixed.
 
 > **Changed in this version**
 > - A **double-click on a pin closes it** (the first time it asks first). Settings → "Pins" can make it toggle the thumbnail or do nothing instead.
@@ -96,7 +96,7 @@ The shortcuts follow Snipaste's wherever it has one. Keys marked *(configurable)
 | `F3` | Pin the clipboard (image, image file, colour value or text) at the cursor; pressed again while the clipboard is unchanged, bring back the pin closed last (configurable) |
 | `Shift+F3` | Hide / show all pins (configurable) |
 | Unassigned | Pin click-through (the pin under the cursor lets clicks through), snip and pin, snip / copy / pin, copy the last area again, copy the whole screen, snip the active window, snip the screen under the cursor, delayed snip, clear snip history: assign them in Settings → "Hotkeys" / "More hotkeys" |
-| Tray icon | Double-click starts a capture; the menu also has custom snip, paste from clipboard, hide / show pins and "Make all pins clickable" |
+| Tray icon | Double-click starts a capture; the menu also has custom snip, paste from clipboard, hide / show pins, "Make all pins clickable" and a "Capture hotkey (F1)" switch that turns the capture hotkey off and on (e.g. to free F1 for a game) without forgetting it |
 
 ### Capture: selecting the area
 
@@ -149,20 +149,20 @@ The shortcuts follow Snipaste's wherever it has one. Keys marked *(configurable)
 | Wheel on a selected magnifier | Change its zoom |
 | `Delete` | Delete the selected annotation |
 | `Ctrl+Shift+C` / `Ctrl+Shift+V` | Copy the selected annotation / paste a copy of it |
-| `Ctrl+Z` / `Ctrl+Y` | Undo / redo (configurable) |
-| `Ctrl+Shift+Z` | Remove all annotations, as one undo step (configurable) |
+| `Ctrl+Z` / `Ctrl+Y` | Undo / redo |
+| `Ctrl+Shift+Z` | Remove all annotations, as one undo step |
 | `Enter` or click outside | Commit the text box (`Shift+Enter` for a new line; `Esc` commits too) |
 | Wheel over the text box | Font size |
 | Middle-click in the text box | Paste the clipboard's text |
-| `Ctrl+C` / `Ctrl+Insert` | Copy to clipboard (`Ctrl+C` configurable) |
-| `Ctrl+S` / `Ctrl+Shift+S` | Save as / quick save (configurable; `Shift`+click on Save quick-saves too) |
-| `Ctrl+T` | Pin to screen (configurable) |
-| `Ctrl+P` | Print (configurable) |
+| `Ctrl+C` / `Ctrl+Insert` | Copy to clipboard |
+| `Ctrl+S` / `Ctrl+Shift+S` | Save as / quick save (`Shift`+click on Save quick-saves too) |
+| `Ctrl+T` | Pin to screen |
+| `Ctrl+P` | Print |
 | `Ctrl+Alt+C` | Copy as a PNG file |
 | `V` | Copy the area's size as text (`800x600`) |
 | `Enter` | Copy and close (configurable in Settings → "Enter & mouse actions") |
-| Double-click in the area (no tool) | Copy and close (configurable) |
-| Middle-click in the area | Pin to screen (configurable) |
+| Double-click in the area (no tool) | Copy and close (configurable in Settings → "Enter & mouse actions") |
+| Middle-click in the area | Pin to screen (configurable in Settings → "Enter & mouse actions") |
 | Right-click | Step back one level: finish the line strip or the text; with the shape, blur or eraser tool, mark the UI element under the cursor (outside the area: all of it); deselect; drop the tool; then discard the area to frame a new one (asks first when annotations would be lost) |
 | `Esc` | Cancel a magnifier-frame drag → finish the line strip → deselect → leave the capture (asks first; can be disabled) |
 
@@ -190,10 +190,10 @@ The shortcuts follow Snipaste's wherever it has one. Keys marked *(configurable)
 | `+` / `-` | Zoom in / out |
 | `Ctrl++` / `Ctrl+-` | Opacity up / down |
 | Arrow keys | Move one pixel (faster when held) |
-| `Ctrl+C` / `Ctrl+Insert` | Copy (`Ctrl+C` configurable) |
+| `Ctrl+C` / `Ctrl+Insert` | Copy |
 | `Ctrl+Alt+C` | Copy as a PNG file |
-| `Ctrl+S` / `Ctrl+Shift+S` | Save as / quick save (configurable) |
-| `Ctrl+P` | Print (configurable) |
+| `Ctrl+S` / `Ctrl+Shift+S` | Save as / quick save |
+| `Ctrl+P` | Print |
 | `Ctrl+V` | Show the clipboard's content in this pin instead |
 | `Ctrl+Shift+C` | Copy the text a text pin was made from |
 | `Ctrl+A` | Select every shown pin |

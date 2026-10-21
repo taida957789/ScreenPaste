@@ -7,28 +7,32 @@ namespace ScreenPaste.Output;
 
 /// <summary>
 /// Keyboard handling for a focused pin. Which command a key runs is decided by the pure
-/// <see cref="PinKeyRouter"/>; this half builds its context and runs the result, as the
-/// menu does for its entries; a modifier tapped on its own goes through
-/// <see cref="PinKeyRouter.RouteTap"/> (Alt: the loupe). The IME is off for pins, so 1-6,
-/// W/A/S/D and C arrive as keys rather than ImeProcessed while a Chinese or Japanese IME is on.
+/// <see cref="PinKeyRouter"/> from the user's keys (<see cref="ShortcutMap"/>); this half
+/// builds its context and runs the result, as the menu does for its entries; a modifier
+/// tapped on its own goes through <see cref="PinKeyRouter.RouteTap"/> (Alt: the loupe), and a
+/// character no key-down claimed (Shift+= typing +) through <see cref="PinKeyRouter.RouteText"/>.
+/// The IME is off for pins, so 1-6, W/A/S/D and C arrive as keys rather than ImeProcessed
+/// while a Chinese or Japanese IME is on.
 /// </summary>
 public sealed partial class PinWindow
 {
     private const int MaxNudgeRepeat = 64;     // CursorNudge.Step has long since capped
-    private const uint DeadKeyFlag = 0x80000000;
     private int _nudgeRepeat;                  // auto-repeats of the held arrow or W/A/S/D key
     private bool _altChordRan;                 // a key held with Alt ran a command since Alt went down
+    private bool _keyRepeating;                // the last key down was an auto-repeat (its typed character too)
 
     private void InitKeyboard()
     {
         InputMethod.SetIsInputMethodEnabled(this, false);
         PreviewKeyDown += Pin_PreviewKeyDown;
         PreviewKeyUp += Pin_PreviewKeyUp;
+        PreviewTextInput += Pin_PreviewTextInput;
     }
 
     private void Pin_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         var key = KeyInputNormalizer.Effective(e);
+        _keyRepeating = e.IsRepeat;
         _modifierTaps.KeyDown(key, Keyboard.Modifiers, AnyMouseButtonDown());
         if (IsAltKey(key) && !e.IsRepeat) _altChordRan = false;
 
@@ -36,18 +40,40 @@ public sealed partial class PinWindow
         {
             Key = key,
             Modifiers = Keyboard.Modifiers,
-            Text = LayoutText(key),
+            Text = KeyboardLayout.UnshiftedText(key),
             IsRepeat = e.IsRepeat,
             LoupeVisible = LoupeShowing,
         };
-        // Built per press, so a gesture changed in the settings applies to open pins at once.
-        var command = new PinKeyRouter(PinKeyBindings.FromSettings(_settings)).Route(ctx);
-        if (command == PinCommand.None) return;
+        var route = Router().Resolve(ctx);
+        if (route.Command == PinCommand.None) return;
 
         e.Handled = true;
         if (ctx.Modifiers.HasFlag(ModifierKeys.Alt)) _altChordRan = true;
-        if (ctx.IsRepeat && !PinKeyRouter.RunsOnRepeat(command)) return;   // a held key runs it once
-        RunCommand(command, ctx);
+        RunRoute(route, ctx);
+    }
+
+    /// <summary>A character the key-down left alone: + typed with Shift+=, an AltGr symbol.</summary>
+    private void Pin_PreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        if (string.IsNullOrEmpty(e.Text)) return;   // Ctrl chords type control characters
+        var ctx = new PinKeyContext { Modifiers = Keyboard.Modifiers, IsRepeat = _keyRepeating, LoupeVisible = LoupeShowing };
+        var route = Router().ResolveText(e.Text, ctx);
+        if (route.Command == PinCommand.None) return;
+        e.Handled = true;
+        RunRoute(route, ctx);
+    }
+
+    /// <summary>Built per press, so a key changed in the settings applies to open pins at once.</summary>
+    private PinKeyRouter Router() => new(ShortcutMap.FromSettings(_settings));
+
+    /// <summary>Run a routed key: a held key runs it once unless it keeps going (zoom, moves),
+    /// and a move or nudge takes its direction from the key its action stands for
+    /// (<see cref="ShortcutAction.Canonical"/>), whichever key the user bound to it.</summary>
+    private void RunRoute(PinRoute route, PinKeyContext pressed)
+    {
+        if (pressed.IsRepeat && !PinKeyRouter.RunsOnRepeat(route.Command)) return;
+        var ctx = route.Action?.Canonical is { } c ? pressed with { Key = c.Key, Modifiers = c.Modifiers } : pressed;
+        RunCommand(route.Command, ctx);
     }
 
     /// <summary>A modifier tapped on its own runs its command (Alt: the loupe; Shift: its
@@ -67,7 +93,7 @@ public sealed partial class PinWindow
         if (tapped != ModifierKeys.None)
         {
             var ctx = new PinKeyContext { Key = key, Modifiers = Keyboard.Modifiers, LoupeVisible = LoupeShowing };
-            var command = PinKeyRouter.RouteTap(tapped, ctx);
+            var command = Router().RouteTap(tapped, ctx);
             if (command != PinCommand.None)
             {
                 e.Handled = true;
@@ -160,17 +186,6 @@ public sealed partial class PinWindow
 
     private int NextNudgeRepeat(bool isRepeat) =>
         _nudgeRepeat = isRepeat ? Math.Min(_nudgeRepeat + 1, MaxNudgeRepeat) : 0;
-
-    /// <summary>What the key types on the current keyboard layout with no modifier held, or
-    /// null: none, or a dead key waiting for its letter.</summary>
-    private static string? LayoutText(Key key)
-    {
-        int vk = KeyInterop.VirtualKeyFromKey(key);
-        if (vk == 0) return null;
-        uint mapped = NativeMethods.MapVirtualKey((uint)vk, NativeMethods.MAPVK_VK_TO_CHAR);
-        if (mapped == 0 || (mapped & DeadKeyFlag) != 0) return null;
-        return ((char)(mapped & 0xFFFF)).ToString();
-    }
 
     private static bool IsAltKey(Key key) => key is Key.LeftAlt or Key.RightAlt;
 }

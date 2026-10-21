@@ -7,12 +7,11 @@ using Xunit;
 namespace ScreenPaste.Tests;
 
 /// <summary>
-/// A focused pin's key table (Snipaste's pin keys): 1-6 turn, flip and recolour it, + and -
-/// zoom (with Ctrl: opacity), the arrows move it, W/A/S/D move the cursor, the Copy / Save /
-/// Quick save / Print gestures follow the settings, and Ctrl+Insert, Ctrl+Alt+C,
-/// Ctrl+Shift+P and the Menu key are fixed. + and - go by the character the key types on the
-/// current layout, since where they sit differs between layouts. Esc and Ctrl+W close the pin
-/// so it can be brought back; Shift+Esc destroys it.
+/// A focused pin's key table (Snipaste's pin keys by default, every one rebindable): 1-6
+/// turn, flip and recolour it, + and - zoom (with Ctrl: opacity), the arrows move it, W/A/S/D
+/// move the cursor, and the outputs follow the settings. + and - go by the character the key
+/// types on the current layout, since where they sit differs between layouts. Esc and Ctrl+W
+/// close the pin so it can be brought back; Shift+Esc destroys it.
 /// </summary>
 public sealed class PinKeyRouterTests
 {
@@ -21,7 +20,7 @@ public sealed class PinKeyRouterTests
     private const ModifierKeys Shift = ModifierKeys.Shift;
     private const ModifierKeys Alt = ModifierKeys.Alt;
 
-    private static readonly PinKeyRouter Router = new(PinKeyBindings.FromSettings(new AppSettings()));
+    private static readonly PinKeyRouter Router = new(ShortcutMap.Defaults);
 
     private static PinKeyContext Press(Key key, ModifierKeys modifiers = None, string? text = null) => new()
     {
@@ -113,7 +112,7 @@ public sealed class PinKeyRouterTests
     [Fact]
     public void AGestureBoundToCtrlPlus_WinsOverTheOpacity()
     {
-        var router = new PinKeyRouter(new PinKeyBindings(KeyChord.Parse("Ctrl+OemPlus"), null, null, null));
+        var router = new PinKeyRouter(ShortcutMap.Defaults.WithKeys(PinShortcuts.Copy, "Ctrl+OemPlus"));
 
         Assert.Equal(PinCommand.Copy, router.Route(Press(Key.OemPlus, Ctrl, "=")));
     }
@@ -134,7 +133,7 @@ public sealed class PinKeyRouterTests
     public void CopyGesture_FollowsTheSettings()
     {
         // Arrange
-        var router = new PinKeyRouter(PinKeyBindings.FromSettings(new AppSettings { CopyHotkey = "Ctrl+Shift+K" }));
+        var router = new PinKeyRouter(ShortcutMap.FromSettings(new AppSettings { CopyHotkey = "Ctrl+Shift+K" }));
 
         // Act / Assert
         Assert.Equal(PinCommand.Copy, router.Route(Press(Key.K, Ctrl | Shift)));
@@ -144,7 +143,7 @@ public sealed class PinKeyRouterTests
     [Fact]
     public void UnboundCopyGesture_LeavesCtrlInsertCopying()
     {
-        var router = new PinKeyRouter(PinKeyBindings.FromSettings(new AppSettings { CopyHotkey = "" }));
+        var router = new PinKeyRouter(ShortcutMap.FromSettings(new AppSettings { CopyHotkey = "" }));
 
         Assert.Equal(PinCommand.None, router.Route(Press(Key.C, Ctrl)));
         Assert.Equal(PinCommand.Copy, router.Route(Press(Key.Insert, Ctrl)));
@@ -153,7 +152,7 @@ public sealed class PinKeyRouterTests
     [Fact]
     public void QuickSave_WinsWhenBothSaveGesturesAreTheSame()
     {
-        var router = new PinKeyRouter(PinKeyBindings.FromSettings(new AppSettings { QuickSaveHotkey = "Ctrl+S" }));
+        var router = new PinKeyRouter(ShortcutMap.FromSettings(new AppSettings { QuickSaveHotkey = "Ctrl+S" }));
 
         Assert.Equal(PinCommand.QuickSave, router.Route(Press(Key.S, Ctrl)));
     }
@@ -161,7 +160,7 @@ public sealed class PinKeyRouterTests
     [Fact]
     public void BareLetterInTheSettings_StaysUnbound()
     {
-        var router = new PinKeyRouter(PinKeyBindings.FromSettings(new AppSettings { SaveHotkey = "S" }));
+        var router = new PinKeyRouter(ShortcutMap.FromSettings(new AppSettings { SaveHotkey = "S" }));
 
         Assert.Equal(PinCommand.NudgeCursor, router.Route(Press(Key.S)));
     }
@@ -243,7 +242,7 @@ public sealed class PinKeyRouterTests
     [Fact]
     public void AGestureBoundToCtrlW_WinsOverClosing()
     {
-        var router = new PinKeyRouter(PinKeyBindings.FromSettings(new AppSettings { CopyHotkey = "Ctrl+W" }));
+        var router = new PinKeyRouter(ShortcutMap.FromSettings(new AppSettings { CopyHotkey = "Ctrl+W" }));
 
         Assert.Equal(PinCommand.Copy, router.Route(Press(Key.W, Ctrl)));
     }
@@ -251,7 +250,7 @@ public sealed class PinKeyRouterTests
     [Fact]
     public void AGestureBoundToEsc_DoesNotTakeOverClosing()
     {
-        var router = new PinKeyRouter(PinKeyBindings.FromSettings(new AppSettings { CopyHotkey = "Shift+Esc" }));
+        var router = new PinKeyRouter(ShortcutMap.FromSettings(new AppSettings { CopyHotkey = "Shift+Esc" }));
 
         Assert.Equal(PinCommand.Destroy, router.Route(Press(Key.Escape, Shift)));
     }
@@ -287,56 +286,6 @@ public sealed class PinKeyRouterTests
         Assert.False(PinKeyRouter.RunsOnRepeat(command));
     }
 
-    // ---------------------------------------------------------------- menu labels ---
-
-    [Theory]
-    [InlineData(PinCommand.Close)]
-    [InlineData(PinCommand.Destroy)]
-    [InlineData(PinCommand.RotateClockwise)]
-    [InlineData(PinCommand.RotateCounterClockwise)]
-    [InlineData(PinCommand.FlipHorizontal)]
-    [InlineData(PinCommand.FlipVertical)]
-    [InlineData(PinCommand.ToggleGrayscale)]
-    [InlineData(PinCommand.ToggleInvert)]
-    [InlineData(PinCommand.CopyAsFile)]
-    [InlineData(PinCommand.OpenSettings)]
-    [InlineData(PinCommand.PasteClipboard)]
-    [InlineData(PinCommand.CopyText)]
-    public void FixedKeys_RouteBackToTheirCommand(PinCommand command)
-    {
-        var chord = KeyChord.Parse(PinKeyRouter.FixedKeys(command));
-
-        Assert.NotNull(chord);
-        Assert.Equal(command, Router.Route(Press(chord.Value.Key, chord.Value.Modifiers)));
-    }
-
-    [Theory]
-    [InlineData(PinCommand.OpacityUp, Key.OemPlus, "+")]
-    [InlineData(PinCommand.OpacityDown, Key.OemMinus, "-")]
-    public void FixedKeys_ForOpacity_AreCtrlAndTheTypedCharacter(PinCommand command, Key key, string text)
-    {
-        Assert.Equal("Ctrl+" + text, PinKeyRouter.FixedKeys(command));
-        Assert.Equal(command, Router.Route(Press(key, Ctrl, text)));
-    }
-
-    [Fact]
-    public void FixedKeys_ForDestroy_IsShiftEsc()
-    {
-        Assert.Equal("Shift+Esc", PinKeyRouter.FixedKeys(PinCommand.Destroy));
-    }
-
-    [Theory]
-    [InlineData(PinCommand.Copy)]
-    [InlineData(PinCommand.Save)]
-    [InlineData(PinCommand.QuickSave)]
-    [InlineData(PinCommand.Print)]
-    [InlineData(PinCommand.Move)]
-    [InlineData(PinCommand.None)]
-    public void FixedKeys_ForAGestureFromTheSettingsOrNoMenuRow_IsNull(PinCommand command)
-    {
-        Assert.Null(PinKeyRouter.FixedKeys(command));
-    }
-
     // ---------------------------------------------------------------- clipboard ---
 
     [Fact]
@@ -365,21 +314,6 @@ public sealed class PinKeyRouterTests
         Assert.False(PinKeyRouter.RunsOnRepeat(command));
     }
 
-    [Fact]
-    public void FixedChords_EachRouteToACommand()
-    {
-        foreach (var chord in PinKeyRouter.FixedChords)
-            Assert.NotEqual(PinCommand.None, Router.Route(Press(chord.Key, chord.Modifiers)));
-    }
-
-    [Fact]
-    public void FixedChords_ListTheClipboardKeys()
-    {
-        Assert.Contains(new KeyChord(Key.V, Ctrl), PinKeyRouter.FixedChords);
-        Assert.Contains(new KeyChord(Key.C, Ctrl | Shift), PinKeyRouter.FixedChords);
-        Assert.Contains(new KeyChord(Key.W, Ctrl), PinKeyRouter.FixedChords);
-    }
-
     // ---------------------------------------------------------------- multi-selection ---
 
     [Fact]
@@ -389,15 +323,9 @@ public sealed class PinKeyRouterTests
     }
 
     [Fact]
-    public void CtrlA_IsAFixedChord()
-    {
-        Assert.Contains(new KeyChord(Key.A, Ctrl), PinKeyRouter.FixedChords);
-    }
-
-    [Fact]
     public void AGestureBoundToCtrlA_WinsOverSelectingAll()
     {
-        var router = new PinKeyRouter(PinKeyBindings.FromSettings(new AppSettings { CopyHotkey = "Ctrl+A" }));
+        var router = new PinKeyRouter(ShortcutMap.FromSettings(new AppSettings { CopyHotkey = "Ctrl+A" }));
 
         Assert.Equal(PinCommand.Copy, router.Route(Press(Key.A, Ctrl)));
     }
@@ -438,19 +366,19 @@ public sealed class PinKeyRouterTests
     {
         var ctx = Press(Key.LeftAlt) with { LoupeVisible = loupeVisible };
 
-        Assert.Equal(PinCommand.ToggleLoupe, PinKeyRouter.RouteTap(Alt, ctx));
+        Assert.Equal(PinCommand.ToggleLoupe, Router.RouteTap(Alt, ctx));
     }
 
     [Fact]
     public void ShiftTap_WithTheLoupeShowing_CyclesTheColourFormat()
     {
-        Assert.Equal(PinCommand.CycleLoupeFormat, PinKeyRouter.RouteTap(Shift, WithLoupe(Key.LeftShift)));
+        Assert.Equal(PinCommand.CycleLoupeFormat, Router.RouteTap(Shift, WithLoupe(Key.LeftShift)));
     }
 
     [Fact]
     public void ShiftTap_WithoutTheLoupe_DoesNothing()
     {
-        Assert.Equal(PinCommand.None, PinKeyRouter.RouteTap(Shift, Press(Key.LeftShift)));
+        Assert.Equal(PinCommand.None, Router.RouteTap(Shift, Press(Key.LeftShift)));
     }
 
     [Theory]
@@ -458,7 +386,7 @@ public sealed class PinKeyRouterTests
     [InlineData(ModifierKeys.Windows)]
     public void OtherTaps_DoNothing(ModifierKeys tapped)
     {
-        Assert.Equal(PinCommand.None, PinKeyRouter.RouteTap(tapped, WithLoupe(Key.LeftCtrl)));
+        Assert.Equal(PinCommand.None, Router.RouteTap(tapped, WithLoupe(Key.LeftCtrl)));
     }
 
     [Theory]
@@ -469,5 +397,65 @@ public sealed class PinKeyRouterTests
     public void SelectionAndLoupeCommands_RunOncePerPress(PinCommand command)
     {
         Assert.False(PinKeyRouter.RunsOnRepeat(command));
+    }
+
+    // ---------------------------------------------------------------- rebinding ---
+
+    private static PinRoute Run(ShortcutKey key)
+    {
+        var ctx = new PinKeyContext { LoupeVisible = true };
+        return key.Kind switch
+        {
+            ShortcutKeyKind.Chord => Router.Resolve(ctx with { Key = key.Key, Modifiers = key.Modifiers }),
+            ShortcutKeyKind.Character when key.Modifiers == None => Router.ResolveText(key.Character.ToString(), ctx),
+            ShortcutKeyKind.Character => Router.Resolve(ctx with { Key = Key.OemPlus, Modifiers = key.Modifiers, Text = key.Character.ToString() }),
+            _ => Router.ResolveTap(key.Modifiers, ctx),
+        };
+    }
+
+    [Fact]
+    public void EveryDefaultKey_ReachesItsOwnAction()
+    {
+        foreach (var action in ShortcutActions.All.Where(a => a.Area == ShortcutArea.Pin))
+        foreach (var key in action.DefaultKeys)
+            Assert.True(Run(key).Action?.Id == action.Id, $"{key} should run {action.Id}");
+    }
+
+    [Fact]
+    public void AReboundKey_RunsTheAction_AndTheOldKeyNoLonger()
+    {
+        var router = new PinKeyRouter(ShortcutMap.Defaults.WithKeys(PinShortcuts.RotateClockwise, "R"));
+
+        Assert.Equal(PinCommand.RotateClockwise, router.Route(Press(Key.R)));
+        Assert.Equal(PinCommand.None, router.Route(Press(Key.D1)));
+    }
+
+    [Fact]
+    public void AReboundMoveKey_StillTellsItsDirection()
+    {
+        var router = new PinKeyRouter(ShortcutMap.Defaults.WithKeys(PinShortcuts.MoveUp, "I"));
+
+        var route = router.Resolve(Press(Key.I));
+
+        Assert.Equal(PinCommand.Move, route.Command);
+        Assert.Equal(new KeyChord(Key.Up, None), route.Action!.Canonical);
+    }
+
+    [Fact]
+    public void ATypedCharacter_ReachesAnActionBoundToIt()
+    {
+        Assert.Equal(PinCommand.ZoomIn, Router.RouteText("+", Press(Key.None)));
+        var router = new PinKeyRouter(ShortcutMap.Defaults.WithKeys(PinShortcuts.Invert, "!"));
+        Assert.Equal(PinCommand.ToggleInvert, router.RouteText("!", Press(Key.None)));
+    }
+
+    [Fact]
+    public void EscClosesWithAnyModifier_OnlyWhileEscIsACloseKey()
+    {
+        var router = new PinKeyRouter(ShortcutMap.Defaults.WithKeys(PinShortcuts.Close, "Ctrl+W"));
+
+        Assert.Equal(PinCommand.None, router.Route(Press(Key.Escape)));
+        Assert.Equal(PinCommand.None, router.Route(Press(Key.Escape, Ctrl)));
+        Assert.Equal(PinCommand.Destroy, router.Route(Press(Key.Escape, Shift)));
     }
 }

@@ -100,15 +100,27 @@ public readonly record struct KeyChord(Key Key, ModifierKeys Modifiers)
         Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or
         Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin);
 
+    /// <summary>A punctuation key (OemSemicolon ... OemBackslash), whose character depends on
+    /// the keyboard layout.</summary>
+    public static bool IsPunctuationKey(Key key) => key is >= Key.OemSemicolon and <= Key.OemBackslash;
+
     /// <summary>Modifiers in the order the settings hotkey editor writes them, then the key.</summary>
-    public override string ToString()
+    public override string ToString() => Prefix() + KeyName(Key);
+
+    /// <summary>As the settings windows show it: a punctuation key as the character
+    /// <paramref name="keyText"/> says it types unshifted ("Shift+[" for Shift+OemOpenBrackets),
+    /// anything else as <see cref="ToString"/>.</summary>
+    public string ToDisplayString(Func<Key, string?> keyText) =>
+        IsPunctuationKey(Key) && keyText(Key) is { Length: 1 } text ? Prefix() + text : ToString();
+
+    private string Prefix()
     {
         var prefix = "";
         if (Modifiers.HasFlag(ModifierKeys.Control)) prefix += "Ctrl+";
         if (Modifiers.HasFlag(ModifierKeys.Alt)) prefix += "Alt+";
         if (Modifiers.HasFlag(ModifierKeys.Shift)) prefix += "Shift+";
         if (Modifiers.HasFlag(ModifierKeys.Windows)) prefix += "Win+";
-        return prefix + KeyName(Key);
+        return prefix;
     }
 
     private static ModifierKeys? ParseModifier(string token) => token.ToUpperInvariant() switch

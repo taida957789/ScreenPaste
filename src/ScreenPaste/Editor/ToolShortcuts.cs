@@ -1,14 +1,11 @@
-using System.Windows.Input;
-using ScreenPaste.Input;
-
 namespace ScreenPaste.Editor;
 
 /// <summary>
-/// Snipaste's keys for picking and adjusting the annotation tools: T / B / M / E choose a
-/// tool, Ctrl+0..9 choose one by Snipaste's meaning (ScreenPaste's toolbar keeps its own
-/// order), Ctrl+Tab cycles through the toolbar, Tab flips the current tool's variant, 1 / 2 or
-/// [ / ] step its width, and + / - change the number marker's next number. Pure, so the maps are unit tested; which context a key works in
-/// is <see cref="ScreenPaste.Capture.OverlayKeyRouter"/>'s.
+/// What the annotation tool keys do: Ctrl+0..9 choose a tool by Snipaste's meaning
+/// (ScreenPaste's toolbar keeps its own order), Ctrl+Tab cycles through the toolbar, and Tab
+/// flips the current tool's variant. Which keys they are is the user's
+/// (<see cref="ScreenPaste.Settings.ShortcutActions"/>); which context a key works in is
+/// <see cref="ScreenPaste.Capture.OverlayKeyRouter"/>'s. Pure, so it is unit tested.
 /// </summary>
 public static class ToolShortcuts
 {
@@ -34,35 +31,6 @@ public static class ToolShortcuts
     {
         ToolKind.MarkerPen, ToolKind.Highlighter, ToolKind.Text, ToolKind.Shape,
         ToolKind.Line, ToolKind.Blur, ToolKind.Magnify, ToolKind.Number, ToolKind.Eraser,
-    };
-
-    private static readonly (Key Key, ToolKind Tool)[] Letters =
-    {
-        (Key.T, ToolKind.Text),
-        (Key.B, ToolKind.MarkerPen),
-        (Key.M, ToolKind.Blur),
-        (Key.E, ToolKind.Eraser),
-    };
-
-    /// <summary>The tool a bare letter picks, or null.</summary>
-    public static ToolKind? ToolForLetter(Key key)
-    {
-        foreach (var (letter, tool) in Letters)
-            if (letter == key) return tool;
-        return null;
-    }
-
-    /// <summary>The tool at <paramref name="index"/> in <paramref name="layout"/>, or null when
-    /// the index is out of range or holds no tool.</summary>
-    public static ToolKind? ToolForIndex(int index, IReadOnlyList<ToolKind> layout) =>
-        index >= 0 && index < layout.Count && layout[index] != ToolKind.None ? layout[index] : null;
-
-    /// <summary>The digit on a top-row or number-pad key, or null.</summary>
-    public static int? DigitOf(Key key) => key switch
-    {
-        >= Key.D0 and <= Key.D9 => key - Key.D0,
-        >= Key.NumPad0 and <= Key.NumPad9 => key - Key.NumPad0,
-        _ => null,
     };
 
     /// <summary>
@@ -97,44 +65,4 @@ public static class ToolShortcuts
     /// kind, line or arrow, Gaussian or mosaic.</summary>
     public static bool HasVariant(ToolKind tool) =>
         tool is ToolKind.Shape or ToolKind.Line or ToolKind.Blur or ToolKind.Magnify;
-
-    /// <summary>-1 for the keys that make the pen thinner (1), +1 for thicker (2), else 0.
-    /// [ and ] depend on the keyboard layout, so they go by character instead.</summary>
-    public static int PenSizeDirection(Key key) => key switch
-    {
-        Key.D1 or Key.NumPad1 => -1,
-        Key.D2 or Key.NumPad2 => 1,
-        _ => 0,
-    };
-
-    /// <summary>-1 for a typed "[", +1 for "]", else 0.</summary>
-    public static int PenSizeDirection(string text) => text switch
-    {
-        "[" => -1,
-        "]" => 1,
-        _ => 0,
-    };
-
-    /// <summary>+1 for a typed "+" (or "=", the same key unshifted on many layouts), -1 for
-    /// "-", else 0: the number marker's next number. Typed characters, since where these keys
-    /// sit depends on the keyboard layout.</summary>
-    public static int NumberStepDirection(string text) => text switch
-    {
-        "+" or "=" => 1,
-        "-" => -1,
-        _ => 0,
-    };
-
-    /// <summary>"Ctrl+3, B": every key that picks <paramref name="tool"/>, for its tooltip;
-    /// empty when none does.</summary>
-    public static string KeysLabel(ToolKind tool)
-    {
-        var keys = new List<string>();
-        for (int i = 0; i < SnipasteLayout.Count; i++)
-            if (tool != ToolKind.None && SnipasteLayout[i] == tool)
-                keys.Add(new KeyChord(Key.D0 + i, ModifierKeys.Control).ToString());
-        foreach (var (letter, t) in Letters)
-            if (t == tool) keys.Add(new KeyChord(letter, ModifierKeys.None).ToString());
-        return string.Join(", ", keys);
-    }
 }

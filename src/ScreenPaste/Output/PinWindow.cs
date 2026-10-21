@@ -459,25 +459,30 @@ public sealed partial class PinWindow : Window
 
     private void FillMenu(ContextMenu menu)
     {
+        // Read per opening, so a key changed in the settings shows on open pins at once.
+        var keys = ShortcutMap.FromSettings(_settings);
+        MenuItem Entry(string labelKey, string id, PinCommand command, bool isChecked = false, bool isEnabled = true) =>
+            MenuEntry(labelKey, keys.Label(id), command, isChecked, isEnabled);
+
         menu.Items.Clear();
-        menu.Items.Add(MenuEntry("pin.copy", Gesture(_settings.CopyHotkey), PinCommand.Copy));
-        menu.Items.Add(FixedEntry("pin.copyFile", PinCommand.CopyAsFile));
-        if (_content.SourceText != null) menu.Items.Add(FixedEntry("pin.copyText", PinCommand.CopyText));
-        menu.Items.Add(MenuEntry("pin.save", Gesture(_settings.SaveHotkey), PinCommand.Save));
-        menu.Items.Add(MenuEntry("pin.quickSave", Gesture(_settings.QuickSaveHotkey), PinCommand.QuickSave));
-        menu.Items.Add(MenuEntry("pin.print", Gesture(_settings.PrintHotkey), PinCommand.Print));
-        menu.Items.Add(FixedEntry("pin.paste", PinCommand.PasteClipboard));
+        menu.Items.Add(Entry("pin.copy", PinShortcuts.Copy, PinCommand.Copy));
+        menu.Items.Add(Entry("pin.copyFile", PinShortcuts.CopyAsFile, PinCommand.CopyAsFile));
+        if (_content.SourceText != null) menu.Items.Add(Entry("pin.copyText", PinShortcuts.CopyText, PinCommand.CopyText));
+        menu.Items.Add(Entry("pin.save", PinShortcuts.Save, PinCommand.Save));
+        menu.Items.Add(Entry("pin.quickSave", PinShortcuts.QuickSave, PinCommand.QuickSave));
+        menu.Items.Add(Entry("pin.print", PinShortcuts.Print, PinCommand.Print));
+        menu.Items.Add(Entry("pin.paste", PinShortcuts.Paste, PinCommand.PasteClipboard));
         menu.Items.Add(new Separator());
-        menu.Items.Add(FixedEntry("pin.rotateCw", PinCommand.RotateClockwise));
-        menu.Items.Add(FixedEntry("pin.rotateCcw", PinCommand.RotateCounterClockwise));
-        menu.Items.Add(FixedEntry("pin.flipH", PinCommand.FlipHorizontal));
-        menu.Items.Add(FixedEntry("pin.flipV", PinCommand.FlipVertical));
-        menu.Items.Add(FixedEntry("pin.grayscale", PinCommand.ToggleGrayscale, isChecked: _state.Grayscale));
-        menu.Items.Add(FixedEntry("pin.invert", PinCommand.ToggleInvert, isChecked: _state.Invert));
+        menu.Items.Add(Entry("pin.rotateCw", PinShortcuts.RotateClockwise, PinCommand.RotateClockwise));
+        menu.Items.Add(Entry("pin.rotateCcw", PinShortcuts.RotateCounterClockwise, PinCommand.RotateCounterClockwise));
+        menu.Items.Add(Entry("pin.flipH", PinShortcuts.FlipHorizontal, PinCommand.FlipHorizontal));
+        menu.Items.Add(Entry("pin.flipV", PinShortcuts.FlipVertical, PinCommand.FlipVertical));
+        menu.Items.Add(Entry("pin.grayscale", PinShortcuts.Grayscale, PinCommand.ToggleGrayscale, isChecked: _state.Grayscale));
+        menu.Items.Add(Entry("pin.invert", PinShortcuts.Invert, PinCommand.ToggleInvert, isChecked: _state.Invert));
         menu.Items.Add(new Separator());
-        menu.Items.Add(FixedEntry("pin.opacityUp", PinCommand.OpacityUp,
+        menu.Items.Add(Entry("pin.opacityUp", PinShortcuts.OpacityUp, PinCommand.OpacityUp,
             isEnabled: _state.Opacity < PinTransformState.MaxOpacity));
-        menu.Items.Add(FixedEntry("pin.opacityDown", PinCommand.OpacityDown,
+        menu.Items.Add(Entry("pin.opacityDown", PinShortcuts.OpacityDown, PinCommand.OpacityDown,
             isEnabled: _state.Opacity > PinTransformState.MinOpacity));
         menu.Items.Add(MenuEntry(Loc.T("pin.reset"), Loc.T("set.middleClickAction"),
             () => ForGroup(pin => pin.Apply(pin._state.Reset())), isChecked: false, isEnabled: !_state.IsAtRest));
@@ -486,17 +491,10 @@ public sealed partial class PinWindow : Window
         menu.Items.Add(new Separator());
         menu.Items.Add(MenuEntry(Loc.T("pin.dblClickClose"), null, ToggleDoubleClickClose,
             isChecked: DoubleClickCloses, isEnabled: true));
-        menu.Items.Add(FixedEntry("tray.settings", PinCommand.OpenSettings));
-        menu.Items.Add(FixedEntry("pin.close", PinCommand.Close));
-        menu.Items.Add(FixedEntry("pin.destroy", PinCommand.Destroy));
+        menu.Items.Add(Entry("tray.settings", PinShortcuts.Settings, PinCommand.OpenSettings));
+        menu.Items.Add(Entry("pin.close", PinShortcuts.Close, PinCommand.Close));
+        menu.Items.Add(Entry("pin.destroy", PinShortcuts.Destroy, PinCommand.Destroy));
     }
-
-    /// <summary>A configurable gesture as the settings window writes it; null when unbound.</summary>
-    private static string? Gesture(string? hotkey) => KeyChord.ParseGesture(hotkey)?.ToString();
-
-    /// <summary>A row for a command on a fixed key, labelled from the key table itself.</summary>
-    private MenuItem FixedEntry(string labelKey, PinCommand command, bool isChecked = false, bool isEnabled = true) =>
-        MenuEntry(labelKey, PinKeyRouter.FixedKeys(command), command, isChecked, isEnabled);
 
     private MenuItem MenuEntry(string labelKey, string? keys, PinCommand command,
         bool isChecked = false, bool isEnabled = true) =>

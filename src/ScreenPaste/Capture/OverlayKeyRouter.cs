@@ -9,9 +9,8 @@ namespace ScreenPaste.Capture;
 public enum OverlayPhase { Selecting, Editing }
 
 /// <summary>
-/// What a key press in the capture overlay does. This is the whole capture key table;
-/// <see cref="OverlayKeyRouter"/> maps the rows wired so far, and a command no row yields
-/// yet does nothing when executed.
+/// What a key press in the capture overlay does. The keys are the user's
+/// (<see cref="ShortcutMap"/>); the comments give Snipaste's defaults.
 /// </summary>
 public enum OverlayCommand
 {
@@ -61,8 +60,7 @@ public enum OverlayCommand
     ClearAll,            // Ctrl+Shift+Z
     DeleteSelected,      // Delete
     MoveAnnotation,      // arrows with an annotation selected
-    SelectToolByLetter,  // T / B / M / E
-    SelectToolByNumber,  // Ctrl+1..9, Ctrl+0
+    SelectTool,          // T / B / M / E, Ctrl+1..9, Ctrl+0: the tool of the action
     NextTool,            // Ctrl+Tab
     PreviousTool,        // Ctrl+Shift+Tab
     ToggleToolVariant,   // Tab: rectangle/ellipse, line/arrow
@@ -91,6 +89,10 @@ public readonly record struct OverlayKeyContext
     /// <summary>The effective key (<see cref="KeyInputNormalizer"/>).</summary>
     public Key Key { get; init; }
     public ModifierKeys Modifiers { get; init; }
+    /// <summary>What the key types on the current layout with no modifier held, or null. Only
+    /// a character bound with Ctrl, Alt or Win is matched by it; a plain one waits for the
+    /// character typed (<see cref="OverlayKeyRouter.RouteText"/>), so Shift+, is not ",".</summary>
+    public string? Text { get; init; }
     /// <summary>A keyboard auto-repeat of a held key.</summary>
     public bool IsRepeat { get; init; }
     /// <summary>WPF delivered the key as ImeProcessed: an IME composition owns it.</summary>
@@ -116,296 +118,227 @@ public readonly record struct OverlayKeyContext
     public bool LineStripActive { get; init; }
 }
 
-/// <summary>The user-configurable gestures (settings.json); null means unbound. Read with
-/// <see cref="KeyChord.ParseGesture"/>, so a bare letter or digit stays unbound.</summary>
-public sealed record OverlayKeyBindings(
-    KeyChord? Undo, KeyChord? Redo, KeyChord? Copy, KeyChord? Save, KeyChord? QuickSave,
-    KeyChord? Pin, KeyChord? Print, KeyChord? ClearAll)
+/// <summary>A routed key: the command, and the action whose key it was (null for the fixed
+/// text-box keys). The action tells a directional command its direction
+/// (<see cref="ShortcutAction.Canonical"/>) and <see cref="OverlayCommand.SelectTool"/> its tool.</summary>
+public readonly record struct OverlayRoute(OverlayCommand Command, ShortcutAction? Action)
 {
-    public static OverlayKeyBindings FromSettings(AppSettings s) => new(
-        KeyChord.ParseGesture(s.UndoHotkey),
-        KeyChord.ParseGesture(s.RedoHotkey),
-        KeyChord.ParseGesture(s.CopyHotkey),
-        KeyChord.ParseGesture(s.SaveHotkey),
-        KeyChord.ParseGesture(s.QuickSaveHotkey),
-        KeyChord.ParseGesture(s.PinHotkey),
-        KeyChord.ParseGesture(s.PrintHotkey),
-        KeyChord.ParseGesture(s.ClearAllHotkey));
+    public static readonly OverlayRoute Nothing = new(OverlayCommand.None, null);
+    public static readonly OverlayRoute Pass = new(OverlayCommand.PassThrough, null);
 }
 
 /// <summary>
-/// Maps a key press in the capture overlay to an <see cref="OverlayCommand"/>. Pure, so the
-/// precedence rules are unit tested; the window builds the context from its state and runs
-/// the result. Snipaste's fixed in-app keys are rows here; the configurable gestures come
-/// from <see cref="OverlayKeyBindings"/>.
+/// Maps a key press, a typed character or a modifier tap in the capture overlay to an
+/// <see cref="OverlayCommand"/>, by the keys the user gave each action (<see cref="ShortcutMap"/>,
+/// Snipaste's by default). Pure, so the precedence rules are unit tested; the window builds the
+/// context from its state and runs the result. Only the text box's own keys are fixed: Esc and
+/// Enter end the edit, Shift+Enter is a new line.
 /// </summary>
 public sealed class OverlayKeyRouter
 {
     // static readonly, not const: coverlet cannot resolve WindowsBase enums in constants
     // and would skip instrumenting the whole app.
     private static readonly ModifierKeys ChordModifiers = ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Windows;
-    private static readonly ModifierKeys CopyAsFileModifiers = ModifierKeys.Control | ModifierKeys.Alt;
-    private static readonly ModifierKeys CtrlShiftModifiers = ModifierKeys.Control | ModifierKeys.Shift;
 
-    private readonly OverlayKeyBindings _bindings;
-
-    public OverlayKeyRouter(OverlayKeyBindings bindings) => _bindings = bindings;
-
-    /// <summary>
-    /// The fixed rows' chords that a configurable gesture or a global hotkey could take
-    /// over: those with a modifier, and F5 (a global hotkey may be a bare function key). The
-    /// settings window warns about a gesture on one of them; a test keeps the list true to
-    /// the table.
-    /// </summary>
-    public static IReadOnlyList<KeyChord> FixedChords { get; } = BuildFixedChords();
-
-    private static List<KeyChord> BuildFixedChords()
+    /// <summary>The gestures that act on the result, tried first while annotating and the
+    /// only keys that still run while a text box is typed in (when they hold Ctrl, Alt or Win).
+    /// QuickSave before Save, so a binding that extends Save's is never shadowed; the
+    /// destructive ClearAll after Undo/Redo, so it loses a tie.</summary>
+    private static readonly (string Id, OverlayCommand Command)[] Gestures =
     {
-        var chords = new List<KeyChord>
-        {
-            new(Key.A, ModifierKeys.Control),             // the screen area
-            new(Key.Insert, ModifierKeys.Control),        // copy
-            new(Key.C, CopyAsFileModifiers),              // copy as a file
-            new(Key.C, ModifierKeys.Alt),                 // pick the colour
-            new(Key.Tab, ModifierKeys.Control),           // next tool
-            new(Key.Tab, CtrlShiftModifiers),             // previous tool
-            new(Key.C, CtrlShiftModifiers),               // copy the annotation
-            new(Key.V, CtrlShiftModifiers),               // paste it
-            new(Key.R, ModifierKeys.Shift),               // the next newer area
-            new(Key.F5, ModifierKeys.None),               // a fresh screenshot
-        };
-        for (var key = Key.D0; key <= Key.D9; key++) chords.Add(new(key, ModifierKeys.Control));   // tools by number
-        foreach (var arrow in new[] { Key.Left, Key.Up, Key.Right, Key.Down })
-        {
-            chords.Add(new(arrow, ModifierKeys.Control));   // grow the region
-            chords.Add(new(arrow, ModifierKeys.Shift));     // shrink it
-        }
-        return chords;
-    }
+        (CaptureShortcuts.QuickSave, OverlayCommand.QuickSave),
+        (CaptureShortcuts.Undo, OverlayCommand.Undo),
+        (CaptureShortcuts.Redo, OverlayCommand.Redo),
+        (CaptureShortcuts.Copy, OverlayCommand.Copy),
+        (CaptureShortcuts.Save, OverlayCommand.Save),
+        (CaptureShortcuts.Pin, OverlayCommand.Pin),
+        (CaptureShortcuts.Print, OverlayCommand.Print),
+        (CaptureShortcuts.ClearAll, OverlayCommand.ClearAll),
+    };
 
-    public OverlayCommand Route(OverlayKeyContext ctx)
-    {
-        if (ctx.DropDownOpen) return OverlayCommand.PassThrough;
-        if (ctx.TextBoxActive) return RouteWhileTyping(ctx);
-        if (ctx.Key == Key.Escape) return RouteEscape(ctx);
+    private readonly ShortcutMap _keys;
 
-        if (ctx.LoupeVisible && ctx.Key == Key.C && ctx.Modifiers == ModifierKeys.None)
-            return OverlayCommand.CopyLoupeColor;
+    public OverlayKeyRouter(ShortcutMap keys) => _keys = keys;
 
-        if (ctx.Phase != OverlayPhase.Editing) return RouteSelecting(ctx);
-
-        // Enter ends a line strip (as Esc does) before anything else it could mean.
-        if (ctx.LineStripActive && ctx.Key == Key.Enter && ctx.Modifiers == ModifierKeys.None)
-            return OverlayCommand.FinishLineStrip;
-        if (ctx.Key == Key.Delete && ctx.HasSelection) return OverlayCommand.DeleteSelected;
-        var gesture = RouteGesture(ctx);
-        return gesture != OverlayCommand.None ? gesture : RouteEditing(ctx);
-    }
+    public OverlayCommand Route(OverlayKeyContext ctx) => ResolveKey(ctx).Command;
 
     /// <summary>A modifier pressed and released on its own (<see cref="ModifierTapTracker"/>).</summary>
-    public OverlayCommand RouteTap(ModifierKeys tapped, OverlayKeyContext ctx)
+    public OverlayCommand RouteTap(ModifierKeys tapped, OverlayKeyContext ctx) => ResolveTap(tapped, ctx).Command;
+
+    /// <summary>A typed character (TextInput), for the keys whose place depends on the keyboard
+    /// layout, whatever modifiers typed them (Shift, or AltGr on many European layouts). Only
+    /// characters no key-down claimed arrive here.</summary>
+    public OverlayCommand RouteText(string text, OverlayKeyContext ctx) => ResolveText(text, ctx).Command;
+
+    public OverlayRoute ResolveKey(OverlayKeyContext ctx)
     {
-        if (ctx.DropDownOpen || ctx.TextBoxActive) return OverlayCommand.None;
-        if (tapped == ModifierKeys.Shift && ctx.LoupeVisible) return OverlayCommand.CycleLoupeFormat;
-        if (tapped == ModifierKeys.Alt && ctx.Phase == OverlayPhase.Selecting) return OverlayCommand.ToggleGuideLines;
-        return OverlayCommand.None;
+        if (ctx.DropDownOpen) return OverlayRoute.Pass;
+        var input = KeyInput.Press(ctx.Key, ctx.Modifiers, (ctx.Modifiers & ChordModifiers) != 0 ? ctx.Text : null);
+        return ctx.TextBoxActive ? RouteWhileTyping(ctx, input) : Decide(ctx, input);
     }
 
-    /// <summary>
-    /// A typed character (TextInput), for the keys whose place depends on the keyboard layout,
-    /// whatever modifiers typed them (Shift, or AltGr on many European layouts): in either
-    /// phase ` and ! show or hide the captured pointer and , and . replay the snip history;
-    /// while editing [ and ] step the pen size, and + and - change the number marker's next
-    /// number. Only characters no key-down claimed arrive here.
-    /// </summary>
-    public OverlayCommand RouteText(string text, OverlayKeyContext ctx)
+    public OverlayRoute ResolveTap(ModifierKeys tapped, OverlayKeyContext ctx) =>
+        ctx.DropDownOpen || ctx.TextBoxActive ? OverlayRoute.Nothing : Decide(ctx, KeyInput.Tapped(tapped));
+
+    public OverlayRoute ResolveText(string text, OverlayKeyContext ctx) =>
+        ctx.DropDownOpen || ctx.TextBoxActive ? OverlayRoute.Pass : Decide(ctx, KeyInput.Typed(text));
+
+    /// <summary>Whether releasing <paramref name="key"/> (which types <paramref name="layoutText"/>
+    /// unshifted) lets go of one of <paramref name="ids"/>' keys: the hold-to-move key, or a move
+    /// key whose held moves become one undo step.</summary>
+    public bool Releases(IEnumerable<string> ids, Key key, string? layoutText = null) =>
+        ids.Any(id => _keys.For(id).Any(k =>
+            (k.Kind == ShortcutKeyKind.Chord && k.Key == key) ||
+            (k.Kind == ShortcutKeyKind.Character && layoutText is { Length: 1 } && layoutText[0] == k.Character)));
+
+    private OverlayRoute Decide(OverlayKeyContext ctx, KeyInput input)
     {
-        if (ctx.DropDownOpen || ctx.TextBoxActive) return OverlayCommand.PassThrough;
-        if (ctx.Dragging) return OverlayCommand.None;
-        var snip = SnipText(text);
-        if (snip != OverlayCommand.None) return snip;
-        if (ctx.Phase != OverlayPhase.Editing) return OverlayCommand.None;
-        if (ctx.Tool == ToolKind.Number)
-        {
-            int step = ToolShortcuts.NumberStepDirection(text);
-            if (step != 0) return step > 0 ? OverlayCommand.NumberUp : OverlayCommand.NumberDown;
-        }
-        return PenSize(ToolShortcuts.PenSizeDirection(text));
+        if (HasWithAnyModifiers(CaptureShortcuts.Escape, Key.Escape, input)) return Route(Escape(ctx), CaptureShortcuts.Escape);
+        if (ctx.LoupeVisible && Has(CaptureShortcuts.CopyColor, input)) return Route(OverlayCommand.CopyLoupeColor, CaptureShortcuts.CopyColor);
+        if (ctx.LoupeVisible && Has(CaptureShortcuts.ColorFormat, input)) return Route(OverlayCommand.CycleLoupeFormat, CaptureShortcuts.ColorFormat);
+        return ctx.Phase == OverlayPhase.Editing ? DecideEditing(ctx, input) : DecideSelecting(ctx, input);
     }
 
     /// <summary>
     /// Framing the area. Space takes the detected area, or mid-drag holds the area to move
-    /// it; Tab, Ctrl+A and the snip context's keys wait until the button is up; W/A/S/D and
-    /// the arrows nudge the cursor, which a drag follows.
+    /// it; Tab, Ctrl+A, the guide lines and the snip context's keys wait until the button is
+    /// up; W/A/S/D and the arrows nudge the cursor, which a drag follows.
     /// </summary>
-    private static OverlayCommand RouteSelecting(OverlayKeyContext ctx)
+    private OverlayRoute DecideSelecting(OverlayKeyContext ctx, KeyInput input)
     {
-        if (ctx.Key == Key.Space && (ctx.Modifiers & ChordModifiers) == 0)
-        {
-            if (ctx.Dragging) return OverlayCommand.HoldToMove;
-            if (ctx.HasDetectedArea && ctx.Modifiers == ModifierKeys.None) return OverlayCommand.AcceptDetected;
-            return OverlayCommand.None;
-        }
-        if ((CursorNudge.IsWasd(ctx.Key) || CursorNudge.IsArrow(ctx.Key)) && IsNudge(ctx))
-            return OverlayCommand.NudgeCursor;
-        if (ctx.Dragging) return OverlayCommand.None;
+        if (ctx.Dragging && HasWhileDragging(CaptureShortcuts.HoldToMove, ctx, input))
+            return Route(OverlayCommand.HoldToMove, CaptureShortcuts.HoldToMove);
+        if (!ctx.Dragging && ctx.HasDetectedArea && Has(CaptureShortcuts.AcceptDetected, input))
+            return Route(OverlayCommand.AcceptDetected, CaptureShortcuts.AcceptDetected);
+        if (FirstWhileDragging(CaptureShortcuts.Nudges.Concat(CaptureShortcuts.Moves), ctx, input) is { } nudge)
+            return new(OverlayCommand.NudgeCursor, nudge);
+        if (ctx.Dragging) return OverlayRoute.Nothing;
 
-        if (ctx.Key == Key.Tab && ctx.Modifiers == ModifierKeys.None) return OverlayCommand.ToggleDetectMode;
-        if (IsSelectAll(ctx)) return OverlayCommand.CycleScreenArea;
-        return RouteSnipKey(ctx);
+        if (Has(CaptureShortcuts.DetectMode, input)) return Route(OverlayCommand.ToggleDetectMode, CaptureShortcuts.DetectMode);
+        if (Has(CaptureShortcuts.ScreenArea, input)) return Route(OverlayCommand.CycleScreenArea, CaptureShortcuts.ScreenArea);
+        if (Has(CaptureShortcuts.GuideLines, input)) return Route(OverlayCommand.ToggleGuideLines, CaptureShortcuts.GuideLines);
+        return DecideSnip(input);
     }
 
-    /// <summary>Snipaste's fixed editing keys, tried after the configurable gestures so a
-    /// gesture the user bound to the same chord wins. Only W/A/S/D and Space work while the
-    /// left button is held.</summary>
-    private static OverlayCommand RouteEditing(OverlayKeyContext ctx)
+    /// <summary>Annotating: the gestures first, so one the user bound to another action's key
+    /// wins; only W/A/S/D, Space and the gestures work while the left button is held.</summary>
+    private OverlayRoute DecideEditing(OverlayKeyContext ctx, KeyInput input)
     {
-        if (ctx.Key == Key.Space) return RouteEditingSpace(ctx);
-        if (IsSelectAll(ctx) && !ctx.Dragging) return OverlayCommand.CycleScreenArea;
-        if (CursorNudge.IsWasd(ctx.Key) && IsNudge(ctx)) return OverlayCommand.NudgeCursor;
-        if (ctx.Dragging) return OverlayCommand.None;
-        if (CursorNudge.IsArrow(ctx.Key)) return RouteRegionArrow(ctx);
-        var tool = RouteTool(ctx);
-        if (tool != OverlayCommand.None) return tool;
-        var output = RouteOutput(ctx);
-        return output != OverlayCommand.None ? output : RouteSnipKey(ctx);
+        // Enter ends a line strip (as Esc does) before anything else it could mean.
+        if (ctx.LineStripActive && Has(CaptureShortcuts.EnterAction, input))
+            return Route(OverlayCommand.FinishLineStrip, CaptureShortcuts.EnterAction);
+        if (ctx.HasSelection && HasWithAnyModifiers(CaptureShortcuts.Delete, Key.Delete, input))
+            return Route(OverlayCommand.DeleteSelected, CaptureShortcuts.Delete);
+        var gesture = DecideGesture(ctx, input, typing: false);
+        if (gesture.Command != OverlayCommand.None) return gesture;
+
+        if (ctx.Dragging && HasWhileDragging(CaptureShortcuts.HoldToMove, ctx, input))
+            return Route(OverlayCommand.HoldToMove, CaptureShortcuts.HoldToMove);
+        if (!ctx.Dragging && Has(CaptureShortcuts.ToggleToolbar, input)) return Route(OverlayCommand.ToggleToolbar, CaptureShortcuts.ToggleToolbar);
+        if (!ctx.Dragging && Has(CaptureShortcuts.ScreenArea, input)) return Route(OverlayCommand.CycleScreenArea, CaptureShortcuts.ScreenArea);
+        if (FirstWhileDragging(CaptureShortcuts.Nudges, ctx, input) is { } nudge) return new(OverlayCommand.NudgeCursor, nudge);
+        if (ctx.Dragging) return OverlayRoute.Nothing;
+
+        var region = DecideRegion(ctx, input);
+        if (region.Command != OverlayCommand.None) return region;
+        var tool = DecideTool(ctx, input);
+        if (tool.Command != OverlayCommand.None) return tool;
+        var output = DecideOutput(input);
+        return output.Command != OverlayCommand.None ? output : DecideSnip(input);
+    }
+
+    /// <summary>The arrows adjust the chosen region a pixel at a time (RegionNudge): the move
+    /// keys move it, or the selected annotation when there is one; the grow and shrink keys
+    /// change the region on their side, whatever is selected or whichever tool is active.</summary>
+    private OverlayRoute DecideRegion(OverlayKeyContext ctx, KeyInput input)
+    {
+        if (First(CaptureShortcuts.Moves, input) is { } move)
+            return new(ctx.HasSelection ? OverlayCommand.MoveAnnotation : OverlayCommand.MoveRegion, move);
+        if (First(CaptureShortcuts.Grows, input) is { } grow) return new(OverlayCommand.GrowRegion, grow);
+        if (First(CaptureShortcuts.Shrinks, input) is { } shrink) return new(OverlayCommand.ShrinkRegion, shrink);
+        return OverlayRoute.Nothing;
+    }
+
+    /// <summary>
+    /// The annotation tool keys (<see cref="ToolShortcuts"/>): a tool's keys pick it, Ctrl+Tab
+    /// and Ctrl+Shift+Tab cycle, Tab flips the current tool's variant (otherwise it still moves
+    /// the focus), 1/2 and [/] step the width, + and - the number marker's next number (with
+    /// that tool), Alt+C picks the colour under the cursor, and Ctrl+Shift+C / Ctrl+Shift+V copy
+    /// the selected annotation and paste a copy of it.
+    /// </summary>
+    private OverlayRoute DecideTool(OverlayKeyContext ctx, KeyInput input)
+    {
+        if (First(CaptureShortcuts.Tools, input) is { } tool) return new(OverlayCommand.SelectTool, tool);
+        if (ToolShortcuts.HasVariant(ctx.Tool) && Has(CaptureShortcuts.ToolVariant, input))
+            return Route(OverlayCommand.ToggleToolVariant, CaptureShortcuts.ToolVariant);
+        if (ctx.Tool == ToolKind.Number)
+        {
+            if (Has(CaptureShortcuts.NumberUp, input)) return Route(OverlayCommand.NumberUp, CaptureShortcuts.NumberUp);
+            if (Has(CaptureShortcuts.NumberDown, input)) return Route(OverlayCommand.NumberDown, CaptureShortcuts.NumberDown);
+        }
+        if (Has(CaptureShortcuts.PenSizeDown, input)) return Route(OverlayCommand.PenSizeDown, CaptureShortcuts.PenSizeDown);
+        if (Has(CaptureShortcuts.PenSizeUp, input)) return Route(OverlayCommand.PenSizeUp, CaptureShortcuts.PenSizeUp);
+        if (Has(CaptureShortcuts.NextTool, input)) return Route(OverlayCommand.NextTool, CaptureShortcuts.NextTool);
+        if (Has(CaptureShortcuts.PreviousTool, input)) return Route(OverlayCommand.PreviousTool, CaptureShortcuts.PreviousTool);
+        if (ctx.HasSelection && Has(CaptureShortcuts.CopyAnnotation, input))
+            return Route(OverlayCommand.CopyAnnotation, CaptureShortcuts.CopyAnnotation);
+        if (Has(CaptureShortcuts.PasteAnnotation, input)) return Route(OverlayCommand.PasteAnnotation, CaptureShortcuts.PasteAnnotation);
+        if (Has(CaptureShortcuts.PickColor, input)) return Route(OverlayCommand.PickColor, CaptureShortcuts.PickColor);
+        return OverlayRoute.Nothing;
+    }
+
+    /// <summary>The other output keys: Enter runs the configurable Enter action, V copies the
+    /// area's size and Ctrl+Alt+C copies the capture as a file.</summary>
+    private OverlayRoute DecideOutput(KeyInput input)
+    {
+        if (Has(CaptureShortcuts.EnterAction, input)) return Route(OverlayCommand.RunEnterAction, CaptureShortcuts.EnterAction);
+        if (Has(CaptureShortcuts.CopySize, input)) return Route(OverlayCommand.CopySize, CaptureShortcuts.CopySize);
+        if (Has(CaptureShortcuts.CopyAsFile, input)) return Route(OverlayCommand.CopyAsFile, CaptureShortcuts.CopyAsFile);
+        return OverlayRoute.Nothing;
     }
 
     /// <summary>The snip context's keys, in either phase once the button is up: R steps back
-    /// through the areas of earlier snips, Shift+R the other way, and F5 (held: again and
-    /// again) captures the screen afresh.</summary>
-    private static OverlayCommand RouteSnipKey(OverlayKeyContext ctx)
+    /// through the areas of earlier snips and Shift+R the other way, the backtick or ! shows or
+    /// hides the captured pointer, comma and period step through the snip history, and F5
+    /// (held: again and again) captures the screen afresh.</summary>
+    private OverlayRoute DecideSnip(KeyInput input)
     {
-        if (ctx.Key == Key.R)
-        {
-            if (ctx.Modifiers == ModifierKeys.None) return OverlayCommand.PreviousRegion;
-            return ctx.Modifiers == ModifierKeys.Shift ? OverlayCommand.NextRegion : OverlayCommand.None;
-        }
-        if (ctx.Key == Key.F5 && ctx.Modifiers == ModifierKeys.None) return OverlayCommand.RefreshScreenshot;
-        return OverlayCommand.None;
+        if (Has(CaptureShortcuts.PreviousRegion, input)) return Route(OverlayCommand.PreviousRegion, CaptureShortcuts.PreviousRegion);
+        if (Has(CaptureShortcuts.NextRegion, input)) return Route(OverlayCommand.NextRegion, CaptureShortcuts.NextRegion);
+        if (Has(CaptureShortcuts.Refresh, input)) return Route(OverlayCommand.RefreshScreenshot, CaptureShortcuts.Refresh);
+        if (Has(CaptureShortcuts.ToggleCursor, input)) return Route(OverlayCommand.ToggleCursor, CaptureShortcuts.ToggleCursor);
+        if (Has(CaptureShortcuts.HistoryPrevious, input)) return Route(OverlayCommand.HistoryPrevious, CaptureShortcuts.HistoryPrevious);
+        if (Has(CaptureShortcuts.HistoryNext, input)) return Route(OverlayCommand.HistoryNext, CaptureShortcuts.HistoryNext);
+        return OverlayRoute.Nothing;
     }
-
-    /// <summary>` or ! toggles the pointer (two spellings, as ` is a dead key on many layouts);
-    /// , and . step back and forth through the snip history.</summary>
-    private static OverlayCommand SnipText(string text) => text switch
-    {
-        "`" or "!" => OverlayCommand.ToggleCursor,
-        "," => OverlayCommand.HistoryPrevious,
-        "." => OverlayCommand.HistoryNext,
-        _ => OverlayCommand.None,
-    };
-
-    /// <summary>
-    /// The annotation tool keys (<see cref="ToolShortcuts"/>): T/B/M/E pick a tool, Ctrl+digit
-    /// picks one by Snipaste's meaning, Ctrl+Tab and Ctrl+Shift+Tab cycle, Tab flips the
-    /// current tool's variant (otherwise it still moves the focus), 1/2 step the width, Alt+C
-    /// picks the colour under the cursor, and Ctrl+Shift+C / Ctrl+Shift+V copy the selected
-    /// annotation and paste a copy of it.
-    /// </summary>
-    private static OverlayCommand RouteTool(OverlayKeyContext ctx)
-    {
-        if (ctx.Modifiers == ModifierKeys.None)
-        {
-            if (ToolShortcuts.ToolForLetter(ctx.Key) != null) return OverlayCommand.SelectToolByLetter;
-            if (ctx.Key == Key.Tab)
-                return ToolShortcuts.HasVariant(ctx.Tool) ? OverlayCommand.ToggleToolVariant : OverlayCommand.None;
-            return PenSize(ToolShortcuts.PenSizeDirection(ctx.Key));
-        }
-        if (ctx.Modifiers == ModifierKeys.Control)
-        {
-            if (ToolShortcuts.DigitOf(ctx.Key) != null) return OverlayCommand.SelectToolByNumber;
-            if (ctx.Key == Key.Tab) return OverlayCommand.NextTool;
-            return OverlayCommand.None;
-        }
-        if (ctx.Modifiers == CtrlShiftModifiers)
-        {
-            if (ctx.Key == Key.Tab) return OverlayCommand.PreviousTool;
-            if (ctx.Key == Key.C) return ctx.HasSelection ? OverlayCommand.CopyAnnotation : OverlayCommand.None;
-            if (ctx.Key == Key.V) return OverlayCommand.PasteAnnotation;
-            return OverlayCommand.None;
-        }
-        if (ctx.Key == Key.C && ctx.Modifiers == ModifierKeys.Alt) return OverlayCommand.PickColor;
-        return OverlayCommand.None;
-    }
-
-    private static OverlayCommand PenSize(int direction) => direction switch
-    {
-        < 0 => OverlayCommand.PenSizeDown,
-        > 0 => OverlayCommand.PenSizeUp,
-        _ => OverlayCommand.None,
-    };
-
-    /// <summary>Space shows or hides the toolbar; mid-drag it holds the area to move it.</summary>
-    private static OverlayCommand RouteEditingSpace(OverlayKeyContext ctx)
-    {
-        if (ctx.Dragging)
-            return (ctx.Modifiers & ChordModifiers) == 0 ? OverlayCommand.HoldToMove : OverlayCommand.None;
-        return ctx.Modifiers == ModifierKeys.None ? OverlayCommand.ToggleToolbar : OverlayCommand.None;
-    }
-
-    /// <summary>The fixed output keys: Enter runs the configurable Enter action, V copies the
-    /// area's size, Ctrl+Insert copies (an alias that does not follow the Copy gesture) and
-    /// Ctrl+Alt+C copies the capture as a file.</summary>
-    private static OverlayCommand RouteOutput(OverlayKeyContext ctx)
-    {
-        if (ctx.Modifiers == ModifierKeys.None)
-        {
-            if (ctx.Key == Key.Enter) return OverlayCommand.RunEnterAction;
-            if (ctx.Key == Key.V) return OverlayCommand.CopySize;
-            return OverlayCommand.None;
-        }
-        if (ctx.Key == Key.Insert && ctx.Modifiers == ModifierKeys.Control) return OverlayCommand.Copy;
-        if (ctx.Key == Key.C && ctx.Modifiers == CopyAsFileModifiers) return OverlayCommand.CopyAsFile;
-        return OverlayCommand.None;
-    }
-
-    /// <summary>The arrows adjust the chosen region a pixel at a time (RegionNudge): plain
-    /// arrows move it, or the selected annotation when there is one; Ctrl grows and Shift
-    /// shrinks the region on the arrow's side, whatever is selected or whichever tool is active.</summary>
-    private static OverlayCommand RouteRegionArrow(OverlayKeyContext ctx)
-    {
-        if (ctx.Modifiers == ModifierKeys.None)
-            return ctx.HasSelection ? OverlayCommand.MoveAnnotation : OverlayCommand.MoveRegion;
-        if (ctx.Modifiers == ModifierKeys.Control) return OverlayCommand.GrowRegion;
-        if (ctx.Modifiers == ModifierKeys.Shift) return OverlayCommand.ShrinkRegion;
-        return OverlayCommand.None;
-    }
-
-    /// <summary>A bare nudge key, or Shift+key mid-drag so a Shift+drag square can be
-    /// fine-tuned too.</summary>
-    private static bool IsNudge(OverlayKeyContext ctx) =>
-        ctx.Modifiers == ModifierKeys.None || (ctx.Dragging && ctx.Modifiers == ModifierKeys.Shift);
-
-    private static bool IsSelectAll(OverlayKeyContext ctx) =>
-        ctx.Key == Key.A && ctx.Modifiers == ModifierKeys.Control;
 
     /// <summary>
     /// The text box sees keys first: Esc and Enter end the edit, Shift+Enter is a new line,
     /// and everything else is typing. A gesture the box then leaves unhandled (Ctrl+S, or
-    /// Ctrl+Z with nothing left to undo in the box) still runs, but only when it holds Ctrl,
-    /// Alt or Win, so a bare-letter binding can never fire mid-word.
+    /// Ctrl+Z with nothing left to undo in the box) still runs, but only by a key that holds
+    /// Ctrl, Alt or Win, so a bare-letter binding can never fire mid-word.
     /// </summary>
-    private OverlayCommand RouteWhileTyping(OverlayKeyContext ctx)
+    private OverlayRoute RouteWhileTyping(OverlayKeyContext ctx, KeyInput input)
     {
-        if (ctx.ImeProcessed) return OverlayCommand.PassThrough;   // a CJK composition owns Enter/Esc
+        if (ctx.ImeProcessed) return OverlayRoute.Pass;   // a CJK composition owns Enter/Esc
 
         if (!ctx.TextBoxDeclined)
         {
-            if (ctx.Key == Key.Escape) return OverlayCommand.CommitText;
-            if (ctx.Key == Key.Enter && !ctx.Modifiers.HasFlag(ModifierKeys.Shift)) return OverlayCommand.CommitText;
-            return OverlayCommand.PassThrough;
+            if (ctx.Key == Key.Escape) return new(OverlayCommand.CommitText, null);
+            if (ctx.Key == Key.Enter && !ctx.Modifiers.HasFlag(ModifierKeys.Shift)) return new(OverlayCommand.CommitText, null);
+            return OverlayRoute.Pass;
         }
 
-        if ((ctx.Modifiers & ChordModifiers) == 0) return OverlayCommand.PassThrough;
-        var gesture = RouteGesture(ctx);
-        return gesture == OverlayCommand.None ? OverlayCommand.PassThrough : gesture;
+        if ((ctx.Modifiers & ChordModifiers) == 0) return OverlayRoute.Pass;
+        var gesture = DecideGesture(ctx, input, typing: true);
+        return gesture.Command == OverlayCommand.None ? OverlayRoute.Pass : gesture;
     }
 
     /// <summary>Snipaste-style: cancel a framed-source drag, then finish a line strip, then
     /// clear the selection, then leave the capture (confirming when editing), with no
     /// reselect step. Selecting leaves at once. The drag goes first because it owns the mouse
     /// and Deselect hides its handles, so it would otherwise keep resizing invisibly.</summary>
-    private static OverlayCommand RouteEscape(OverlayKeyContext ctx)
+    private static OverlayCommand Escape(OverlayKeyContext ctx)
     {
         if (ctx.Phase == OverlayPhase.Selecting) return OverlayCommand.Close;
         if (ctx.FramedSourceDragging) return OverlayCommand.CancelFramedDrag;
@@ -414,23 +347,46 @@ public sealed class OverlayKeyRouter
         return OverlayCommand.ConfirmClose;
     }
 
-    /// <summary>The configurable gestures. QuickSave is tried before Save so a binding that
-    /// extends Save's (Ctrl+Shift+S over Ctrl+S) is never shadowed, and the destructive
-    /// ClearAll comes after Undo/Redo, so it loses a tie and waits while a drag owns the
-    /// annotations.</summary>
-    private OverlayCommand RouteGesture(OverlayKeyContext ctx)
+    private OverlayRoute DecideGesture(OverlayKeyContext ctx, KeyInput input, bool typing)
     {
-        if (Is(_bindings.QuickSave, ctx)) return OverlayCommand.QuickSave;
-        if (Is(_bindings.Undo, ctx)) return OverlayCommand.Undo;
-        if (Is(_bindings.Redo, ctx)) return OverlayCommand.Redo;
-        if (Is(_bindings.Copy, ctx)) return OverlayCommand.Copy;
-        if (Is(_bindings.Save, ctx)) return OverlayCommand.Save;
-        if (Is(_bindings.Pin, ctx)) return OverlayCommand.Pin;
-        if (Is(_bindings.Print, ctx)) return OverlayCommand.Print;
-        if (!ctx.Dragging && Is(_bindings.ClearAll, ctx)) return OverlayCommand.ClearAll;
-        return OverlayCommand.None;
+        foreach (var (id, command) in Gestures)
+        {
+            if (command == OverlayCommand.ClearAll && ctx.Dragging) continue;   // a drag owns the annotations
+            foreach (var key in _keys.For(id))
+                if (key.Matches(input) && (!typing || key.HasCommandModifier)) return Route(command, id);
+        }
+        return OverlayRoute.Nothing;
     }
 
-    private static bool Is(KeyChord? chord, OverlayKeyContext ctx) =>
-        chord is { } c && c.Matches(ctx.Key, ctx.Modifiers);
+    private bool Has(string id, KeyInput input) => _keys.Matches(id, input);
+
+    /// <summary>A key bound as is, or <paramref name="plainKey"/> with any modifiers while it is
+    /// bound plain: Esc and Delete always worked with Shift still down from a Shift+drag.</summary>
+    private bool HasWithAnyModifiers(string id, Key plainKey, KeyInput input) =>
+        Has(id, input) ||
+        (input.Key == plainKey && _keys.For(id).Contains(ShortcutKey.Chord(plainKey, ModifierKeys.None)));
+
+    /// <summary>A key bound as is, or, mid-drag, with Shift added (a Shift+drag square can be
+    /// fine-tuned with W/A/S/D, and moved with Space).</summary>
+    private bool HasWhileDragging(string id, OverlayKeyContext ctx, KeyInput input) =>
+        Has(id, input) ||
+        (ctx.Dragging && input.Modifiers.HasFlag(ModifierKeys.Shift) &&
+         Has(id, input with { Modifiers = input.Modifiers & ~ModifierKeys.Shift }));
+
+    private ShortcutAction? First(IEnumerable<string> ids, KeyInput input)
+    {
+        foreach (var id in ids)
+            if (Has(id, input)) return ShortcutActions.ById(id);
+        return null;
+    }
+
+    /// <summary>The first of the cursor-nudging <paramref name="ids"/> the key is, Shift allowed mid-drag.</summary>
+    private ShortcutAction? FirstWhileDragging(IEnumerable<string> ids, OverlayKeyContext ctx, KeyInput input)
+    {
+        foreach (var id in ids)
+            if (HasWhileDragging(id, ctx, input)) return ShortcutActions.ById(id);
+        return null;
+    }
+
+    private static OverlayRoute Route(OverlayCommand command, string id) => new(command, ShortcutActions.ById(id));
 }

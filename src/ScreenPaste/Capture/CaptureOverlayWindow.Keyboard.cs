@@ -2,13 +2,16 @@ using System.Windows;
 using System.Windows.Input;
 using ScreenPaste.Editor;
 using ScreenPaste.Input;
+using ScreenPaste.Native;
+using ScreenPaste.Settings;
 
 namespace ScreenPaste.Capture;
 
 /// <summary>
 /// Keyboard handling for the capture overlay. Which command a key runs is decided by the
-/// pure <see cref="OverlayKeyRouter"/>; this half builds its context from the window state
-/// and executes the result.
+/// pure <see cref="OverlayKeyRouter"/> from the user's keys (<see cref="ShortcutMap"/>, read
+/// once per capture); this half builds its context from the window state and executes the
+/// result, taking a direction or a tool from the action whose key was pressed.
 ///
 /// Keys are taken on the tunnelling Preview* events, so a focused toolbar button, slider or
 /// a Tab focus move can never swallow a shortcut. The one control that sees keys first is
@@ -19,13 +22,15 @@ namespace ScreenPaste.Capture;
 public partial class CaptureOverlayWindow
 {
     private OverlayKeyRouter _keyRouter = null!;
+    private ShortcutMap _shortcuts = null!;   // also labels the toolbar's tooltips
     private readonly ModifierTapTracker _modifierTaps = new();
     private bool _altChordRan;   // a key held with Alt ran a command since Alt went down
     private bool _keyRepeating;  // the last key down was an auto-repeat (its typed character too)
 
     private void InitKeyboard()
     {
-        _keyRouter = new OverlayKeyRouter(OverlayKeyBindings.FromSettings(_settings));
+        _shortcuts = ShortcutMap.FromSettings(_settings);
+        _keyRouter = new OverlayKeyRouter(_shortcuts);
 
         // Inherited by every element in the overlay; the text box opts back in (PlaceText).
         InputMethod.SetIsInputMethodEnabled(this, false);
@@ -52,7 +57,7 @@ public partial class CaptureOverlayWindow
         _modifierTaps.KeyDown(key, Keyboard.Modifiers, AnyMouseButtonDown());
         if (IsAltKey(key) && !e.IsRepeat) _altChordRan = false;
         var ctx = KeyContext(key, e);
-        if (!RunKeyCommand(_keyRouter.Route(ctx), ctx)) return;
+        if (!RunKeyCommand(_keyRouter.ResolveKey(ctx), ctx)) return;
         e.Handled = true;
         if (ctx.Modifiers.HasFlag(ModifierKeys.Alt)) _altChordRan = true;
     }
@@ -63,14 +68,15 @@ public partial class CaptureOverlayWindow
     {
         if (_editingText == null) return;   // everything else was routed on the way down
         var ctx = KeyContext(KeyInputNormalizer.Effective(e), e) with { TextBoxDeclined = true };
-        if (RunKeyCommand(_keyRouter.Route(ctx), ctx)) e.Handled = true;
+        if (RunKeyCommand(_keyRouter.ResolveKey(ctx), ctx)) e.Handled = true;
     }
 
     private void Overlay_PreviewKeyUp(object sender, KeyEventArgs e)
     {
         var key = KeyInputNormalizer.Effective(e);
-        if (key == Key.Space) EndHoldToMove();
-        if (CursorNudge.IsArrow(key)) CommitAnnotationNudge();   // a held arrow's moves: one undo step
+        var layoutText = KeyboardLayout.UnshiftedText(key);
+        if (_keyRouter.Releases(HoldToMoveKey, key, layoutText)) EndHoldToMove();
+        if (_keyRouter.Releases(CaptureShortcuts.Moves, key, layoutText)) CommitAnnotationNudge();   // a held move key's moves: one undo step
         var tapped = _modifierTaps.KeyUp(key);
         if (IsAltKey(key) && _altChordRan)
         {
@@ -81,19 +87,20 @@ public partial class CaptureOverlayWindow
         }
         if (tapped == ModifierKeys.None) return;
         var ctx = KeyContext(key, e);
-        if (RunKeyCommand(_keyRouter.RouteTap(tapped, ctx), ctx)) e.Handled = true;
+        if (RunKeyCommand(_keyRouter.ResolveTap(tapped, ctx), ctx)) e.Handled = true;
     }
 
     private void Overlay_PreviewTextInput(object sender, TextCompositionEventArgs e)
     {
         if (string.IsNullOrEmpty(e.Text)) return;   // Ctrl chords type control characters
         var ctx = StateContext() with { IsRepeat = _keyRepeating };   // typed by the key just down
-        if (RunKeyCommand(_keyRouter.RouteText(e.Text, ctx), ctx)) e.Handled = true;
+        if (RunKeyCommand(_keyRouter.ResolveText(e.Text, ctx), ctx)) e.Handled = true;
     }
 
     private OverlayKeyContext KeyContext(Key key, KeyEventArgs e) => StateContext() with
     {
         Key = key,
+        Text = KeyboardLayout.UnshiftedText(key),
         IsRepeat = e.IsRepeat,
         ImeProcessed = e.Key == Key.ImeProcessed,
     };
@@ -114,6 +121,8 @@ public partial class CaptureOverlayWindow
         LineStripActive = _strip != null,
     };
 
+    private static readonly string[] HoldToMoveKey = { CaptureShortcuts.HoldToMove };
+
     private static bool IsAltKey(Key key) => key is Key.LeftAlt or Key.RightAlt;
 
     /// <summary>The commands an open line strip survives: nothing at all, the cursor and
@@ -130,10 +139,14 @@ public partial class CaptureOverlayWindow
         Mouse.RightButton == MouseButtonState.Pressed ||
         Mouse.MiddleButton == MouseButtonState.Pressed;
 
-    /// <summary>Execute a routed command; false leaves the key unhandled. Commands that
-    /// depend on the key itself (direction, auto-repeat) read it from <paramref name="ctx"/>.</summary>
-    private bool RunKeyCommand(OverlayCommand command, OverlayKeyContext ctx)
+    /// <summary>Execute a routed command; false leaves the key unhandled. A directional
+    /// command reads its direction (and grow or shrink) from the key the action stands for
+    /// (<see cref="ShortcutAction.Canonical"/>), whichever key the user bound to it; the
+    /// auto-repeat comes from the key really pressed.</summary>
+    private bool RunKeyCommand(OverlayRoute route, OverlayKeyContext pressed)
     {
+        var command = route.Command;
+        var ctx = route.Action?.Canonical is { } c ? pressed with { Key = c.Key, Modifiers = c.Modifiers } : pressed;
         // A held arrow's moves become one undo step before anything else can happen, and an
         // open line strip is finished before any command that could act on the annotations.
         if (command != OverlayCommand.MoveAnnotation) CommitAnnotationNudge();
@@ -178,7 +191,7 @@ public partial class CaptureOverlayWindow
                 return true;
             // The annotation tool keys: CaptureOverlayWindow.Tools.cs; the snip context's
             // (pointer, last areas, history, refresh): CaptureOverlayWindow.History.cs.
-            default: return RunToolCommand(command, ctx) || RunSnipCommand(command, ctx);
+            default: return RunToolCommand(route, ctx) || RunSnipCommand(command, ctx);
         }
     }
 }

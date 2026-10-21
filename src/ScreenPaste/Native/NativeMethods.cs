@@ -141,6 +141,11 @@ internal static class NativeMethods
     [DllImport("user32.dll", EntryPoint = "MapVirtualKeyW")]
     public static extern uint MapVirtualKey(uint uCode, uint uMapType);
 
+    /// <summary>The key that types <paramref name="ch"/> on the current layout in the low byte,
+    /// and the shift state it takes in the high byte (1 Shift, 2 Ctrl, 4 Alt); -1 for none.</summary>
+    [DllImport("user32.dll", EntryPoint = "VkKeyScanW", CharSet = CharSet.Unicode)]
+    public static extern short VkKeyScan(char ch);
+
     // ---- Foreground window ----
     [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();

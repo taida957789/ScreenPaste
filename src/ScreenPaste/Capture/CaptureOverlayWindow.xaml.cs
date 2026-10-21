@@ -333,8 +333,8 @@ public partial class CaptureOverlayWindow : Window
         toolsRow.Children.Add(MakeNumberToolButton());
         toolsRow.Children.Add(MakeToolButton(GlyphEraser, ToolKind.Eraser));
         toolsRow.Children.Add(MakeSeparator());
-        _undoButton = MakeActionButton(GlyphUndo, Loc.T("action.undo") + " (" + _settings.UndoHotkey + ")", () => _history.Undo());
-        _redoButton = MakeActionButton(GlyphRedo, Loc.T("action.redo") + " (" + _settings.RedoHotkey + ")", () => _history.Redo());
+        _undoButton = MakeActionButton(GlyphUndo, WithHotkey(Loc.T("action.undo"), _shortcuts.Label(CaptureShortcuts.Undo)), () => _history.Undo());
+        _redoButton = MakeActionButton(GlyphRedo, WithHotkey(Loc.T("action.redo"), _shortcuts.Label(CaptureShortcuts.Redo)), () => _history.Redo());
         toolsRow.Children.Add(_undoButton);
         toolsRow.Children.Add(_redoButton);
         toolsRow.Children.Add(MakeSeparator());

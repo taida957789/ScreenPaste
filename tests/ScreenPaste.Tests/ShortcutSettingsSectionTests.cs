@@ -65,14 +65,33 @@ public sealed class ShortcutSettingsSectionTests
             section.AddTo(body);
             Assert.Equal(Visibility.Collapsed, Warning(body).Visibility);
 
-            FieldFor(body, Loc.T("set.clickThrough")).Text = "F3";
+            ShortcutSettingsSection.SetGesture(FieldFor(body, Loc.T("set.clickThrough")), "F3");
 
             Assert.Equal(Visibility.Visible, Warning(body).Visibility);
             Assert.Contains(Loc.T("set.paste"), Warning(body).Text);
 
-            FieldFor(body, Loc.T("set.clickThrough")).Text = "";
+            ShortcutSettingsSection.SetGesture(FieldFor(body, Loc.T("set.clickThrough")), "");
 
             Assert.Equal(Visibility.Collapsed, Warning(body).Visibility);
+        });
+    }
+
+    [Fact]
+    public void APunctuationKey_ShowsItsCharacter_AndSavesItsName()
+    {
+        StaRunner.Run(() =>
+        {
+            var section = new ShortcutSettingsSection(new AppSettings { ClickThroughHotkey = "Shift+OemOpenBrackets" }, _ => { });
+            var body = new StackPanel();
+            section.AddTo(body);
+            var saved = new AppSettings();
+
+            section.Save(saved);
+
+            var shown = FieldFor(body, Loc.T("set.clickThrough")).Text;
+            Assert.Equal(ShortcutText.Gesture("Shift+OemOpenBrackets"), shown);
+            Assert.DoesNotContain("Oem", shown);   // "Shift+[" on a US layout
+            Assert.Equal("Shift+OemOpenBrackets", saved.ClickThroughHotkey);
         });
     }
 

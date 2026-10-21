@@ -62,11 +62,11 @@ public partial class CaptureOverlayWindow
     /// <summary>The toolbar's output buttons: copy, save (Shift+click: quick save), pin, close.</summary>
     private void AddOutputButtons(Panel row)
     {
-        row.Children.Add(MakeActionButton(GlyphCopy, WithHotkey(Loc.T("action.copy"), _settings.CopyHotkey), DoCopy));
+        row.Children.Add(MakeActionButton(GlyphCopy, WithHotkey(Loc.T("action.copy"), _shortcuts.Label(CaptureShortcuts.Copy)), DoCopy));
         row.Children.Add(MakeActionButton(GlyphSave,
-            WithHotkey(Loc.T("action.save"), _settings.SaveHotkey) + " · " + Loc.T("action.shiftQuickSave"), SaveClicked));
-        row.Children.Add(MakeActionButton(GlyphPin, WithHotkey(Loc.T("action.pin"), _settings.PinHotkey), DoPin));
-        row.Children.Add(MakeActionButton(GlyphClose, Loc.T("action.close") + " (Esc)", Cancel));
+            WithHotkey(Loc.T("action.save"), _shortcuts.Label(CaptureShortcuts.Save)) + " · " + Loc.T("action.shiftQuickSave"), SaveClicked));
+        row.Children.Add(MakeActionButton(GlyphPin, WithHotkey(Loc.T("action.pin"), _shortcuts.Label(CaptureShortcuts.Pin)), DoPin));
+        row.Children.Add(MakeActionButton(GlyphClose, WithHotkey(Loc.T("action.close"), _shortcuts.Label(CaptureShortcuts.Escape)), Cancel));
     }
 
     /// <summary>"Copy (Ctrl+C)", or the label alone when the gesture is unbound.</summary>

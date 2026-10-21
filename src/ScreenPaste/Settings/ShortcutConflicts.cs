@@ -1,15 +1,6 @@
-using ScreenPaste.Capture;
 using ScreenPaste.Input;
-using ScreenPaste.Output;
 
 namespace ScreenPaste.Settings;
-
-/// <summary>Where a gesture works: system-wide, in the capture and on pins (configurable), or
-/// one of the key routers' fixed keys.</summary>
-public enum ShortcutScope { Global, InApp, BuiltIn }
-
-/// <summary>A named gesture; a blank or unreadable gesture takes part in nothing.</summary>
-public readonly record struct ShortcutEntry(string Name, string? Gesture, ShortcutScope Scope);
 
 public enum ShortcutConflictKind
 {
@@ -18,68 +9,82 @@ public enum ShortcutConflictKind
     /// <summary>A global hotkey on an in-app key: Windows hands it to the hotkey, so the
     /// capture and the pins never see it.</summary>
     GlobalTakesInAppKey,
-    /// <summary>Two in-app gestures: only the first in the router's order runs.</summary>
+    /// <summary>Two in-app actions on one key where both can run: only the first in the
+    /// key router's order does.</summary>
     InAppDuplicate,
-    /// <summary>An in-app gesture on a fixed key: the gesture wins, the fixed key is lost.</summary>
-    InAppReplacesBuiltIn,
 }
 
-/// <summary>One chord used more than once; <see cref="Names"/> are the global and in-app
-/// entries that use it (fixed keys have no name of their own).</summary>
-public sealed record ShortcutConflict(ShortcutConflictKind Kind, KeyChord Chord, IReadOnlyList<string> Names);
+/// <summary>One key used more than once, and the names of what uses it.</summary>
+public sealed record ShortcutConflict(ShortcutConflictKind Kind, string Key, IReadOnlyList<string> Names);
 
 /// <summary>
-/// Finds gestures used twice, for the settings window's warning: among the global hotkeys,
-/// between a global hotkey and an in-app key, among the in-app gestures, and between an
-/// in-app gesture and a fixed key of the capture or the pins. Gestures are compared as
-/// <see cref="KeyChord"/>s, so "Shift+Ctrl+A" is "Ctrl+Shift+A". Pure, so it is unit tested.
+/// Finds keys used twice, for the settings windows' warnings: among the global hotkeys,
+/// between a global hotkey and an in-app key (any context: Windows takes a registered hotkey
+/// everywhere), and between two in-app actions of the capture or of a pin that can run at the
+/// same time (<see cref="ShortcutContexts"/>: Space framing and Space annotating are no
+/// clash). Gestures are compared as keys, so "Shift+Ctrl+A" is "Ctrl+Shift+A". Pure, so it is
+/// unit tested.
 /// </summary>
 public static class ShortcutConflicts
 {
-    public static IReadOnlyList<ShortcutConflict> Find(IEnumerable<ShortcutEntry> entries)
+    /// <summary>The global hotkeys' clashes, among themselves and with <paramref name="inApp"/>.</summary>
+    /// <param name="global">Each global hotkey's name and gesture; blank or unreadable ones take part in nothing.</param>
+    /// <param name="actionName">An in-app action's name as the warning shows it.</param>
+    public static IReadOnlyList<ShortcutConflict> Global(
+        IEnumerable<(string Name, string? Gesture)> global, ShortcutMap inApp, Func<ShortcutAction, string> actionName)
     {
         var conflicts = new List<ShortcutConflict>();
-        var groups = entries
-            .Select(e => (Entry: e, Chord: KeyChord.Parse(e.Gesture)))
-            .Where(x => x.Chord != null)
-            .GroupBy(x => x.Chord!.Value);
-        foreach (var group in groups)
+        var hotkeys = global
+            .Select(g => (g.Name, Chord: KeyChord.Parse(g.Gesture)))
+            .Where(g => g.Chord != null)
+            .GroupBy(g => g.Chord!.Value);
+        foreach (var group in hotkeys)
         {
-            var scopes = group.Select(x => x.Entry.Scope).ToList();
-            if (KindOf(scopes) is not { } kind) continue;
-            var names = group.Where(x => x.Entry.Scope != ShortcutScope.BuiltIn).Select(x => x.Entry.Name).ToList();
-            conflicts.Add(new ShortcutConflict(kind, group.Key, names));
+            var key = ShortcutKey.Chord(group.Key.Key, group.Key.Modifiers);
+            var names = group.Select(g => g.Name).ToList();
+            if (names.Count > 1)
+            {
+                conflicts.Add(new ShortcutConflict(ShortcutConflictKind.GlobalDuplicate, key.ToString(), names));
+                continue;
+            }
+            var taken = ShortcutActions.All.Where(a => inApp.For(a.Id).Any(k => k.Collides(key))).Select(actionName).ToList();
+            if (taken.Count > 0)
+                conflicts.Add(new ShortcutConflict(ShortcutConflictKind.GlobalTakesInAppKey, key.ToString(), names.Concat(taken).ToList()));
         }
         return conflicts;
     }
 
-    /// <summary>The conflicts in <paramref name="settings"/>, the entries named by
-    /// <paramref name="label"/> (Loc.T in the app) from their Loc keys.</summary>
-    public static IReadOnlyList<ShortcutConflict> ForSettings(AppSettings settings, Func<string, string> label) =>
-        Find(Entries(
-            GlobalHotkeyTable.All.Select(h => (label(h.LabelKey), (string?)h.Get(settings))),
-            InAppShortcutTable.All.Select(s => (label(s.LabelKey), (string?)s.Get(settings)))));
-
-    /// <summary>The global and in-app gestures given, plus every fixed key.</summary>
-    public static IEnumerable<ShortcutEntry> Entries(
-        IEnumerable<(string Name, string? Gesture)> global, IEnumerable<(string Name, string? Gesture)> inApp) =>
-        global.Select(g => new ShortcutEntry(g.Name, g.Gesture, ShortcutScope.Global))
-            .Concat(inApp.Select(i => new ShortcutEntry(i.Name, i.Gesture, ShortcutScope.InApp)))
-            .Concat(BuiltIns());
-
-    /// <summary>The fixed chords of the capture overlay and of a pin.</summary>
-    public static IEnumerable<ShortcutEntry> BuiltIns() =>
-        OverlayKeyRouter.FixedChords.Concat(PinKeyRouter.FixedChords)
-            .Select(c => new ShortcutEntry(c.ToString(), c.ToString(), ShortcutScope.BuiltIn));
-
-    private static ShortcutConflictKind? KindOf(IReadOnlyList<ShortcutScope> scopes)
+    /// <summary>Two in-app actions on one key in the same area and a shared context, each key
+    /// named once with every action on it, in table order.</summary>
+    public static IReadOnlyList<ShortcutConflict> InApp(ShortcutMap map, Func<ShortcutAction, string>? actionName = null)
     {
-        int global = scopes.Count(s => s == ShortcutScope.Global);
-        int inApp = scopes.Count(s => s == ShortcutScope.InApp);
-        if (global >= 2) return ShortcutConflictKind.GlobalDuplicate;
-        if (global == 1) return scopes.Count > 1 ? ShortcutConflictKind.GlobalTakesInAppKey : null;
-        if (inApp >= 2) return ShortcutConflictKind.InAppDuplicate;
-        if (inApp == 1) return scopes.Count > 1 ? ShortcutConflictKind.InAppReplacesBuiltIn : null;
-        return null;   // fixed keys alone: each context has its own
+        var bound = ShortcutActions.All.SelectMany(a => map.For(a.Id).Select(k => (Action: a, Key: k))).ToList();
+        var clashes = new Dictionary<string, List<ShortcutAction>>();
+        for (int i = 0; i < bound.Count; i++)
+        for (int j = i + 1; j < bound.Count; j++)
+        {
+            var (a, ka) = bound[i];
+            var (b, kb) = bound[j];
+            if (a == b || a.Area != b.Area || (a.Contexts & b.Contexts) == 0 || !ka.Collides(kb)) continue;
+            var key = ka.ToString();
+            if (!clashes.TryGetValue(key, out var actions)) clashes[key] = actions = new();
+            if (!actions.Contains(a)) actions.Add(a);
+            if (!actions.Contains(b)) actions.Add(b);
+        }
+        var name = actionName ?? (a => a.Id);
+        return clashes
+            .Select(c => new ShortcutConflict(ShortcutConflictKind.InAppDuplicate, c.Key, c.Value.Select(name).ToList()))
+            .ToList();
+    }
+
+    /// <summary>Every clash in <paramref name="settings"/>; <paramref name="label"/> turns a Loc
+    /// key into text (Loc.T in the app) and <paramref name="actionName"/> names an in-app action.</summary>
+    public static IReadOnlyList<ShortcutConflict> ForSettings(
+        AppSettings settings, Func<string, string> label, Func<ShortcutAction, string> actionName)
+    {
+        var map = ShortcutMap.FromSettings(settings);
+        return Global(GlobalHotkeyTable.All.Select(h => (label(h.LabelKey), (string?)h.Get(settings))), map, actionName)
+            .Concat(InApp(map, actionName))
+            .ToList();
     }
 }

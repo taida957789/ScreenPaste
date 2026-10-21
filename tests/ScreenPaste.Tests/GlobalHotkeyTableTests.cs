@@ -171,69 +171,47 @@ public sealed class GlobalHotkeyTableTests
 
     // ---------------------------------------------------------------- conflicts ---
 
-    private static ShortcutEntry Global(string name, string gesture) => new(name, gesture, ShortcutScope.Global);
-    private static ShortcutEntry InApp(string name, string gesture) => new(name, gesture, ShortcutScope.InApp);
-    private static ShortcutEntry BuiltIn(string gesture) => new(gesture, gesture, ShortcutScope.BuiltIn);
+    private static readonly Func<ShortcutAction, string> Id = a => a.Id;
+
+    private static IReadOnlyList<ShortcutConflict> GlobalConflicts(params (string Name, string Gesture)[] global) =>
+        ShortcutConflicts.Global(global.Select(g => (g.Name, (string?)g.Gesture)), ShortcutMap.Defaults, Id);
 
     [Fact]
     public void TheDefaultSettings_HaveNoConflicts()
     {
-        Assert.Empty(ShortcutConflicts.ForSettings(new AppSettings(), key => key));
+        Assert.Empty(ShortcutConflicts.ForSettings(new AppSettings(), key => key, Id));
     }
 
     [Fact]
     public void TwoGlobalHotkeysOnOneGesture_AreADuplicate_HoweverTheyAreSpelt()
     {
-        var conflicts = ShortcutConflicts.Find(new[] { Global("Capture", "Ctrl+Shift+A"), Global("Paste", "Shift+Ctrl+A") });
+        var conflict = Assert.Single(GlobalConflicts(("Capture", "Ctrl+Shift+F9"), ("Paste", "Shift+Ctrl+F9")));
 
-        var conflict = Assert.Single(conflicts);
         Assert.Equal(ShortcutConflictKind.GlobalDuplicate, conflict.Kind);
-        Assert.Equal(new KeyChord(Key.A, ModifierKeys.Control | ModifierKeys.Shift), conflict.Chord);
+        Assert.Equal("Ctrl+Shift+F9", conflict.Key);
         Assert.Equal(new[] { "Capture", "Paste" }, conflict.Names);
     }
 
     [Fact]
-    public void AGlobalHotkeyOnAnInAppGesture_TakesTheKeyFromTheCapture()
+    public void AGlobalHotkeyOnAnInAppKey_TakesItFromTheCaptureAndThePins()
     {
-        var conflicts = ShortcutConflicts.Find(new[] { Global("Paste", "Ctrl+Z"), InApp("Undo", "Ctrl+Z") });
+        var conflict = Assert.Single(GlobalConflicts(("Paste", "Ctrl+C")));
 
-        var conflict = Assert.Single(conflicts);
         Assert.Equal(ShortcutConflictKind.GlobalTakesInAppKey, conflict.Kind);
-        Assert.Equal(new[] { "Paste", "Undo" }, conflict.Names);
+        Assert.Equal(new[] { "Paste", CaptureShortcuts.Copy, PinShortcuts.Copy }, conflict.Names);
     }
 
-    [Fact]
-    public void AGlobalHotkeyOnABuiltInKey_TakesTheKeyFromTheCapture()
+    [Theory]
+    [InlineData("F5", CaptureShortcuts.Refresh)]
+    [InlineData("Ctrl+W", PinShortcuts.Close)]
+    [InlineData("R", CaptureShortcuts.PreviousRegion)]
+    [InlineData("Ctrl+Alt+C", CaptureShortcuts.CopyAsFile)]
+    public void AGlobalHotkeyOnAnyInAppKey_IsSeen(string gesture, string action)
     {
-        var conflicts = ShortcutConflicts.Find(new[] { Global("Paste", "F5"), BuiltIn("F5") });
+        var conflict = Assert.Single(GlobalConflicts(("Paste", gesture)));
 
-        var conflict = Assert.Single(conflicts);
         Assert.Equal(ShortcutConflictKind.GlobalTakesInAppKey, conflict.Kind);
-        Assert.Equal(new[] { "Paste" }, conflict.Names);
-    }
-
-    [Fact]
-    public void TwoInAppGesturesOnOneChord_AreADuplicate()
-    {
-        var conflict = Assert.Single(ShortcutConflicts.Find(new[] { InApp("Undo", "Ctrl+Q"), InApp("Copy", "Ctrl+Q") }));
-
-        Assert.Equal(ShortcutConflictKind.InAppDuplicate, conflict.Kind);
-    }
-
-    [Fact]
-    public void AnInAppGestureOnABuiltInKey_ReplacesIt()
-    {
-        var conflict = Assert.Single(ShortcutConflicts.Find(new[] { InApp("Copy", "Ctrl+A"), BuiltIn("Ctrl+A") }));
-
-        Assert.Equal(ShortcutConflictKind.InAppReplacesBuiltIn, conflict.Kind);
-        Assert.Equal(new[] { "Copy" }, conflict.Names);
-    }
-
-    [Fact]
-    public void BuiltInKeysAlone_NeverConflict()
-    {
-        // Ctrl+Insert copies in the capture and on a pin alike: two contexts, one meaning.
-        Assert.Empty(ShortcutConflicts.Find(new[] { BuiltIn("Ctrl+Insert"), BuiltIn("Ctrl+Insert") }));
+        Assert.Contains(action, conflict.Names);
     }
 
     [Theory]
@@ -242,7 +220,7 @@ public sealed class GlobalHotkeyTableTests
     [InlineData("Ctrl+Nope")]
     public void UnassignedOrUnreadableGestures_AreLeftOut(string gesture)
     {
-        Assert.Empty(ShortcutConflicts.Find(new[] { Global("Capture", gesture), Global("Paste", gesture) }));
+        Assert.Empty(GlobalConflicts(("Capture", gesture), ("Paste", gesture)));
     }
 
     [Fact]
@@ -250,7 +228,7 @@ public sealed class GlobalHotkeyTableTests
     {
         var settings = new AppSettings { ClickThroughHotkey = "F3" };
 
-        var conflict = Assert.Single(ShortcutConflicts.ForSettings(settings, key => key));
+        var conflict = Assert.Single(ShortcutConflicts.ForSettings(settings, key => key, Id));
 
         Assert.Equal(ShortcutConflictKind.GlobalDuplicate, conflict.Kind);
         Assert.Equal(
@@ -263,37 +241,48 @@ public sealed class GlobalHotkeyTableTests
     {
         var settings = new AppSettings { HidePinsHotkey = "Ctrl+C" };
 
-        var conflict = Assert.Single(ShortcutConflicts.ForSettings(settings, key => key));
+        var conflict = Assert.Single(ShortcutConflicts.ForSettings(settings, key => key, Id));
 
         Assert.Equal(ShortcutConflictKind.GlobalTakesInAppKey, conflict.Kind);
     }
 
-    [Theory]
-    [InlineData("Ctrl+A")]        // the whole screen, in the capture
-    [InlineData("Ctrl+Alt+C")]    // copy as a file, in the capture and on a pin
-    [InlineData("Ctrl+W")]        // close a pin
-    [InlineData("Ctrl+V")]        // a pin takes the clipboard
-    [InlineData("Ctrl+Shift+C")]  // copy an annotation; a text pin's text
-    [InlineData("F5")]            // refresh the screenshot
-    public void ForSettings_KnowsTheBuiltInKeys(string gesture)
+    [Fact]
+    public void ForSettings_SeesTwoInAppActionsOnOneKey()
     {
-        var settings = new AppSettings { UndoHotkey = gesture };
+        var settings = new AppSettings();
+        settings.KeyBindings[CaptureShortcuts.Refresh] = new() { "R" };
 
-        var conflict = Assert.Single(ShortcutConflicts.ForSettings(settings, key => key));
+        var conflict = Assert.Single(ShortcutConflicts.ForSettings(settings, key => key, Id));
 
-        Assert.Equal(ShortcutConflictKind.InAppReplacesBuiltIn, conflict.Kind);
+        Assert.Equal(ShortcutConflictKind.InAppDuplicate, conflict.Kind);
+        Assert.Equal("R", conflict.Key);
+        Assert.Equal(new[] { CaptureShortcuts.PreviousRegion, CaptureShortcuts.Refresh }, conflict.Names);
     }
 
     [Fact]
-    public void InAppShortcutTable_ReadsBackWhatItWrites()
+    public void OneKeyForTwoActionsThatNeverRunAtOnce_IsNoClash()
     {
-        var settings = new AppSettings();
-        foreach (var shortcut in InAppShortcutTable.All)
-        {
-            shortcut.Set(settings, "Ctrl+Alt+F9");
+        // V copies the size while annotating; Tab toggles detection only while framing.
+        var map = ShortcutMap.Defaults.WithKeys(CaptureShortcuts.DetectMode, "V");
 
-            Assert.Equal("Ctrl+Alt+F9", shortcut.Get(settings));
-        }
-        Assert.Equal(8, InAppShortcutTable.All.Count);
+        Assert.Empty(ShortcutConflicts.InApp(map));
+    }
+
+    [Fact]
+    public void OneKeyInTheCaptureAndOnAPin_IsNoClash()
+    {
+        var map = ShortcutMap.Defaults.WithKeys(PinShortcuts.Close, "R");
+
+        Assert.Empty(ShortcutConflicts.InApp(map));
+    }
+
+    [Fact]
+    public void ADigitAndItsNumberPadTwin_Clash()
+    {
+        var map = ShortcutMap.Defaults.WithKeys(PinShortcuts.Invert, "NumPad1");
+
+        var conflict = Assert.Single(ShortcutConflicts.InApp(map));
+
+        Assert.Equal(new[] { PinShortcuts.RotateClockwise, PinShortcuts.Invert }, conflict.Names);
     }
 }

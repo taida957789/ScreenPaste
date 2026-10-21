@@ -199,17 +199,12 @@ public partial class CaptureOverlayWindow
     // ------------------------------------------------------- tool keys ---
 
     /// <summary>Execute an annotation tool command; false leaves the key unhandled.</summary>
-    private bool RunToolCommand(OverlayCommand command, OverlayKeyContext ctx)
+    private bool RunToolCommand(OverlayRoute route, OverlayKeyContext ctx)
     {
-        switch (command)
+        switch (route.Command)
         {
             case OverlayCommand.MoveAnnotation: NudgeSelectedAnnotation(ctx.Key); return true;
-            case OverlayCommand.SelectToolByLetter: SwitchTool(ToolShortcuts.ToolForLetter(ctx.Key)); return true;
-            case OverlayCommand.SelectToolByNumber:
-                SwitchTool(ToolShortcuts.DigitOf(ctx.Key) is { } digit
-                    ? ToolShortcuts.ToolForIndex(digit, ToolShortcuts.SnipasteLayout)
-                    : null);
-                return true;
+            case OverlayCommand.SelectTool: SwitchTool(route.Action?.Tool); return true;
             case OverlayCommand.NextTool: SwitchTool(ToolShortcuts.Cycle(ToolShortcuts.CycleOrder, _tool, 1)); return true;
             case OverlayCommand.PreviousTool: SwitchTool(ToolShortcuts.Cycle(ToolShortcuts.CycleOrder, _tool, -1)); return true;
             case OverlayCommand.ToggleToolVariant:
@@ -248,13 +243,12 @@ public partial class CaptureOverlayWindow
         RefreshLineStrip();   // an open strip shows its new arrowhead at once
     }
 
-    /// <summary>"Marker (Ctrl+3, B)", plus the Tab hint for a tool with variants.</summary>
-    private static string ToolTipFor(ToolKind kind)
+    /// <summary>"Marker (B / Ctrl+3)" with the user's keys, plus the variant key's hint for a
+    /// tool with variants.</summary>
+    private string ToolTipFor(ToolKind kind)
     {
-        var tip = ToolLabel(kind);
-        var keys = ToolShortcuts.KeysLabel(kind);
-        if (keys.Length > 0) tip += " (" + keys + ")";
-        if (ToolShortcuts.HasVariant(kind)) tip += " · " + Loc.T("tool.tabVariant");
+        var tip = WithHotkey(ToolLabel(kind), CaptureShortcuts.ForTool(kind) is { } id ? _shortcuts.Label(id) : null);
+        if (ToolShortcuts.HasVariant(kind)) tip += " · " + WithHotkey(Loc.T("keys.toolVariant"), _shortcuts.Label(CaptureShortcuts.ToolVariant));
         if (kind == ToolKind.Magnify) tip += " - " + Loc.T("magnify.hint");
         if (kind == ToolKind.Line) tip += " - " + Loc.T("line.stripHint");
         if (kind == ToolKind.Number) tip += " - " + Loc.T("number.hint");

@@ -51,7 +51,7 @@ Après la capture, une **barre d'outils** apparaît près du curseur (déplaçab
 - Raccourcis globaux (**F1** capture, **Ctrl+F1** capturer et copier, **Maj+F1** capture personnalisée, **F2** enregistrement, **F3** coller / rappeler une image, **Maj+F3** masquer / afficher les images épinglées, tous configurables) et lancement depuis la **barre d'état système**
 - **Multilingue** : 繁體中文 / English / 日本語 / 한국어 / Français / Deutsch / Español (suit le système par défaut)
 - Thème **clair / sombre / système**, interface moderne aux coins arrondis et barres de titre sombres
-- **Fenêtre de paramètres** centralisée : langue, raccourcis, thème, lancement au démarrage, dossier d'enregistrement, valeurs par défaut des annotations (type de flou), format / fréquence d'enregistrement (les champs de raccourci se règlent en appuyant simplement sur la combinaison)
+- **Fenêtre de paramètres** centralisée : langue, raccourcis, thème, lancement au démarrage, dossier d'enregistrement, valeurs par défaut des annotations (type de flou), format / fréquence d'enregistrement (les champs de raccourci se règlent en appuyant simplement sur la combinaison ; toutes les touches de la capture et des images épinglées sont aussi réattribuables)
 - **Lancement automatique au démarrage** (optionnel)
 - **Mise à jour automatique** : vérifie les nouvelles versions via GitHub Releases (activable dans les paramètres, ou vérification manuelle) ; téléchargement et installation en un clic
 
@@ -77,7 +77,7 @@ Enregistrement : appuyez sur **F2** et glissez pour choisir la zone ; appuyez à
 
 ## Raccourcis
 
-Les raccourcis reprennent ceux de Snipaste dès qu'il en a un. Les touches marquées *(configurable)* se modifient dans Paramètres → « Raccourcis » / « Raccourcis dans l'application » ; les autres sont fixes.
+Les raccourcis reprennent ceux de Snipaste dès qu'il en a un ; les tableaux indiquent les touches par défaut. Les raccourcis globaux se modifient dans Paramètres → « Raccourcis » ; toutes les touches de la capture et des images épinglées se réattribuent dans Paramètres → « Raccourcis dans l'application » → « Personnaliser les touches… » (deux touches par action au plus, avec un avertissement en cas de conflit). Seules les touches d'édition propres à la zone de texte et les modificateurs maintenus pendant un glissement (comme `Maj`) restent fixes.
 
 > **Nouveautés de cette version**
 > - Un **double-clic sur une image épinglée la ferme** (la première fois, une confirmation est demandée). Paramètres → « Images épinglées » permet de lui faire basculer la miniature ou de ne rien faire.
@@ -96,7 +96,7 @@ Les raccourcis reprennent ceux de Snipaste dès qu'il en a un. Les touches marqu
 | `F3` | Épingler le presse-papiers (image, fichier image, valeur de couleur ou texte) au curseur ; pressée à nouveau sans que le presse-papiers ait changé, rappelle la dernière image fermée (configurable) |
 | `Maj+F3` | Masquer / afficher toutes les images épinglées (configurable) |
 | Non attribués | Image épinglée traversable (celle sous le curseur laisse passer les clics), capturer et épingler, capturer, copier et épingler, recopier la dernière zone, copier tout l'écran, capturer la fenêtre active, capturer l'écran sous le curseur, capture différée, effacer l'historique des captures : à attribuer dans Paramètres → « Raccourcis » / « Plus de raccourcis » |
-| Icône de la barre d'état | Double-clic : démarrer une capture ; le menu propose aussi la capture personnalisée, coller le presse-papiers, masquer / afficher les images épinglées et « Rendre toutes les images épinglées cliquables » |
+| Icône de la barre d'état | Double-clic : démarrer une capture ; le menu propose aussi la capture personnalisée, coller le presse-papiers, masquer / afficher les images épinglées, « Rendre toutes les images épinglées cliquables » et « Raccourci de capture (F1) », qui désactive et réactive le raccourci de capture sans l'oublier (par exemple pour laisser F1 à un jeu) |
 
 ### Capture : sélection de la zone
 
@@ -149,20 +149,20 @@ Les raccourcis reprennent ceux de Snipaste dès qu'il en a un. Les touches marqu
 | Molette sur une loupe sélectionnée | Changer son grossissement |
 | `Suppr` | Supprimer l'annotation sélectionnée |
 | `Ctrl+Maj+C` / `Ctrl+Maj+V` | Copier l'annotation sélectionnée / en coller une copie |
-| `Ctrl+Z` / `Ctrl+Y` | Annuler / rétablir (configurable) |
-| `Ctrl+Maj+Z` | Supprimer toutes les annotations, en une seule étape d'annulation (configurable) |
+| `Ctrl+Z` / `Ctrl+Y` | Annuler / rétablir |
+| `Ctrl+Maj+Z` | Supprimer toutes les annotations, en une seule étape d'annulation |
 | `Entrée` ou clic à l'extérieur | Valider le texte (`Maj+Entrée` pour un saut de ligne ; `Échap` valide aussi) |
 | Molette sur la zone de texte | Taille de police |
 | Clic milieu dans la zone de texte | Coller le texte du presse-papiers |
-| `Ctrl+C` / `Ctrl+Inser` | Copier dans le presse-papiers (`Ctrl+C` configurable) |
-| `Ctrl+S` / `Ctrl+Maj+S` | Enregistrer sous / enregistrement rapide (configurable ; `Maj`+clic sur Enregistrer fait aussi un enregistrement rapide) |
-| `Ctrl+T` | Épingler à l'écran (configurable) |
-| `Ctrl+P` | Imprimer (configurable) |
+| `Ctrl+C` / `Ctrl+Inser` | Copier dans le presse-papiers |
+| `Ctrl+S` / `Ctrl+Maj+S` | Enregistrer sous / enregistrement rapide (`Maj`+clic sur Enregistrer fait aussi un enregistrement rapide) |
+| `Ctrl+T` | Épingler à l'écran |
+| `Ctrl+P` | Imprimer |
 | `Ctrl+Alt+C` | Copier en tant que fichier PNG |
 | `V` | Copier la taille de la zone en texte (`800x600`) |
 | `Entrée` | Copier et fermer (configurable dans Paramètres → « Entrée et souris ») |
-| Double-clic dans la zone (sans outil) | Copier et fermer (configurable) |
-| Clic milieu dans la zone | Épingler à l'écran (configurable) |
+| Double-clic dans la zone (sans outil) | Copier et fermer (configurable dans Paramètres → « Entrée et souris ») |
+| Clic milieu dans la zone | Épingler à l'écran (configurable dans Paramètres → « Entrée et souris ») |
 | Clic droit | Revenir d'un niveau : terminer la ligne brisée ou le texte ; avec l'outil forme, flou ou gomme, marquer l'élément d'interface sous le curseur (hors de la zone : toute la zone) ; désélectionner ; lâcher l'outil ; enfin abandonner la zone pour en tracer une autre (avec confirmation si des annotations seraient perdues) |
 | `Échap` | Annuler le glisser d'un cadre de loupe → terminer la ligne brisée → désélectionner → quitter la capture (avec confirmation, désactivable) |
 
@@ -190,10 +190,10 @@ Les raccourcis reprennent ceux de Snipaste dès qu'il en a un. Les touches marqu
 | `+` / `-` | Zoom avant / arrière |
 | `Ctrl++` / `Ctrl+-` | Augmenter / diminuer l'opacité |
 | Flèches | Déplacer d'un pixel (plus vite en maintenant) |
-| `Ctrl+C` / `Ctrl+Inser` | Copier (`Ctrl+C` configurable) |
+| `Ctrl+C` / `Ctrl+Inser` | Copier |
 | `Ctrl+Alt+C` | Copier en tant que fichier PNG |
-| `Ctrl+S` / `Ctrl+Maj+S` | Enregistrer sous / enregistrement rapide (configurable) |
-| `Ctrl+P` | Imprimer (configurable) |
+| `Ctrl+S` / `Ctrl+Maj+S` | Enregistrer sous / enregistrement rapide |
+| `Ctrl+P` | Imprimer |
 | `Ctrl+V` | Afficher à la place le contenu du presse-papiers |
 | `Ctrl+Maj+C` | Copier le texte d'origine d'une image créée à partir de texte |
 | `Ctrl+A` | Sélectionner toutes les images affichées |
