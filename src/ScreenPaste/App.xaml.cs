@@ -90,7 +90,7 @@ public partial class App : Application
         PinManager.OpenSettingsRequested = OpenSettings;   // a pin's Ctrl+Shift+P
 
         _tray?.ShowBalloonTip(3000, "ScreenPaste",
-            Loc.T("tray.started", _settings.CaptureHotkey), Forms.ToolTipIcon.Info);
+            CaptureHint("tray.started", "tray.startedNoHotkey"), Forms.ToolTipIcon.Info);
 
         if (_settings.CheckUpdateOnStartup) CheckForUpdates(silentIfNone: true);
     }
@@ -132,7 +132,9 @@ public partial class App : Application
     {
         if (_tray == null) return;
         var menu = new Forms.ContextMenuStrip();
-        menu.Items.Add(WithHotkey(Loc.T("tray.capture"), _settings.CaptureHotkey), null, (_, _) => StartCapture());
+        menu.Items.Add(WithHotkey(Loc.T("tray.capture"), _settings.CaptureHotkeyEnabled ? _settings.CaptureHotkey : null),
+            null, (_, _) => StartCapture());
+        menu.Items.Add(CaptureHotkeySwitch());
         menu.Items.Add(WithHotkey(Loc.T("tray.customSnip"), _settings.CustomSnipHotkey), null, (_, _) => OpenCustomSnip());
         menu.Items.Add(
             _recorder != null
@@ -151,7 +153,7 @@ public partial class App : Application
         menu.Items.Add(Loc.T("tray.exit"), null, (_, _) => ExitApp());
         ApplyMenuTheme(menu);
         _tray.ContextMenuStrip = menu;
-        _tray.Text = Loc.T("tray.tip", _settings.CaptureHotkey);
+        _tray.Text = CaptureHint("tray.tip", "tray.tipNoHotkey");
     }
 
     /// <summary>"Paste (F3)", or the label alone when the hotkey is unassigned.</summary>

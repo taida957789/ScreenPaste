@@ -55,6 +55,35 @@ public partial class App
         WarnHotkeysFailed(failed);
     }
 
+    /// <summary>The tray's check item for the capture hotkey: unchecking lets F1 go (a game or
+    /// another app wants it) without forgetting the gesture; checking takes it back.</summary>
+    private Forms.ToolStripMenuItem CaptureHotkeySwitch()
+    {
+        bool assigned = !string.IsNullOrWhiteSpace(_settings.CaptureHotkey);
+        var item = new Forms.ToolStripMenuItem(Loc.T("tray.captureHotkey", assigned ? _settings.CaptureHotkey.Trim() : "—"))
+        {
+            Checked = assigned && _settings.CaptureHotkeyEnabled,
+            Enabled = assigned,
+        };
+        item.Click += (_, _) => ToggleCaptureHotkey();
+        return item;
+    }
+
+    /// <summary>A "press F1 to capture" text, or, with the capture hotkey switched off or
+    /// unassigned, its "double-click the icon" twin.</summary>
+    private string CaptureHint(string withHotkey, string withoutHotkey) =>
+        _settings.CaptureHotkeyEnabled && !string.IsNullOrWhiteSpace(_settings.CaptureHotkey)
+            ? Loc.T(withHotkey, _settings.CaptureHotkey.Trim())
+            : Loc.T(withoutHotkey);
+
+    private void ToggleCaptureHotkey()
+    {
+        _settings.CaptureHotkeyEnabled = !_settings.CaptureHotkeyEnabled;
+        _settings.Save();
+        RegisterHotkeys(warnAll: false);   // switched back on but taken meanwhile: says so
+        RefreshTray();
+    }
+
     private void WarnHotkeysFailed(IReadOnlyList<GlobalHotkeyBinding> failed)
     {
         if (failed.Count == 0) return;

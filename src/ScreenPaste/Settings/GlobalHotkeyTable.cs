@@ -68,9 +68,11 @@ public static class GlobalHotkeyTable
     public static GlobalHotkey? ById(int id) => All.FirstOrDefault(h => h.Id == id);
 
     /// <summary>The assigned hotkeys in table order, with what RegisterHotKey takes for each.
-    /// A blank gesture is unassigned and left out.</summary>
+    /// A blank gesture is unassigned and left out, and so is the capture hotkey while the tray
+    /// has it switched off (<see cref="AppSettings.CaptureHotkeyEnabled"/>).</summary>
     public static IReadOnlyList<GlobalHotkeyBinding> Bindings(AppSettings settings) =>
-        All.Select(h => (Hotkey: h, Gesture: (h.Get(settings) ?? "").Trim()))
+        All.Where(h => h.Action != GlobalHotkeyAction.Capture || settings.CaptureHotkeyEnabled)
+           .Select(h => (Hotkey: h, Gesture: (h.Get(settings) ?? "").Trim()))
            .Where(x => x.Gesture.Length > 0)
            .Select(x => new GlobalHotkeyBinding(x.Hotkey, x.Gesture, HotkeyGesture.ToWin32(x.Gesture)))
            .ToList();

@@ -10,6 +10,8 @@ public sealed class AppSettings
     // ---- Hotkeys (human-friendly gesture strings, e.g. "F1", "Ctrl+Shift+A", "Ctrl+Z") ----
     // 全域截圖熱鍵（系統層級）
     public string CaptureHotkey { get; set; } = "F1";
+    // 系統匣選單可暫停截圖熱鍵（例如玩遊戲時讓出 F1），不清掉上面的設定
+    public bool CaptureHotkeyEnabled { get; set; } = true;
     // 全域區域錄影熱鍵（再按一次停止）
     public string RecordHotkey { get; set; } = "F2";
     // 其他全域熱鍵（Snipaste 預設；留空即停用）：截圖並複製、自訂截圖、貼上剪貼簿／叫回關閉的貼圖、

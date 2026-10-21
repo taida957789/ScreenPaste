@@ -110,6 +110,24 @@ public sealed class GlobalHotkeyTableTests
             bindings.Select(b => b.Hotkey.Action));
     }
 
+    [Fact]
+    public void TheCaptureHotkey_IsSwitchedOnByDefault()
+    {
+        Assert.True(new AppSettings().CaptureHotkeyEnabled);
+    }
+
+    [Fact]
+    public void Bindings_LeaveOutTheCaptureHotkey_WhileTheTraySwitchedItOff()
+    {
+        var settings = new AppSettings { CaptureHotkeyEnabled = false };
+
+        var actions = GlobalHotkeyTable.Bindings(settings).Select(b => b.Hotkey.Action).ToList();
+
+        Assert.DoesNotContain(GlobalHotkeyAction.Capture, actions);
+        Assert.Contains(GlobalHotkeyAction.SnipAndCopy, actions);   // only the capture hotkey is let go
+        Assert.Contains(GlobalHotkeyAction.Paste, actions);
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
