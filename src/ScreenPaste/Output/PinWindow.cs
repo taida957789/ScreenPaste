@@ -53,7 +53,6 @@ public sealed partial class PinWindow : Window
     private readonly Grid _layers;             // the image and its flash
     private readonly Canvas _viewport;         // what the window shows: all of the layers, or a thumbnail's part
     private readonly Border _frame;
-    private readonly MatrixTransform _layout = new();   // orientation and zoom, image px to DIPs
     private PinContent _content;               // what is pinned, as it came; a dropped file replaces it
     private BitmapSource? _effected;           // Source with the effects in _effectedFor
     private (bool Grayscale, bool Invert) _effectedFor;
@@ -101,7 +100,7 @@ public sealed partial class PinWindow : Window
 
         // The image and its flash turn and zoom together; the frame stays one pixel wide. The
         // viewport clips them to what the window shows, which a thumbnail makes a part of them.
-        _layers = new Grid { LayoutTransform = _layout };
+        _layers = new Grid();
         _layers.Children.Add(_image);
         _layers.Children.Add(_saveFlash);
         _viewport = new Canvas { ClipToBounds = true };
@@ -218,7 +217,12 @@ public sealed partial class PinWindow : Window
     private void UpdateLayoutTransform()
     {
         var (sx, sy) = DisplayScale();
-        _layout.Matrix = _state.Orientation * new Matrix(sx / _dpi, 0, 0, sy / _dpi, 0, 0);
+        // A new transform each time: WPF lays the layers out before SourceInitialized, and a
+        // new matrix on the transform they already hold neither lays them out again nor
+        // redraws them, so at 175% the image stayed 1.75 times too big, cropped by the window.
+        var layout = new MatrixTransform(_state.Orientation * new Matrix(sx / _dpi, 0, 0, sy / _dpi, 0, 0));
+        layout.Freeze();
+        _layers.LayoutTransform = layout;
         _frame.BorderThickness = new Thickness(FramePx / _dpi);
 
         var (w, h) = ShownSize();
