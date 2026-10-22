@@ -81,7 +81,9 @@ public partial class App : Application
             SnipHistoryLimits.BudgetBytes(_settings.SnipHistoryBudgetMb));
         Loc.Init(_settings.Language);
         Theme.Apply(_settings.Theme);
-        StartupManager.Sync(_settings.RunAtStartup);
+        // The Run key decides, as the installer's "run at startup" task writes it too: read it
+        // back as the setting rather than put the setting over it.
+        _settings.RunAtStartup = StartupManager.Reconcile();
         // Copy-as-file PNGs (Ctrl+Alt+C) only have to outlive the paste.
         Task.Run(ClipboardService.DeleteStaleClips);
 
@@ -163,6 +165,7 @@ public partial class App : Application
     private void OpenSettings()
     {
         if (_settingsWindow is { IsVisible: true }) { _settingsWindow.Activate(); return; }
+        _settings.RunAtStartup = StartupManager.IsEnabled();   // as it is now, whatever changed it
         _settingsWindow = new SettingsWindow(_settings, ApplySettingsChanged, () => CheckForUpdates(silentIfNone: false), HoldHotkeys);
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
