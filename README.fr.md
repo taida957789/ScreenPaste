@@ -53,7 +53,7 @@ Après la capture, une **barre d'outils** apparaît près du curseur (déplaçab
 - Thème **clair / sombre / système**, interface moderne aux coins arrondis et barres de titre sombres
 - **Fenêtre de paramètres** centralisée : langue, raccourcis, thème, lancement au démarrage, dossier d'enregistrement, valeurs par défaut des annotations (type de flou), format / fréquence d'enregistrement (les champs de raccourci se règlent en appuyant simplement sur la combinaison ; toutes les touches de la capture et des images épinglées sont aussi réattribuables)
 - **Lancement automatique au démarrage** (optionnel)
-- **Mise à jour automatique** : vérifie les nouvelles versions via GitHub Releases (activable dans les paramètres, ou vérification manuelle) ; téléchargement et installation en un clic
+- **Mise à jour automatique** : vérifie les nouvelles versions via GitHub Releases (activable dans les paramètres, ou vérification manuelle) ; téléchargement et installation en un clic, avec la progression et la vitesse
 
 ## Installation
 

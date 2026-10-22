@@ -53,7 +53,7 @@ Tras capturar, aparece una **barra de herramientas** junto al cursor (arrastrabl
 - Tema **claro / oscuro / según el sistema**, interfaz moderna con esquinas redondeadas y barras de título oscuras
 - **Ventana de ajustes** centralizada: idioma, atajos, tema, inicio automático, carpeta de guardado, valores predeterminados de anotación (tipo de desenfoque), formato / tasa de grabación (los campos de atajo se fijan pulsando la combinación; también se puede reasignar cada tecla de la captura y de las imágenes fijadas)
 - **Inicio automático con Windows** (opcional)
-- **Actualización automática**: comprueba nuevas versiones vía GitHub Releases (activable en ajustes, o comprobación manual); descarga e instala con un clic
+- **Actualización automática**: comprueba nuevas versiones vía GitHub Releases (activable en ajustes, o comprobación manual); descarga e instala con un clic, mostrando el progreso y la velocidad
 
 ## Instalación
 
