@@ -83,7 +83,12 @@ public sealed class UpdateWindow : Window
         }
 
         // Launch the installer and exit so files aren't locked; the installer relaunches the app.
-        try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
+        // Its "run at startup" task follows the setting as it is now, not as first installed.
+        var setup = new ProcessStartInfo(path)
+        {
+            UseShellExecute = true, Arguments = StartupManager.InstallerArguments(StartupManager.IsEnabled()),
+        };
+        try { Process.Start(setup); }
         catch { OnOpenPage(); return; }
         Application.Current.Shutdown();
     }

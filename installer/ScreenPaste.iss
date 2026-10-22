@@ -52,7 +52,9 @@ Name: "{group}\解除安裝 {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{userdesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Registry]
-; Optional run-at-startup (per-user Run key). The app's own tray toggle also manages this.
+; Optional run-at-startup (per-user Run key). The app reads this value back as its "Run at
+; startup" setting, and an update it starts passes /MERGETASKS="startup" or "!startup" so this
+; task follows that setting: keep the task's name.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "ScreenPaste"; ValueData: """{app}\{#MyAppExeName}"""; Tasks: startup; Flags: uninsdeletevalue
 
 [Run]
@@ -61,3 +63,6 @@ Filename: "{app}\{#MyAppExeName}"; Description: "立即啟動 {#MyAppName}"; Fla
 [UninstallRun]
 ; Best-effort: close a running instance before uninstalling.
 Filename: "{cmd}"; Parameters: "/C taskkill /IM {#MyAppExeName} /F"; Flags: runhidden; RunOnceId: "KillApp"
+; The Run value also when it was turned on from the app's Settings (uninsdeletevalue only covers
+; the task above): left behind, a reinstall to the same folder would read it as still on.
+Filename: "{cmd}"; Parameters: "/C reg delete ""HKCU\Software\Microsoft\Windows\CurrentVersion\Run"" /v ScreenPaste /f"; Flags: runhidden; RunOnceId: "DelRunValue"
