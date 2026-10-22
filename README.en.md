@@ -53,7 +53,7 @@ After capturing, an **icon toolbar** pops up next to the cursor (draggable, and 
 - **Light / Dark / Follow system** theme, with a modern rounded UI and dark title bars
 - A centralized **Settings window**: language, hotkeys, theme, run at startup, save folder, annotation defaults (blur type), recording format / frame rate (hotkey fields are set by simply pressing the combination; every key of the capture and of pins can be rebound too)
 - Optional **run automatically at startup**
-- **Auto-update**: checks for new versions via GitHub Releases (toggle in settings, or check manually); one click to download and install
+- **Auto-update**: checks for new versions via GitHub Releases (toggle in settings, or check manually); one click to download and install, showing the progress and speed
 
 ## Install
 

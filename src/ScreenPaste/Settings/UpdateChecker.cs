@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Reflection;
@@ -58,16 +59,20 @@ public static class UpdateChecker
         catch { return null; }
     }
 
-    /// <summary>Download the installer to a temp file. Returns the path, or null on failure.</summary>
-    public static async Task<string?> DownloadAsync(string url)
+    /// <summary>Download the installer to a temp file, telling <paramref name="progress"/> how it
+    /// goes. Returns the path, or null on failure.</summary>
+    public static async Task<string?> DownloadAsync(string url, IProgress<DownloadProgress>? progress = null)
     {
         try
         {
             var path = Path.Combine(Path.GetTempPath(), "ScreenPaste-update-setup.exe");
             using var resp = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
             resp.EnsureSuccessStatusCode();
+            await using var source = await resp.Content.ReadAsStreamAsync().ConfigureAwait(false);
             await using var fs = File.Create(path);
-            await resp.Content.CopyToAsync(fs).ConfigureAwait(false);
+            var clock = Stopwatch.StartNew();
+            await UpdateDownload.CopyAsync(source, fs, resp.Content.Headers.ContentLength, progress, () => clock.Elapsed)
+                .ConfigureAwait(false);
             return path;
         }
         catch { return null; }

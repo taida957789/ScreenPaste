@@ -53,7 +53,7 @@ Nach der Aufnahme erscheint neben dem Cursor eine **Symbol-Werkzeugleiste** (ver
 - **Hell / Dunkel / System**-Design, moderne abgerundete Oberfläche und dunkle Titelleisten
 - Zentrales **Einstellungsfenster**: Sprache, Hotkeys, Design, Autostart, Speicherordner, Anmerkungs-Standards (Weichzeichner-Typ), Aufnahmeformat / Bildrate (Hotkey-Felder werden durch einfaches Drücken der Kombination gesetzt; auch jede Taste der Aufnahme und der angehefteten Bilder lässt sich neu belegen)
 - Optionaler **Autostart mit Windows**
-- **Auto-Update**: prüft über GitHub Releases auf neue Versionen (in den Einstellungen umschaltbar, auch manuell); Download und Installation mit einem Klick
+- **Auto-Update**: prüft über GitHub Releases auf neue Versionen (in den Einstellungen umschaltbar, auch manuell); Download und Installation mit einem Klick, mit Fortschritt und Geschwindigkeit
 
 ## Installation
 
